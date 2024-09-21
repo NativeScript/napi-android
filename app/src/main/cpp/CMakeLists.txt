@@ -32,10 +32,16 @@ include_directories(
         ${CMAKE_SOURCE_DIR}/runtime
         ${CMAKE_SOURCE_DIR}/zip/include
         ${CMAKE_SOURCE_DIR}/runtime/jni/robinhood
+        ${CMAKE_SOURCE_DIR}/runtime/jni
+        ${CMAKE_SOURCE_DIR}/runtime/metadata
 )
 
 # Search for all CPP files in runtime/ directory and add them to our sources
-file(GLOB_RECURSE RUNTIME_FILES "${CMAKE_SOURCE_DIR}/runtime/**/*.cpp")
+file(GLOB_RECURSE RUNTIME_FILES
+        "${CMAKE_SOURCE_DIR}/runtime/*.cpp"
+        "${CMAKE_SOURCE_DIR}/runtime/jni/*.cpp"
+        "${CMAKE_SOURCE_DIR}/runtime/metadata/*.cpp"
+)
 
 # Creates and names a library, sets it as either STATIC or SHARED, and provides the relative paths to its source code.
 add_library(${CMAKE_PROJECT_NAME} SHARED
@@ -48,7 +54,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         # napi
         napi/native_api.cpp
         # test
-        native-lib.cpp
+        Init.cpp
         # napi-runtime
         ${RUNTIME_FILES}
 )

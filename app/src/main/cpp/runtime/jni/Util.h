@@ -4,7 +4,7 @@
 #ifndef UTIL_H_
 #define UTIL_H_
 
-namespace tns {
+namespace ns {
 class Util {
     public:
         static std::string JniClassPathToCanonicalName(const std::string& jniClassPath);

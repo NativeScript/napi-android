@@ -3,7 +3,7 @@
 #include <assert.h>
 
 using namespace std;
-using namespace tns;
+using namespace ns;
 
 JniSignatureParser::JniSignatureParser(const string& signature)
     : m_signature(signature) {

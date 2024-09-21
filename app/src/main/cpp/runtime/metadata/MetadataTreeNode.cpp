@@ -1,7 +1,7 @@
 #include "MetadataTreeNode.h"
 
 using namespace std;
-using namespace tns;
+using namespace ns;
 
 MetadataTreeNode::MetadataTreeNode()
     :

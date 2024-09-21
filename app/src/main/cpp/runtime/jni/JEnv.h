@@ -5,133 +5,207 @@
 #include "robinhood/robin_hood.h"
 #include <string>
 
-namespace tns {
-class JEnv {
+namespace ns {
+    class JEnv {
     public:
         JEnv();
 
-        JEnv(JNIEnv* jniEnv);
+        JEnv(JNIEnv *jniEnv);
 
         ~JEnv();
 
-        operator JNIEnv* () const;
+        operator JNIEnv *() const;
 
         jclass GetObjectClass(jobject obj);
 
         jsize GetArrayLength(jarray array);
 
-        jmethodID GetMethodID(jclass clazz, const std::string& name, const std::string& sig);
-        jmethodID GetStaticMethodID(jclass clazz, const std::string& name, const std::string& sig);
-        std::pair<jmethodID,jclass> GetInterfaceStaticMethodIDAndJClass(
+        jmethodID GetMethodID(jclass clazz, const std::string &name, const std::string &sig);
+
+        jmethodID GetStaticMethodID(jclass clazz, const std::string &name, const std::string &sig);
+
+        std::pair<jmethodID, jclass> GetInterfaceStaticMethodIDAndJClass(
                 const std::string &interfaceName, const std::string &methodName,
                 const std::string &sig);
 
-        jfieldID GetFieldID(jclass clazz, const std::string& name, const std::string& sig);
-        jfieldID GetStaticFieldID(jclass clazz, const std::string& name, const std::string& sig);
+        jfieldID GetFieldID(jclass clazz, const std::string &name, const std::string &sig);
 
-        void CallStaticVoidMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        void CallNonvirtualVoidMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        void CallVoidMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        jfieldID GetStaticFieldID(jclass clazz, const std::string &name, const std::string &sig);
 
-        jboolean CallStaticBooleanMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jboolean CallNonvirtualBooleanMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jboolean CallBooleanMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        void CallStaticVoidMethodA(jclass clazz, jmethodID methodID, jvalue *args);
 
-        jbyte CallStaticByteMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jbyte CallNonvirtualByteMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jbyte CallByteMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        void CallNonvirtualVoidMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
 
-        jchar CallStaticCharMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jchar CallNonvirtualCharMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jchar CallCharMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        void CallVoidMethodA(jobject obj, jmethodID methodID, jvalue *args);
 
-        jshort CallStaticShortMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jshort CallNonvirtualShortMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jshort CallShortMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        jboolean CallStaticBooleanMethodA(jclass clazz, jmethodID methodID, jvalue *args);
 
-        jint CallStaticIntMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jint CallNonvirtualIntMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jint CallIntMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        jboolean
+        CallNonvirtualBooleanMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
 
-        jlong CallStaticLongMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jlong CallNonvirtualLongMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jlong CallLongMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        jboolean CallBooleanMethodA(jobject obj, jmethodID methodID, jvalue *args);
 
-        jfloat CallStaticFloatMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jfloat CallNonvirtualFloatMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jfloat CallFloatMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        jbyte CallStaticByteMethodA(jclass clazz, jmethodID methodID, jvalue *args);
 
-        jdouble CallStaticDoubleMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jdouble CallNonvirtualDoubleMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jdouble CallDoubleMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        jbyte
+        CallNonvirtualByteMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
 
-        jobject CallStaticObjectMethodA(jclass clazz, jmethodID methodID, jvalue* args);
-        jobject CallNonvirtualObjectMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue* args);
-        jobject CallObjectMethodA(jobject obj, jmethodID methodID, jvalue* args);
+        jbyte CallByteMethodA(jobject obj, jmethodID methodID, jvalue *args);
+
+        jchar CallStaticCharMethodA(jclass clazz, jmethodID methodID, jvalue *args);
+
+        jchar
+        CallNonvirtualCharMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
+
+        jchar CallCharMethodA(jobject obj, jmethodID methodID, jvalue *args);
+
+        jshort CallStaticShortMethodA(jclass clazz, jmethodID methodID, jvalue *args);
+
+        jshort
+        CallNonvirtualShortMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
+
+        jshort CallShortMethodA(jobject obj, jmethodID methodID, jvalue *args);
+
+        jint CallStaticIntMethodA(jclass clazz, jmethodID methodID, jvalue *args);
+
+        jint CallNonvirtualIntMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
+
+        jint CallIntMethodA(jobject obj, jmethodID methodID, jvalue *args);
+
+        jlong CallStaticLongMethodA(jclass clazz, jmethodID methodID, jvalue *args);
+
+        jlong
+        CallNonvirtualLongMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
+
+        jlong CallLongMethodA(jobject obj, jmethodID methodID, jvalue *args);
+
+        jfloat CallStaticFloatMethodA(jclass clazz, jmethodID methodID, jvalue *args);
+
+        jfloat
+        CallNonvirtualFloatMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
+
+        jfloat CallFloatMethodA(jobject obj, jmethodID methodID, jvalue *args);
+
+        jdouble CallStaticDoubleMethodA(jclass clazz, jmethodID methodID, jvalue *args);
+
+        jdouble
+        CallNonvirtualDoubleMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
+
+        jdouble CallDoubleMethodA(jobject obj, jmethodID methodID, jvalue *args);
+
+        jobject CallStaticObjectMethodA(jclass clazz, jmethodID methodID, jvalue *args);
+
+        jobject
+        CallNonvirtualObjectMethodA(jobject obj, jclass clazz, jmethodID methodID, jvalue *args);
+
+        jobject CallObjectMethodA(jobject obj, jmethodID methodID, jvalue *args);
 
         jobject GetStaticObjectField(jclass clazz, jfieldID fieldID);
+
         jboolean GetStaticBooleanField(jclass clazz, jfieldID fieldID);
+
         jbyte GetStaticByteField(jclass clazz, jfieldID fieldID);
+
         jchar GetStaticCharField(jclass clazz, jfieldID fieldID);
+
         jshort GetStaticShortField(jclass clazz, jfieldID fieldID);
+
         jint GetStaticIntField(jclass clazz, jfieldID fieldID);
+
         jlong GetStaticLongField(jclass clazz, jfieldID fieldID);
+
         jfloat GetStaticFloatField(jclass clazz, jfieldID fieldID);
+
         jdouble GetStaticDoubleField(jclass clazz, jfieldID fieldID);
 
         void SetStaticObjectField(jclass clazz, jfieldID fieldID, jobject value);
+
         void SetStaticBooleanField(jclass clazz, jfieldID fieldID, jboolean value);
+
         void SetStaticByteField(jclass clazz, jfieldID fieldID, jbyte value);
+
         void SetStaticCharField(jclass clazz, jfieldID fieldID, jchar value);
+
         void SetStaticShortField(jclass clazz, jfieldID fieldID, jshort value);
+
         void SetStaticIntField(jclass clazz, jfieldID fieldID, jint value);
+
         void SetStaticLongField(jclass clazz, jfieldID fieldID, jlong value);
+
         void SetStaticFloatField(jclass clazz, jfieldID fieldID, jfloat value);
+
         void SetStaticDoubleField(jclass clazz, jfieldID fieldID, jdouble value);
 
         jobject GetObjectField(jobject obj, jfieldID fieldID);
+
         jboolean GetBooleanField(jobject obj, jfieldID fieldID);
+
         jbyte GetByteField(jobject obj, jfieldID fieldID);
+
         jchar GetCharField(jobject obj, jfieldID fieldID);
+
         jshort GetShortField(jobject obj, jfieldID fieldID);
+
         jint GetIntField(jobject obj, jfieldID fieldID);
+
         jlong GetLongField(jobject obj, jfieldID fieldID);
+
         jfloat GetFloatField(jobject obj, jfieldID fieldID);
+
         jdouble GetDoubleField(jobject obj, jfieldID fieldID);
 
         void SetObjectField(jobject obj, jfieldID fieldID, jobject value);
+
         void SetBooleanField(jobject obj, jfieldID fieldID, jboolean value);
+
         void SetByteField(jobject obj, jfieldID fieldID, jbyte value);
+
         void SetCharField(jobject obj, jfieldID fieldID, jchar value);
+
         void SetShortField(jobject obj, jfieldID fieldID, jshort value);
+
         void SetIntField(jobject obj, jfieldID fieldID, jint value);
+
         void SetLongField(jobject obj, jfieldID fieldID, jlong value);
+
         void SetFloatField(jobject obj, jfieldID fieldID, jfloat value);
+
         void SetDoubleField(jobject obj, jfieldID fieldID, jdouble value);
 
-        jstring NewString(const jchar* unicodeChars, jsize len);
-        jstring NewStringUTF(const char* bytes);
+        jstring NewString(const jchar *unicodeChars, jsize len);
+
+        jstring NewStringUTF(const char *bytes);
 
         jobjectArray NewObjectArray(jsize length, jclass elementClass, jobject initialElement);
 
         jobject GetObjectArrayElement(jobjectArray array, jsize index);
+
         void SetObjectArrayElement(jobjectArray array, jsize index, jobject value);
 
-        const char* GetStringUTFChars(jstring str, jboolean* isCopy);
-        void ReleaseStringUTFChars(jstring str, const char* utf);
+        const char *GetStringUTFChars(jstring str, jboolean *isCopy);
 
-        const jchar* GetStringChars(jstring str, jboolean* isCopy);
-        void ReleaseStringChars(jstring str, const jchar* chars);
+        void ReleaseStringUTFChars(jstring str, const char *utf);
+
+        const jchar *GetStringChars(jstring str, jboolean *isCopy);
+
+        void ReleaseStringChars(jstring str, const jchar *chars);
 
         const int GetStringLength(jstring str);
+
         const int GetStringUTFLength(jstring str);
-        void GetStringUTFRegion(jstring str, jsize start, jsize len, char* buf);
+
+        void GetStringUTFRegion(jstring str, jsize start, jsize len, char *buf);
 
         jint Throw(jthrowable obj);
-        jint ThrowNew(jclass clazz, const std::string& message);
+
+        jint ThrowNew(jclass clazz, const std::string &message);
+
         jboolean ExceptionCheck();
+
         jthrowable ExceptionOccurred();
+
         void ExceptionDescribe();
+
         void ExceptionClear();
 
         jboolean IsInstanceOf(jobject obj, jclass clazz);
@@ -139,57 +213,84 @@ class JEnv {
         jobjectRefType GetObjectRefType(jobject obj);
 
         jobject NewGlobalRef(jobject obj);
+
         jweak NewWeakGlobalRef(jobject obj);
+
         void DeleteGlobalRef(jobject globalRef);
+
         void DeleteWeakGlobalRef(jweak obj);
 
         jobject NewLocalRef(jobject ref);
+
         void DeleteLocalRef(jobject localRef);
 
         jbyteArray NewByteArray(jsize length);
+
         jbooleanArray NewBooleanArray(jsize length);
+
         jcharArray NewCharArray(jsize length);
+
         jshortArray NewShortArray(jsize length);
+
         jintArray NewIntArray(jsize length);
+
         jlongArray NewLongArray(jsize length);
+
         jfloatArray NewFloatArray(jsize length);
+
         jdoubleArray NewDoubleArray(jsize length);
 
-        jbyte* GetByteArrayElements(jbyteArray array, jboolean* isCopy);
-        void ReleaseByteArrayElements(jbyteArray array, jbyte* elems, jint mode);
+        jbyte *GetByteArrayElements(jbyteArray array, jboolean *isCopy);
 
-        void GetBooleanArrayRegion(jbooleanArray array, jsize start, jsize len, jboolean* buf);
-        void GetByteArrayRegion(jbyteArray array, jsize start, jsize len, jbyte* buf);
-        void GetCharArrayRegion(jcharArray array, jsize start, jsize len, jchar* buf);
-        void GetShortArrayRegion(jshortArray array, jsize start, jsize len, jshort* buf);
-        void GetIntArrayRegion(jintArray array, jsize start, jsize len, jint* buf);
-        void GetLongArrayRegion(jlongArray array, jsize start, jsize len, jlong* buf);
-        void GetFloatArrayRegion(jfloatArray array, jsize start, jsize len, jfloat* buf);
-        void GetDoubleArrayRegion(jdoubleArray array, jsize start, jsize len, jdouble* buf);
+        void ReleaseByteArrayElements(jbyteArray array, jbyte *elems, jint mode);
 
-        void SetByteArrayRegion(jbyteArray array, jsize start, jsize len, const jbyte* buf);
-        void SetBooleanArrayRegion(jbooleanArray array, jsize start, jsize len, const jboolean* buf);
-        void SetCharArrayRegion(jcharArray array, jsize start, jsize len, const jchar* buf);
-        void SetShortArrayRegion(jshortArray array, jsize start, jsize len, const jshort* buf);
-        void SetIntArrayRegion(jintArray array, jsize start, jsize len, const jint* buf);
-        void SetLongArrayRegion(jlongArray array, jsize start, jsize len, const jlong* buf);
-        void SetFloatArrayRegion(jfloatArray array, jsize start, jsize len, const jfloat* buf);
-        void SetDoubleArrayRegion(jdoubleArray array, jsize start, jsize len, const jdouble* buf);
+        void GetBooleanArrayRegion(jbooleanArray array, jsize start, jsize len, jboolean *buf);
 
-        jclass FindClass(const std::string& className);
+        void GetByteArrayRegion(jbyteArray array, jsize start, jsize len, jbyte *buf);
+
+        void GetCharArrayRegion(jcharArray array, jsize start, jsize len, jchar *buf);
+
+        void GetShortArrayRegion(jshortArray array, jsize start, jsize len, jshort *buf);
+
+        void GetIntArrayRegion(jintArray array, jsize start, jsize len, jint *buf);
+
+        void GetLongArrayRegion(jlongArray array, jsize start, jsize len, jlong *buf);
+
+        void GetFloatArrayRegion(jfloatArray array, jsize start, jsize len, jfloat *buf);
+
+        void GetDoubleArrayRegion(jdoubleArray array, jsize start, jsize len, jdouble *buf);
+
+        void SetByteArrayRegion(jbyteArray array, jsize start, jsize len, const jbyte *buf);
+
+        void
+        SetBooleanArrayRegion(jbooleanArray array, jsize start, jsize len, const jboolean *buf);
+
+        void SetCharArrayRegion(jcharArray array, jsize start, jsize len, const jchar *buf);
+
+        void SetShortArrayRegion(jshortArray array, jsize start, jsize len, const jshort *buf);
+
+        void SetIntArrayRegion(jintArray array, jsize start, jsize len, const jint *buf);
+
+        void SetLongArrayRegion(jlongArray array, jsize start, jsize len, const jlong *buf);
+
+        void SetFloatArrayRegion(jfloatArray array, jsize start, jsize len, const jfloat *buf);
+
+        void SetDoubleArrayRegion(jdoubleArray array, jsize start, jsize len, const jdouble *buf);
+
+        jclass FindClass(const std::string &className);
 
         /*
          * The "CheckForClassInCache" will check if a class is loaded into the cache
          * if it is: it returns a global reference of it
          * if it is not: it will return "nullptr".
          */
-        jclass CheckForClassInCache(const std::string& className);
+        jclass CheckForClassInCache(const std::string &className);
 
         /*
          * "InsertClassIntoCache" will take care of deleting the LocalReference of passed "jclass& tmp".
          * A new GlobalReference object will be created from "tmp". The function returns the global object.
          */
-        jclass InsertClassIntoCache(const std::string& className, jclass& tmp);
+        jclass InsertClassIntoCache(const std::string &className, jclass &tmp);
 
 
         /*
@@ -197,12 +298,14 @@ class JEnv {
          * this is useful for rethrowing exceptions if they were caught in the previous attempt of loading it.
          * if it is not: it will return "nullptr".
          */
-        jthrowable CheckForClassMissingCache(const std::string& className);
+        jthrowable CheckForClassMissingCache(const std::string &className);
 
-        jthrowable InsertClassIntoMissingCache(const std::string& className, const jthrowable& tmp);
+        jthrowable InsertClassIntoMissingCache(const std::string &className, const jthrowable &tmp);
 
-        jobject NewDirectByteBuffer(void* address, jlong capacity);
-        void* GetDirectBufferAddress(jobject buf);
+        jobject NewDirectByteBuffer(void *address, jlong capacity);
+
+        void *GetDirectBufferAddress(jobject buf);
+
         jlong GetDirectBufferCapacity(jobject buf);
 
         jboolean IsAssignableFrom(jclass clazz1, jclass clazz2);
@@ -323,20 +426,20 @@ class JEnv {
 
         }
 
-        jobject NewObjectA(jclass clazz, jmethodID methodID, jvalue* args) {
+        jobject NewObjectA(jclass clazz, jmethodID methodID, jvalue *args) {
             jobject jo = m_env->NewObjectA(clazz, methodID, args);
             CheckForJavaException();
             return jo;
         }
 
-        static void Init(JavaVM* jvm);
+        static void Init(JavaVM *jvm);
 
     private:
         void CheckForJavaException();
 
-        JNIEnv* m_env;
+        JNIEnv *m_env;
 
-        static JavaVM* s_jvm;
+        static JavaVM *s_jvm;
 
         static jclass RUNTIME_CLASS;
 
@@ -344,7 +447,7 @@ class JEnv {
 
         static robin_hood::unordered_map<std::string, jclass> s_classCache;
         static robin_hood::unordered_map<std::string, jthrowable> s_missingClasses;
-};
+    };
 }
 
 #endif /* JENV_H_ */

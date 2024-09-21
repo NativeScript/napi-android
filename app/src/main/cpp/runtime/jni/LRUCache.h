@@ -21,7 +21,7 @@
 #include <list>
 #include <unordered_map>
 
-namespace tns {
+namespace ns {
 // Class providing fixed-size (by number of records)
 // LRU-replacement cache of a function with signature
 // V f(K).

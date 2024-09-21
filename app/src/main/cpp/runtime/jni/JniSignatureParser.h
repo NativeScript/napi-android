@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace tns {
+namespace ns {
 class JniSignatureParser {
     public:
         JniSignatureParser(const std::string& signature);

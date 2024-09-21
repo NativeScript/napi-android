@@ -10,14 +10,15 @@
 
 #include <string>
 
-namespace tns {
+namespace ns {
 class File {
     public:
         static const char* ReadText(const std::string& filePath, int& length, bool& isNew);
         static std::string ReadText(const std::string& filePath);
         static bool WriteBinary(const std::string& filePath, const void* inData, int length);
         static void* ReadBinary(const std::string& filePath, int& length);
-    private:
+        static std::unique_ptr<char[]> ReadFile(const std::string &filePath, int &length, int extraBuffer = 0);
+private:
         static const int BUFFER_SIZE = 1024 * 1024;
         static char* Buffer;
         static const char* WRITE_BINARY;

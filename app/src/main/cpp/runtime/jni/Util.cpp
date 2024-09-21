@@ -4,7 +4,7 @@
 #include <codecvt>
 
 using namespace std;
-namespace tns {
+namespace ns {
 
 
     string Util::JniClassPathToCanonicalName(const string &jniClassPath) {

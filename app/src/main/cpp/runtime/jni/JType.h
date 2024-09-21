@@ -3,7 +3,7 @@
 
 #include "JEnv.h"
 
-namespace tns {
+namespace ns {
 enum class Type
     : int {
     Boolean,

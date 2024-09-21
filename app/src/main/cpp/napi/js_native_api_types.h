@@ -115,7 +115,8 @@ typedef enum {
     napi_cannot_run_js,
     // Custom errors
     napi_handle_scope_empty,
-    napi_memory_error
+    napi_memory_error,
+    napi_promise_exception
 } napi_status;
 
 

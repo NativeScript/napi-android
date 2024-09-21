@@ -4,7 +4,7 @@
 #include "JEnv.h"
 #include "JType.h"
 
-namespace tns {
+namespace ns {
 class JniLocalRef {
     public:
         JniLocalRef()

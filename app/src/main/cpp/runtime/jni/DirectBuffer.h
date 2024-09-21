@@ -3,7 +3,7 @@
 
 #include "JEnv.h"
 
-namespace tns {
+namespace ns {
 class DirectBuffer {
     public:
         DirectBuffer(uint32_t capacity = 65536);

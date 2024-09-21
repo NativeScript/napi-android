@@ -9,7 +9,7 @@
 
 using namespace std;
 
-namespace tns {
+namespace ns {
 class MethodInfo {
     public:
         MethodInfo(uint8_t* pValue, MetadataReader* reader)

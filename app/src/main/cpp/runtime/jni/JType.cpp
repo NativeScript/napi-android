@@ -1,7 +1,7 @@
 #include "JType.h"
 #include "NativeScriptAssert.h"
 
-namespace tns {
+namespace ns {
 Type JType::getClassType(int retType) {
     Type classReturnType = static_cast<Type>(retType);
     return classReturnType;

@@ -1,7 +1,7 @@
 #ifndef LOGGER_H_
 #define LOGGER_H_
 
-namespace tns {
+namespace ns {
 class Logger {
     public:
         Logger();

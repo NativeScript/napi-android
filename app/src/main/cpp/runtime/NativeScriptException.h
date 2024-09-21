@@ -5,7 +5,7 @@
 #include "jni/JniLocalRef.h"
 #include "js_native_api.h"
 
-namespace tns {
+namespace ns {
 class NativeScriptException {
     public:
         /*

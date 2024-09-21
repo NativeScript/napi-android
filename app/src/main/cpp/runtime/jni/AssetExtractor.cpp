@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include "AssetExtractor.h"
 
-using namespace tns;
+using namespace ns;
 
 void AssetExtractor::ExtractAssets(JNIEnv* env, jobject obj, jstring apk, jstring input, jstring outputDir, jboolean _forceOverwrite) {
     auto forceOverwrite = JNI_TRUE == _forceOverwrite;

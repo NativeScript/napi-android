@@ -1,7 +1,7 @@
 #include "DirectBuffer.h"
 #include "JniLocalRef.h"
 
-using namespace tns;
+using namespace ns;
 
 DirectBuffer::DirectBuffer(uint32_t length) {
     m_length = length;

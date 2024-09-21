@@ -1,6 +1,6 @@
 #include "MetadataMethodInfo.h"
 
-using namespace tns;
+using namespace ns;
 
 std::string MethodInfo::GetName() {
     uint32_t nameOfffset = *reinterpret_cast<uint32_t*>(m_pData);

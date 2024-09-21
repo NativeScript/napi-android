@@ -674,7 +674,7 @@ napi_status napi_open_escapable_handle_scope(napi_env env, napi_escapable_handle
     }
     
     (*result)->escapeCalled = false;
-    
+
     LIST_INSERT_HEAD(&env->handleScopeList, &(*result)->handleScope, node);
     
     return napi_clear_last_error(env);
@@ -714,7 +714,6 @@ napi_status napi_escape_handle(napi_env env, napi_escapable_handle_scope scope, 
     CHECK_ARG(env)
     CHECK_ARG(scope)
     CHECK_ARG(escapee)
-    CHECK_ARG(result)
     
     RETURN_STATUS_IF_FALSE(!scope->escapeCalled, napi_escape_called_twice)
     // Get the outer handle scope
@@ -740,7 +739,11 @@ napi_status napi_escape_handle(napi_env env, napi_escapable_handle_scope scope, 
     scope->escapeCalled = true;
     handle->value = JS_DupValue(env->context, *((JSValue *)escapee));
     SLIST_INSERT_HEAD(&handleScope->handleList, handle, node);
-    *result = (napi_value)&handle->value;
+
+    if (result != nullptr) {
+        *result = (napi_value)&handle->value;
+    }
+
     
     return napi_clear_last_error(env);
 }
@@ -4472,12 +4475,9 @@ napi_status napi_check_object_type_tag(napi_env env, napi_value object, napi_typ
     return napi_clear_last_error(env);
 }
 
-static void processPendingTask(napi_env env)
+napi_status napi_run_microtasks(napi_env env)
 {
-    if (TRUTHY(!env))
-    {
-        return;
-    }
+    if (TRUTHY(!env)) return napi_invalid_arg;
     
     int error = 1;
     do
@@ -4490,10 +4490,12 @@ static void processPendingTask(napi_env env)
             // Represents engine internal exceptions, such as memory allocation failure, etc.
             // TODO(ChasonTang): Test when Promise throws an exception
             JSValue inlineExceptionValue = JS_GetException(context);
-            
+
             JS_FreeValue(context, inlineExceptionValue);
         }
     } while (error != 0);
+
+    return napi_ok;
 }
 
 
@@ -4520,8 +4522,8 @@ napi_status napi_run_script(napi_env env,
     const char *cScript = JS_ToCString(env->context, *((JSValue *)script));
     // 2. Evaulate it
     eval_result = JS_Eval(env->context, cScript, strlen(cScript), "<input>", JS_EVAL_TYPE_GLOBAL);
-    
-    processPendingTask(env);
+
+    napi_run_microtasks(env);
     
     // 3. Free the script char *
     JS_FreeCString(env->context, cScript);

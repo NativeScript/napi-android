@@ -529,6 +529,7 @@ NAPI_EXTERN napi_status NAPI_CDECL NAPIFreeRuntime(napi_runtime runtime);
 
 NAPI_EXTERN napi_status NAPI_CDECL napi_free_cstring(napi_env env, const char *cString);
 
+NAPI_EXTERN napi_status NAPI_CDECL napi_run_microtasks(napi_env env);
 EXTERN_C_END
 
 #endif // SRC_JS_NATIVE_API_H_

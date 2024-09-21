@@ -1,6 +1,6 @@
 #include "Logger.h"
 
-using namespace tns;
+using namespace ns;
 
 Logger::Logger() {
 }

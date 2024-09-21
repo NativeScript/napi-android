@@ -3,7 +3,7 @@
 
 #include "JEnv.h"
 
-namespace tns {
+namespace ns {
 class AssetExtractor {
     public:
         static void ExtractAssets(JNIEnv* env, jobject obj, jstring apk, jstring inputDir, jstring outputDir, jboolean _forceOverwrite);

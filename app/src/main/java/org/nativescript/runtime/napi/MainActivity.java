@@ -2,11 +2,13 @@ package org.nativescript.runtime.napi;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.TextView;
 
 import org.nativescript.runtime.napi.databinding.ActivityMainBinding;
+
+import java.io.File;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -23,14 +25,31 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        callFromJS();
+        LogcatLogger logger = new LogcatLogger(getApplicationContext());
+
+        DefaultExtractPolicy extractPolicy = new DefaultExtractPolicy(logger);
+
+        Context ctx = getApplicationContext();
+        String appDir = null;
+        try {
+            appDir = getApplicationContext().getFilesDir().getCanonicalPath();
+
+            AssetExtractor aE = new AssetExtractor(null, logger);
+
+            String outputDir = ctx.getFilesDir().getPath() + File.separator;
+            aE.extractAssets(ctx, "metadata", outputDir, extractPolicy, false);
+            aE.extractAssets(ctx, "app", outputDir, extractPolicy, true);
+
+        } catch (Exception e) {
+
+        }
+
+        if (appDir != null) {
+            startNAPIRuntime(appDir);
+        }
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
-
-        // Example of a call to a native method
-        TextView tv = binding.sampleText;
-        tv.setText(stringFromJNI());
     }
 
     public int number;
@@ -41,10 +60,5 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    /**
-     * A native method that is implemented by the 'napi' native library,
-     * which is packaged with this application.
-     */
-    public native String stringFromJNI();
-    public native void callFromJS();
+    public native void startNAPIRuntime(String filesPath);
 }

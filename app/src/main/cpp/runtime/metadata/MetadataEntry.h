@@ -5,7 +5,7 @@
 #include "jni.h"
 #include "MetadataTreeNode.h"
 
-namespace tns {
+namespace ns {
 enum class NodeType {
     Package,
     Class,

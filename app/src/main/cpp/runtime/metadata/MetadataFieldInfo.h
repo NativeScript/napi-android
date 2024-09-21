@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-namespace tns {
+namespace ns {
 struct __attribute__ ((__packed__)) FieldInfo {
     FieldInfo()
     :

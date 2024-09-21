@@ -4,7 +4,7 @@
 #include <sstream>
 
 using namespace std;
-using namespace tns;
+using namespace ns;
 
 MetadataReader::MetadataReader()
     :

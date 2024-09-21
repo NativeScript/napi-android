@@ -13,7 +13,7 @@
 
 using namespace std;
 
-namespace tns {
+namespace ns {
 
 string File::ReadText(const string& filePath) {
     int len;
@@ -82,6 +82,24 @@ const char* File::ReadText(const string& filePath, int& charLength, bool& isNew)
 
     return Buffer;
 }
+
+std::unique_ptr<char[]> File::ReadFile(const std::string &filePath, int &length, int extraBuffer) {
+        FILE *file = fopen(filePath.c_str(), "rb");
+        if (!file) {
+            std::stringstream ss;
+            ss << "metadata file (" << filePath << ") couldn't be opened! (Error: " << errno << ") ";
+//        throw NativeScriptException(ss.str());
+        }
+
+        fseek(file, 0, SEEK_END);
+        length = ftell(file);
+        std::unique_ptr<char[]> buffer(new char[length + extraBuffer]);
+        rewind(file);
+        fread(buffer.get(), 1, length, file);
+        fclose(file);
+
+        return buffer;
+    }
 
 char* File::Buffer = new char[BUFFER_SIZE];
 

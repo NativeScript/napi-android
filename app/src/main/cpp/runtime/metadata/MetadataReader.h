@@ -7,7 +7,7 @@
 #include <string>
 #include <assert.h>
 #include "robin_hood.h"
-namespace tns {
+namespace ns {
 typedef std::vector<std::string> (*GetTypeMetadataCallback)(const std::string& classname, int index);
 
 class MethodInfo;

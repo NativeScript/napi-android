@@ -1,0 +1,1 @@
+console.log(java.lang.String);
