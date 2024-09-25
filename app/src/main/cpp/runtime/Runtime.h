@@ -8,6 +8,8 @@
 #include "js_native_api.h"
 #include "robin_hood.h"
 #include <fcntl.h>
+#include "native_api_util.h"
+#include "ObjectManager.h"
 
 namespace ns {
     class Runtime {
@@ -45,6 +47,9 @@ namespace ns {
 
         int GetId();
 
+        static ObjectManager* GetObjectManager(napi_env env);
+        ObjectManager* GetObjectManager() const;
+
         napi_env GetNapiEnv();
 
         napi_runtime GetNapiRuntime();
@@ -68,7 +73,7 @@ namespace ns {
         napi_value m_gcFunc;
         volatile bool m_runGC;
 
-// TODO      ObjectManager* m_objectManager;
+        ObjectManager* m_objectManager;
 // TODO      ArrayBufferHelper m_arrayBufferHelper;
 
         bool m_isMainThread;

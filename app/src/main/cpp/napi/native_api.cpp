@@ -1679,7 +1679,6 @@ napi_status napi_create_double(napi_env env, double value, napi_value *result)
     CHECK_ARG(env)
     CHECK_ARG(result)
     
-    
     JSValue jsValue = JS_NewFloat64(env->context, value);
     return CreateScopedResult(env, jsValue, result);
 }
@@ -2461,13 +2460,15 @@ napi_status napi_get_value_string_utf8(napi_env env, napi_value value, char *buf
 {
     CHECK_ARG(env)
     CHECK_ARG(value)
-    
-    size_t l = 0;
-    const char *str = JS_ToCStringLen(env->context, &l, *((JSValue *)value));
-    if (str == nullptr)
+
+    if (!JS_IsString(*((JSValue *)value)))
     {
         return napi_set_last_error(env, napi_string_expected);
     }
+    
+    size_t l = 0;
+    const char *str = JS_ToCStringLen(env->context, &l, *((JSValue *)value));
+ 
     
     if (result != nullptr)
     {
@@ -3351,7 +3352,7 @@ napi_status napi_has_named_property(napi_env env, napi_value object, const char 
     CHECK_ARG(result)
     
     JSValue jsValue = *((JSValue *)object);
-    
+
     if (!JS_IsObject(jsValue))
     {
         return napi_set_last_error(env, napi_object_expected);
@@ -4278,7 +4279,6 @@ napi_status napi_add_finalizer(napi_env env, napi_value jsObject, void *nativeOb
     JSValue res = JS_Invoke(env->context, env->finalizationRegistry, env->atoms.registerFinalizer, 2, params);
     JS_FreeValue(env->context, res);
 
-    
     if (result)
     {
         // Create a weak reference.

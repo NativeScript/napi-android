@@ -147,6 +147,14 @@ int Runtime::GetAndroidVersion() {
     return intValue;
 }
 
+ObjectManager* Runtime::GetObjectManager(napi_env env) {
+    return GetRuntime(env)->GetObjectManager();
+}
+
+ObjectManager* Runtime::GetObjectManager() const {
+    return m_objectManager;
+}
+
 Runtime::~Runtime() {
 //    delete this->m_objectManager;
     delete this->m_loopTimer;

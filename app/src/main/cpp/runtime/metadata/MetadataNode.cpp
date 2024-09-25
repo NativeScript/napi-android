@@ -14,8 +14,28 @@
 #include "NativeScriptAssert.h"
 #include "File.h"
 #include "Runtime.h"
+#include "ArgConverter.h"
+
 
 using namespace std;
+
+void MetadataNode::Init(napi_env env) {
+    auto cache = GetMetadataNodeCache(env);
+    cache->MetadataKey = java_bridge::make_ref(env, ArgConverter::ConvertToV8String(env, "tns::MetadataKey"));
+}
+
+MetadataNode::MetadataNodeCache* MetadataNode::GetMetadataNodeCache(napi_env env) {
+    MetadataNodeCache* cache;
+    auto itFound = s_metadata_node_cache.find(env);
+    if (itFound == s_metadata_node_cache.end()) {
+        cache = new MetadataNodeCache;
+        s_metadata_node_cache.emplace(env, cache);
+    } else {
+        cache = itFound->second;
+    }
+    return cache;
+}
+
 
 MetadataNode::MetadataNode(MetadataTreeNode *treeNode) :
         m_treeNode(treeNode) {
@@ -56,9 +76,7 @@ void MetadataNode::CreateTopLevelNamespaces(napi_env env) {
         if (nodeType == MetadataTreeNode::PACKAGE) {
             auto node = GetOrCreateInternal(treeNode);
 
-            napi_ref ref = node->CreateWrapper(env);
-            napi_value packageObj;
-            napi_get_reference_value(env, ref, &packageObj);
+            napi_value packageObj = node->CreateWrapper(env);
 
             string nameSpace = node->m_treeNode->name;
             // if the namespaces matches a javascript keyword, prefix it with $ to avoid TypeScript and JavaScript errors
@@ -68,6 +86,49 @@ void MetadataNode::CreateTopLevelNamespaces(napi_env env) {
             napi_set_named_property(env, global, nameSpace.c_str(), packageObj);
         }
     }
+}
+
+napi_value MetadataNode::CreateJSWrapper(napi_env env, ns::ObjectManager* objectManager) {
+    return nullptr;
+}
+
+
+MetadataTreeNode* MetadataNode::GetOrCreateTreeNodeByName(const string& className) {
+    MetadataTreeNode* result = nullptr;
+
+    auto itFound = s_name2TreeNodeCache.find(className);
+
+    if (itFound != s_name2TreeNodeCache.end()) {
+        result = itFound->second;
+    } else {
+        result = s_metadataReader.GetOrCreateTreeNodeByName(className);
+
+        s_name2TreeNodeCache.emplace(className, result);
+    }
+
+    return result;
+}
+
+string MetadataNode::GetName() {
+    return m_name;
+}
+
+MetadataNode* MetadataNode::GetOrCreate(const string& className) {
+    MetadataNode* node = nullptr;
+
+    auto it = s_name2NodeCache.find(className);
+
+    if (it == s_name2NodeCache.end()) {
+        MetadataTreeNode* treeNode = GetOrCreateTreeNodeByName(className);
+
+        node = GetOrCreateInternal(treeNode);
+
+        s_name2NodeCache.emplace(className, node);
+    } else {
+        node = it->second;
+    }
+
+    return node;
 }
 
 
@@ -178,40 +239,43 @@ bool MetadataNode::IsJavascriptKeyword(std::string word) {
     return keywords.find(word) != keywords.end();
 }
 
-napi_ref MetadataNode::CreateWrapper(napi_env env) {
-    napi_ref ref;
+napi_value MetadataNode::CreateWrapper(napi_env env) {
+    napi_escapable_handle_scope scope;
+    napi_open_escapable_handle_scope(env, &scope);
+    napi_value obj;
     uint8_t nodeType = s_metadataReader.GetNodeType(m_treeNode);
     bool isClass = s_metadataReader.IsNodeTypeClass(nodeType),
             isInterface = s_metadataReader.IsNodeTypeInterface(nodeType);
     napi_status status;
-    napi_handle_scope scope;
-    napi_open_handle_scope(env, &scope);
+
 
     if (isClass || isInterface) {
-//        obj = GetConstructorFunction(env);
+        obj = GetConstructorFunction(env);
     } else if (s_metadataReader.IsNodeTypePackage(nodeType)) {
-        napi_value obj = CreatePackageObject(env);
-        napi_create_reference(env, obj, 1, &ref);
-        napi_close_handle_scope(env, scope);
+        obj = CreatePackageObject(env);
+
     } else {
         std::stringstream ss;
         ss << "(InternalError): Can't create proxy for this type=" << static_cast<int>(nodeType);
-//        throw NativeScriptException(ss.str());
+         throw NativeScriptException(ss.str());
     }
 
+    napi_value result;
+    napi_escape_handle(env, scope, obj, &result);
 
-    return ref;
+    napi_close_escapable_handle_scope(env, scope);
+
+    return result;
 }
 
 
 typedef struct PackageGetterMethodInfo {
     const char *utf8name;
     MetadataNode *data;
-    napi_ref ref;
+    napi_ref value;
 } PackageGetterMethodInfo;
 
 napi_value MetadataNode::PackageGetter(napi_env env, napi_callback_info info) {
-
     size_t argc = 1;
     napi_value args[1];
     napi_value thisArg;
@@ -221,10 +285,8 @@ napi_value MetadataNode::PackageGetter(napi_env env, napi_callback_info info) {
 
     auto *methodInfo = static_cast<PackageGetterMethodInfo *>(data);
 
-    if (methodInfo->ref != nullptr) {
-        napi_value result;
-        napi_get_reference_value(env,  methodInfo->ref, &result);
-        return result;
+    if (methodInfo->value != nullptr) {
+        return java_bridge::get_ref_value(env, methodInfo->value);
     }
 
     auto node = methodInfo->data;
@@ -236,7 +298,7 @@ napi_value MetadataNode::PackageGetter(napi_env env, napi_callback_info info) {
 
     if (foundChild) {
         auto childNode = MetadataNode::GetOrCreateInternal(child.treeNode);
-        methodInfo->ref = childNode->CreateWrapper(env);
+        methodInfo->value = java_bridge::make_ref(env, childNode->CreateWrapper(env));
 
         uint8_t childNodeType = s_metadataReader.GetNodeType(child.treeNode);
         bool isInterface = s_metadataReader.IsNodeTypeInterface(childNodeType);
@@ -258,9 +320,7 @@ napi_value MetadataNode::PackageGetter(napi_env env, napi_callback_info info) {
 //                }
     }
 
-    napi_value result;
-    napi_get_reference_value(env,  methodInfo->ref, &result);
-    return result;
+    return java_bridge::get_ref_value(env, methodInfo->value);
 }
 
 
@@ -277,7 +337,7 @@ napi_value MetadataNode::CreatePackageObject(napi_env env) {
             auto *info = (PackageGetterMethodInfo *) malloc(sizeof(PackageGetterMethodInfo));
             info->utf8name = childNode->name.c_str();
             info->data = this;
-            info->ref = nullptr;
+            info->value = nullptr;
 
             napi_property_descriptor descriptor{
                     childNode->name.c_str(),
@@ -296,26 +356,52 @@ napi_value MetadataNode::CreatePackageObject(napi_env env) {
     return packageObj;
 }
 
-
+napi_value MetadataNode::ConstructorFunction(napi_env env, napi_callback_info info) {
+    NAPI_CALLBACK_BEGIN(0);
+    return jsThis;
+}
 
 napi_value MetadataNode::GetConstructorFunction(napi_env env) {
-//    auto node = GetOrCreateInternal(m_treeNode);
-//
-//    JEnv jEnv;
-//
-//    auto currentNode = m_treeNode;
-//    std::string finalName(currentNode->name);
-//    while (currentNode->parent) {
-//        if (!currentNode->parent->name.empty()) {
-//            finalName = currentNode->parent->name + "." + finalName;
-//        }
-//        currentNode = currentNode->parent;
-//    }
+    auto cache = GetMetadataNodeCache(env);
+    auto itFound = cache->CtorFuncCache.find(m_treeNode);
+    if (itFound != cache->CtorFuncCache.end()) {
+        return java_bridge::get_ref_value(env, itFound->second);
+    }
 
-    return nullptr;
+    auto node = GetOrCreateInternal(m_treeNode);
+
+    JEnv jEnv;
+
+    auto currentNode = m_treeNode;
+    std::string finalName(currentNode->name);
+    while (currentNode->parent) {
+        if (!currentNode->parent->name.empty()) {
+            finalName = currentNode->parent->name + "." + finalName;
+        }
+        currentNode = currentNode->parent;
+    }
+
+    // TODO
+    // 1. Create the class and get the constructor
+    // 2. Define static fields and methods on the constructor
+    // 3. Find and init this class's super class and inherit from it using napi_inherit
+    // 4. Define any instance functions and fields on the class
+    // 5. Bind the treeNode data to class constructor with napi_wrap
+    // 6. Cache the class for future access
+    // 7. Keep everything on demand, define and init properties and their relavant metadata when accessed.
+
+    // 1.
+
+    napi_value constructor;
+    napi_define_class(env, finalName.c_str(), NAPI_AUTO_LENGTH, MetadataNode::ConstructorFunction, node, 0, nullptr, &constructor);
+
+    // 2. Define static fields and methods on the class
+
+    return constructor;
 }
 
 MetadataReader MetadataNode::s_metadataReader;
 robin_hood::unordered_map<std::string, MetadataNode *> MetadataNode::s_name2NodeCache;
 robin_hood::unordered_map<std::string, MetadataTreeNode *> MetadataNode::s_name2TreeNodeCache;
 robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> MetadataNode::s_treeNode2NodeCache;
+robin_hood::unordered_map<napi_env, MetadataNode::MetadataNodeCache*> MetadataNode::s_metadata_node_cache;

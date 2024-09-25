@@ -34,6 +34,7 @@ include_directories(
         ${CMAKE_SOURCE_DIR}/runtime/jni/robinhood
         ${CMAKE_SOURCE_DIR}/runtime/jni
         ${CMAKE_SOURCE_DIR}/runtime/metadata
+        ${CMAKE_SOURCE_DIR}/runtime/convert
 )
 
 # Search for all CPP files in runtime/ directory and add them to our sources
@@ -41,6 +42,7 @@ file(GLOB_RECURSE RUNTIME_FILES
         "${CMAKE_SOURCE_DIR}/runtime/*.cpp"
         "${CMAKE_SOURCE_DIR}/runtime/jni/*.cpp"
         "${CMAKE_SOURCE_DIR}/runtime/metadata/*.cpp"
+        "${CMAKE_SOURCE_DIR}/runtime/convert/*.cpp"
 )
 
 # Creates and names a library, sets it as either STATIC or SHARED, and provides the relative paths to its source code.
