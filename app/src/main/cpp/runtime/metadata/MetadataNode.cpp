@@ -1,12 +1,9 @@
-//
-// Created by Ammar Ahmed on 20/09/2024.
-//
 #include <string>
 #include <sstream>
 #include <cctype>
 #include <dirent.h>
 #include <set>
-#include <errno.h>
+#include <cerrno>
 #include <unistd.h>
 #include "NativeScriptException.h"
 #include "MetadataNode.h"
@@ -21,11 +18,12 @@ using namespace std;
 
 void MetadataNode::Init(napi_env env) {
     auto cache = GetMetadataNodeCache(env);
-    cache->MetadataKey = java_bridge::make_ref(env, ArgConverter::ConvertToV8String(env, "tns::MetadataKey"));
+    cache->MetadataKey = java_bridge::make_ref(env, ArgConverter::ConvertToV8String(env,
+                                                                                    "tns::MetadataKey"));
 }
 
-MetadataNode::MetadataNodeCache* MetadataNode::GetMetadataNodeCache(napi_env env) {
-    MetadataNodeCache* cache;
+MetadataNode::MetadataNodeCache *MetadataNode::GetMetadataNodeCache(napi_env env) {
+    MetadataNodeCache *cache;
     auto itFound = s_metadata_node_cache.find(env);
     if (itFound == s_metadata_node_cache.end()) {
         cache = new MetadataNodeCache;
@@ -88,13 +86,13 @@ void MetadataNode::CreateTopLevelNamespaces(napi_env env) {
     }
 }
 
-napi_value MetadataNode::CreateJSWrapper(napi_env env, ns::ObjectManager* objectManager) {
+napi_value MetadataNode::CreateJSWrapper(napi_env env, ns::ObjectManager *objectManager) {
     return nullptr;
 }
 
 
-MetadataTreeNode* MetadataNode::GetOrCreateTreeNodeByName(const string& className) {
-    MetadataTreeNode* result = nullptr;
+MetadataTreeNode *MetadataNode::GetOrCreateTreeNodeByName(const string &className) {
+    MetadataTreeNode *result = nullptr;
 
     auto itFound = s_name2TreeNodeCache.find(className);
 
@@ -113,13 +111,13 @@ string MetadataNode::GetName() {
     return m_name;
 }
 
-MetadataNode* MetadataNode::GetOrCreate(const string& className) {
-    MetadataNode* node = nullptr;
+MetadataNode *MetadataNode::GetOrCreate(const string &className) {
+    MetadataNode *node = nullptr;
 
     auto it = s_name2NodeCache.find(className);
 
     if (it == s_name2NodeCache.end()) {
-        MetadataTreeNode* treeNode = GetOrCreateTreeNodeByName(className);
+        MetadataTreeNode *treeNode = GetOrCreateTreeNodeByName(className);
 
         node = GetOrCreateInternal(treeNode);
 
@@ -159,7 +157,7 @@ void MetadataNode::BuildMetadata(const std::string &filesPath) {
         ss << "metadata folder couldn't be opened! (Error: " << errno << ") ";
         if (errno == ENOENT || errno == EACCES) {
         } else {
-//            throw NativeScriptException(ss.str());
+           throw NativeScriptException(ss.str());
         }
     }
     closedir(dir);
@@ -190,9 +188,9 @@ void MetadataNode::BuildMetadata(uint32_t nodesLength, uint8_t *nodeData, uint32
 }
 
 MetadataEntry MetadataNode::GetChildMetadataForPackage(MetadataNode *node, const char *propName) {
-    MetadataEntry child;
-
     assert(node->m_treeNode->children != nullptr);
+
+    MetadataEntry child(nullptr, NodeType::Class);
 
     const auto &children = *node->m_treeNode->children;
 
@@ -200,9 +198,9 @@ MetadataEntry MetadataNode::GetChildMetadataForPackage(MetadataNode *node, const
         if (propName == treeNodeChild->name.c_str()) {
             child.name = propName;
             child.treeNode = treeNodeChild;
+            child.type = static_cast<NodeType>(s_metadataReader.GetNodeType(treeNodeChild));
 
-            uint8_t childNodeType = s_metadataReader.GetNodeType(treeNodeChild);
-            if (s_metadataReader.IsNodeTypeInterface(childNodeType)) {
+            if (s_metadataReader.IsNodeTypeInterface((uint8_t) child.type)) {
                 bool isPrefix;
                 string declaringType = s_metadataReader.ReadInterfaceImplementationTypeName(
                         treeNodeChild, isPrefix);
@@ -211,6 +209,7 @@ MetadataEntry MetadataNode::GetChildMetadataForPackage(MetadataNode *node, const
                                          s_metadataReader.ReadTypeName(child.treeNode))
                                       : declaringType;
             }
+
         }
     }
 
@@ -257,7 +256,7 @@ napi_value MetadataNode::CreateWrapper(napi_env env) {
     } else {
         std::stringstream ss;
         ss << "(InternalError): Can't create proxy for this type=" << static_cast<int>(nodeType);
-         throw NativeScriptException(ss.str());
+        throw NativeScriptException(ss.str());
     }
 
     napi_value result;
@@ -393,15 +392,20 @@ napi_value MetadataNode::GetConstructorFunction(napi_env env) {
     // 1.
 
     napi_value constructor;
-    napi_define_class(env, finalName.c_str(), NAPI_AUTO_LENGTH, MetadataNode::ConstructorFunction, node, 0, nullptr, &constructor);
+    napi_define_class(env, finalName.c_str(), NAPI_AUTO_LENGTH, MetadataNode::ConstructorFunction,
+                      node, 0, nullptr, &constructor);
 
     // 2. Define static fields and methods on the class
 
     return constructor;
 }
 
+MetadataReader *MetadataNode::getMetadataReader() {
+    return &MetadataNode::s_metadataReader;
+}
+
 MetadataReader MetadataNode::s_metadataReader;
 robin_hood::unordered_map<std::string, MetadataNode *> MetadataNode::s_name2NodeCache;
 robin_hood::unordered_map<std::string, MetadataTreeNode *> MetadataNode::s_name2TreeNodeCache;
 robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> MetadataNode::s_treeNode2NodeCache;
-robin_hood::unordered_map<napi_env, MetadataNode::MetadataNodeCache*> MetadataNode::s_metadata_node_cache;
+robin_hood::unordered_map<napi_env, MetadataNode::MetadataNodeCache *> MetadataNode::s_metadata_node_cache;

@@ -18,8 +18,18 @@ public:
     napi_value CreateJSWrapper(napi_env env, ns::ObjectManager* objectManager);
     static MetadataNode* GetOrCreate(const std::string& className);
 
+    static MetadataReader* getMetadataReader();
+
     std::string GetName();
 private:
+    struct MethodCallbackData;
+
+    struct ExtendedClassCallbackData;
+
+    struct ExtendedClassCacheData;
+
+    struct TypeMetadata;
+
     struct MetadataNodeCache;
 
     static void BuildMetadata(uint32_t nodesLength, uint8_t* nodeData, uint32_t nameLength, uint8_t* nameData, uint32_t valueLength, uint8_t* valueData);
@@ -54,6 +64,23 @@ private:
     static robin_hood::unordered_map<MetadataTreeNode*, MetadataNode*> s_treeNode2NodeCache;
     static robin_hood::unordered_map<napi_env, MetadataNodeCache*> s_metadata_node_cache;
 
+    struct MethodCallbackData {
+        MethodCallbackData()
+                :
+                node(nullptr), parent(nullptr), isSuper(false) {
+        }
+
+        MethodCallbackData(MetadataNode* _node)
+                :
+                node(_node), parent(nullptr), isSuper(false) {
+        }
+
+        std::vector<MetadataEntry> candidates;
+        MetadataNode* node;
+        MethodCallbackData* parent;
+        bool isSuper;
+    };
+
     struct ExtendedClassCacheData {
         ExtendedClassCacheData()
                 :
@@ -67,6 +94,40 @@ private:
         napi_ref extendedCtorFunction;
         std::string extendedName;
         MetadataNode* node;
+    };
+
+    struct PropertyCallbackData {
+        PropertyCallbackData(std::string _propertyName, std::string _getterMethodName, std::string _setterMethodName)
+                :
+                propertyName(_propertyName), getterMethodName(_getterMethodName), setterMethodName(_setterMethodName) {
+
+        }
+        std::string propertyName;
+        std::string getterMethodName;
+        std::string setterMethodName;
+    };
+
+    struct ExtendedClassCallbackData {
+        ExtendedClassCallbackData(MetadataNode* _node, const std::string& _extendedName, napi_ref _implementationObject, std::string _fullClassName)
+                :
+                node(_node), extendedName(_extendedName), fullClassName(_fullClassName) {
+            implementationObject = _implementationObject;
+        }
+
+        MetadataNode* node;
+        std::string extendedName;
+        napi_ref implementationObject;
+
+        std::string fullClassName;
+    };
+
+    struct TypeMetadata {
+        TypeMetadata(const std::string& _name)
+                :
+                name(_name) {
+        }
+
+        std::string name;
     };
 
     struct MetadataNodeCache {

@@ -1,31 +1,28 @@
 #include "MetadataMethodInfo.h"
+#include "MetadataNode.h"
+
 
 using namespace ns;
 
 std::string MethodInfo::GetName() {
-    uint32_t nameOfffset = *reinterpret_cast<uint32_t*>(m_pData);
-    string methodName = m_reader->ReadName(nameOfffset);
-    m_pData += sizeof(uint32_t);
+    string methodName = MetadataNode::getMetadataReader()->ReadName(nameOffset);
 
     return methodName;
 }
 
 uint8_t MethodInfo::CheckIsResolved() {
-    auto resolvedData = *reinterpret_cast<uint8_t*>(m_pData);
-    m_pData += sizeof(uint8_t);
 
     return resolvedData;
 }
 
 uint16_t MethodInfo::GetSignatureLength() {
     m_signatureLength = *reinterpret_cast<uint16_t*>(m_pData);
-    m_pData += sizeof(uint16_t);
 
     return m_signatureLength;
 }
 
 std::string MethodInfo::GetSignature() { //use nodeId's to read the whole signature
-    uint16_t* nodeIdPtr = reinterpret_cast<uint16_t*>(m_pData);
+    auto m_reader = MetadataNode::getMetadataReader();
     string signature = "(";
     string ret;
     for (int i = 0; i < m_signatureLength; i++) {
@@ -65,16 +62,31 @@ std::string MethodInfo::GetSignature() { //use nodeId's to read the whole signat
 }
 
 std::string MethodInfo::GetDeclaringType() {
-    uint16_t* declaringTypePtr = reinterpret_cast<uint16_t*>(m_pData);
+    auto m_reader = MetadataNode::getMetadataReader();
     uint16_t nodeId = *declaringTypePtr;
 
     string declTypeName = m_reader->ReadTypeName(nodeId);
-
-    m_pData += sizeof(uint16_t);
 
     return declTypeName;
 }
 
 int MethodInfo::GetSizeOfReadMethodInfo() {
+    if (!sizeMeasured) {
+        nameOffset = *reinterpret_cast<uint32_t*>(m_pData);
+        resolvedData = *reinterpret_cast<uint8_t*>(m_pData);
+        m_signatureLength = *reinterpret_cast<uint16_t*>(m_pData);
+
+        int sizeofReadNodeIds = m_signatureLength * sizeof(uint16_t);
+        m_pData += sizeofReadNodeIds;
+
+        if (isStatic) {
+            declaringTypePtr = reinterpret_cast<uint16_t*>(m_pData);
+        }
+
+
+        m_pData = m_pData + sizeof(nameOffset) + sizeof(resolvedData) + sizeof(nodeIdPtr) + sizeof(declaringTypePtr);
+        sizeMeasured = true;
+    }
+
     return m_pData - m_pStartData;
 }

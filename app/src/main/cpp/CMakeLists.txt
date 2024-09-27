@@ -37,7 +37,7 @@ include_directories(
         ${CMAKE_SOURCE_DIR}/runtime/convert
 )
 
-# Search for all CPP files in runtime/ directory and add them to our sources
+# Search for all CPP files in runtime/ directory and add them to our sourcess
 file(GLOB_RECURSE RUNTIME_FILES
         "${CMAKE_SOURCE_DIR}/runtime/*.cpp"
         "${CMAKE_SOURCE_DIR}/runtime/jni/*.cpp"
