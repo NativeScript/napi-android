@@ -34,6 +34,7 @@ namespace ns {
 
     class MetadataEntry {
     public:
+
         MetadataEntry(MetadataTreeNode* m_treeNode, NodeType nodeType);
 
         const std::string& getName();

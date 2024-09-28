@@ -25,7 +25,7 @@ namespace ns {
 
         static int64_t ConvertToJavaLong(napi_env env, napi_value value);
 
-        static napi_value jstringToV8String(napi_env env, jstring value) {
+        static napi_value jstringToJsString(napi_env env, jstring value) {
             if (value == nullptr) {
                 napi_value result;
                 napi_get_null(env, &result);
@@ -35,7 +35,7 @@ namespace ns {
             JEnv jenv;
             auto chars = jenv.GetStringChars(value, NULL);
             auto length = jenv.GetStringLength(value);
-            auto v8String = ConvertToV8String(env, chars, length);
+            auto v8String = convertToJsString(env, chars, length);
             jenv.ReleaseStringChars(value, chars);
 
             return v8String;
@@ -75,31 +75,35 @@ namespace ns {
             size_t str_len;
             napi_get_value_string_utf16(env, jsValue, nullptr, 0, &str_len);
             std::u16string str(str_len, '\0');
-            napi_get_value_string_utf16(env, jsValue, reinterpret_cast<char16_t*>(&str[0]), str_len + 1, &str_len);
-            return jenv.NewString(reinterpret_cast<const jchar*>(str.data()), str_len);
+            napi_get_value_string_utf16(env, jsValue, reinterpret_cast<char16_t *>(&str[0]),
+                                        str_len + 1, &str_len);
+            return jenv.NewString(reinterpret_cast<const jchar *>(str.data()), str_len);
         }
 
-        inline static napi_value ConvertToV8String(napi_env env, const jchar* data, int length) {
+        inline static napi_value convertToJsString(napi_env env, const jchar *data, int length) {
             napi_value result;
-            napi_create_string_utf16(env, reinterpret_cast<const char16_t*>(data), length, &result);
+            napi_create_string_utf16(env, reinterpret_cast<const char16_t *>(data), length,
+                                     &result);
             return result;
         }
 
-        inline static napi_value ConvertToV8String(napi_env env, const std::string& s) {
+        inline static napi_value convertToJsString(napi_env env, const std::string &s) {
             napi_value result;
             napi_create_string_utf8(env, s.c_str(), s.length(), &result);
             return result;
         }
 
-        inline static napi_value ConvertToV8String(napi_env env, const char* data, int length)  {
+        inline static napi_value convertToJsString(napi_env env, const char *data, int length) {
             napi_value result;
             napi_create_string_utf8(env, data, length, &result);
             return result;
         }
 
-        inline static napi_value ConvertToV8UTF16String(napi_env env, const std::u16string& utf16string) {
+        inline static napi_value
+        ConvertToJsUTF16String(napi_env env, const std::u16string &utf16string) {
             napi_value result;
-            napi_create_string_utf16(env, reinterpret_cast<const char16_t*>(utf16string.data()), utf16string.length(), &result);
+            napi_create_string_utf16(env, reinterpret_cast<const char16_t *>(utf16string.data()),
+                                     utf16string.length(), &result);
             return result;
         }
 
@@ -115,28 +119,30 @@ namespace ns {
             napi_ref NanNumberObject;
         };
 
-        static TypeLongOperationsCache* GetTypeLongCache(napi_env env);
+        static TypeLongOperationsCache *GetTypeLongCache(napi_env env);
 
         inline static jstring ObjectToString(jobject object) {
             return (jstring) object;
         }
 
-        inline static napi_value jcharToV8String(napi_env env, jchar value) {
-            auto v8String = ConvertToV8String(env, &value, 1);
+        inline static napi_value jcharToJsString(napi_env env, jchar value) {
+            auto v8String = convertToJsString(env, &value, 1);
             return v8String;
         }
 
         static napi_value NativeScriptLongFunctionCallback(napi_env env, napi_callback_info info);
 
-        static napi_value NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info);
+        static napi_value
+        NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info);
 
-        static napi_value NativeScriptLongToStringFunctionCallback(napi_env env, napi_callback_info info);
+        static napi_value
+        NativeScriptLongToStringFunctionCallback(napi_env env, napi_callback_info info);
 
         /*
          * "s_type_long_operations_cache" used to keep function
          * dealing with operations concerning java long -> javascript number.
          */
-        static robin_hood::unordered_map<napi_env, TypeLongOperationsCache*> s_type_long_operations_cache;
+        static robin_hood::unordered_map<napi_env, TypeLongOperationsCache *> s_type_long_operations_cache;
     };
 }
 

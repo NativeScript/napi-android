@@ -750,6 +750,80 @@ napi_status napi_escape_handle(napi_env env, napi_escapable_handle_scope scope, 
 
 // Error Handling
 
+napi_status napi_create_error(napi env, napi_value code, napi_value msg, napi_value* result) {
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+    
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+
+    if (code != nullptr) {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+    
+    return CreateScopedResult(env, error, &result);
+}
+
+napi_status napi_create_type_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
+{
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+    
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "TypeError"), JS_PROP_C_W_E);
+    
+    if (code != nullptr) {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+    
+    return CreateScopedResult(env, error, &result);
+}
+
+napi_status napi_create_range_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
+{
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+    
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "RangeError"), JS_PROP_C_W_E);
+    
+    if (code != nullptr) {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+    
+    return CreateScopedResult(env, error, &result);
+}
+
+napi_status napi_create_range_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
+{
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+    
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "SyntaxError"), JS_PROP_C_W_E);
+
+    if (code != nullptr) {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+    
+    return CreateScopedResult(env, error, &result);
+}
+
 napi_status napi_throw(napi_env env, napi_value error)
 {
     
@@ -1002,6 +1076,7 @@ static napi_status clearWeak(napi_env env, napi_ref ref)
     
     return napi_clear_last_error(env);
 }
+
 
 
 
@@ -2456,38 +2531,36 @@ napi_status napi_get_value_string_latin1(napi_env env,
     return napi_clear_last_error(env);
 }
 
-napi_status napi_get_value_string_utf8(napi_env env, napi_value value, char *buf, size_t bufsize, size_t *result)
+napi_status napi_get_value_string_utf8(napi_env env, napi_value value, char *str, size_t length, size_t *result)
 {
     CHECK_ARG(env)
     CHECK_ARG(value)
+
+
 
     if (!JS_IsString(*((JSValue *)value)))
     {
         return napi_set_last_error(env, napi_string_expected);
     }
     
-    size_t l = 0;
-    const char *str = JS_ToCStringLen(env->context, &l, *((JSValue *)value));
+    size_t cstr_len = 0;
+    const char *cstr = JS_ToCStringLen(env->context, &cstr_len, *((JSValue *)value));
  
     
     if (result != nullptr)
     {
-        *result = l;
+        *result = cstr_len;
     }
     
-    if (buf != nullptr && bufsize != 0)
+    if (str != nullptr && length != 0)
     {
-        if (l > bufsize)
-        {
-            strncpy(buf, str, bufsize);
-            buf[bufsize - 1] = '\0';
-        }
-        else
-        {
-            strcpy(buf, str);
+        strncpy(str, cstr, cstr_len > length ? length : cstr_len);
+
+        if (cstr_len < length) {
+            str[cstr_len] = '\0';
         }
     }
-    JS_FreeCString(env->context, str);
+    JS_FreeCString(env->context, cstr);
     return napi_clear_last_error(env);
 }
 
@@ -3237,7 +3310,6 @@ napi_status napi_delete_property(napi_env env, napi_value object, napi_value key
     CHECK_ARG(env)
     CHECK_ARG(object)
     CHECK_ARG(key)
-    CHECK_ARG(result)
     
     JSValue jsValue = *((JSValue *)object);
     JSValue jsKey = *((JSValue *)key);
@@ -3870,6 +3942,7 @@ napi_status napi_get_new_target(napi_env env, napi_callback_info callbackInfo, n
     
     return napi_clear_last_error(env);
 }
+
 
 napi_status napi_new_instance(napi_env env, napi_value constructor, size_t argc, const napi_value *argv,
                               napi_value *result)

@@ -28,10 +28,10 @@ void ArgConverter::Init(napi_env env, napi_value context) {
     napi_set_named_property(env, longNumberCtorFunc, "prototype", longNumberPrototype);
 
 
-    cache->LongNumberCtorFunc = java_bridge::make_ref(env, longNumberCtorFunc, 1);
+    cache->LongNumberCtorFunc = napi_util::make_ref(env, longNumberCtorFunc, 1);
     napi_value nanValue;
     napi_create_double(env, numeric_limits<double>::quiet_NaN(), &nanValue);
-    cache->NanNumberObject = java_bridge::make_ref(env, nanValue, 1);
+    cache->NanNumberObject = napi_util::make_ref(env, nanValue, 1);
 }
 
 napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info) {
@@ -86,7 +86,7 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
 
         NumericCasts::MarkAsLong(env, jsThis, argv[0]);
 
-        java_bridge::napi_inherits(env, jsThis, java_bridge::get_ref_value(env, cache->NanNumberObject));
+        napi_util::napi_inherits(env, jsThis, napi_util::get_ref_value(env, cache->NanNumberObject));
 
         return jsThis;
 
@@ -128,7 +128,7 @@ napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args
                 napi_get_boolean(env, JType::BooleanValue(jenv, arg), &jsArg);
                 break;
             case Type::Char:
-                jsArg = jcharToV8String(env, JType::CharValue(jenv, arg));
+                jsArg = jcharToJsString(env, JType::CharValue(jenv, arg));
                 break;
             case Type::Byte:
                 napi_create_int32(env, JType::ByteValue(jenv, arg), &jsArg);
@@ -149,7 +149,7 @@ napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args
                 napi_create_double(env, JType::DoubleValue(jenv, arg), &jsArg);
                 break;
             case Type::String:
-                jsArg = jstringToV8String(env, (jstring) arg);
+                jsArg = jstringToJsString(env, (jstring) arg);
                 break;
             case Type::JsObject: {
 //                jint javaObjectID = JType::IntValue(jenv, arg);
@@ -187,7 +187,7 @@ napi_value ArgConverter::ConvertFromJavaLong(napi_env env, jlong value) {
         napi_create_string_utf8(env, strNumber, NAPI_AUTO_LENGTH, &strValue);
         napi_value args[1] = { strValue };
 
-        napi_new_instance(env, java_bridge::get_ref_value(env, cache->LongNumberCtorFunc), 1, args, &convertedValue);
+        napi_new_instance(env, napi_util::get_ref_value(env, cache->LongNumberCtorFunc), 1, args, &convertedValue);
     }
 
     return convertedValue;

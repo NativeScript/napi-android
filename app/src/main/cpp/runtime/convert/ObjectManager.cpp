@@ -8,9 +8,10 @@
 #include <algorithm>
 #include <sstream>
 
-const char * C_JSINFO = "_n:info";
-const char * C_CALLSUPER = "_n:supercall";
-const char * C_IS_NAPI = "_n:hint";
+
+const char * C_JSINFO = "#js_info";
+const char * C_CALLSUPER = "#supercall";
+const char * C_IS_NAPI = "#is_napi";
 
 using namespace std;
 using namespace ns;
@@ -104,7 +105,7 @@ void ObjectManager::Init(napi_env env) {
     napi_value proto;
     napi_get_prototype(env, jsWrapper, &proto);
     napi_set_property(env, proto, IS_NAPI, hint);
-    m_poJsWrapperFunc = java_bridge::make_ref(env, jsWrapper, 1);
+    m_poJsWrapperFunc = napi_util::make_ref(env, jsWrapper, 1);
 }
 
 JniLocalRef ObjectManager::GetJavaObjectByJsObject(napi_env env, napi_value object) {
@@ -212,14 +213,10 @@ napi_value ObjectManager::GetJsObjectByJavaObject(int javaObjectID) {
 
     auto it = m_idToObject.find(javaObjectID);
     if (it == m_idToObject.end()) {
-
-        napi_value object;
-        napi_create_object(m_env, &object);
-        napi_escape_handle(m_env, escapableScope, object, nullptr);
-        return object;
+        return nullptr;
     }
 
-    return java_bridge::get_ref_value(m_env, it->second);
+    return napi_util::get_ref_value(m_env, it->second);
 }
 
 napi_value ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName) {
@@ -260,7 +257,7 @@ void ObjectManager::Link(napi_value object, uint32_t javaObjectID, jclass clazz)
 
     auto jsInstanceInfo = new JSInstanceInfo(false /*isJavaObjWeak*/, javaObjectID, clazz);
 
-    napi_ref objectHandle = java_bridge::make_ref(m_env, object, 1);
+    napi_ref objectHandle = napi_util::make_ref(m_env, object, 1);
 
     auto state = new ObjectWeakCallbackState(this, jsInstanceInfo, objectHandle);
     // subscribe for JS GC event
@@ -384,7 +381,7 @@ void ObjectManager::DeleteWeakGlobalRefCallback(const jweak &object, void *state
 }
 
 napi_value ObjectManager::GetEmptyObject(napi_env env) {
-    napi_value emptyObjCtorFunc = java_bridge::get_ref_value(env, m_poJsWrapperFunc);
+    napi_value emptyObjCtorFunc = napi_util::get_ref_value(env, m_poJsWrapperFunc);
 
     napi_value jsWrapper;
     napi_new_instance(env, emptyObjCtorFunc, 0, nullptr, &jsWrapper);

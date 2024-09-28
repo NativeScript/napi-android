@@ -80,7 +80,10 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_create_range_error(napi_env env,
                                                            napi_value code,
                                                            napi_value msg,
                                                            napi_value *result);
-
+NAPI_EXTERN napi_status NAPI_CDECL napi_create_syntax_error(napi_env env,
+                                                           napi_value code,
+                                                           napi_value msg,
+                                                           napi_value *result);
 // Methods to get the native napi_value from Primitive type
 NAPI_EXTERN napi_status NAPI_CDECL napi_typeof(napi_env env,
                                                napi_value value,
@@ -107,7 +110,7 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_get_value_string_latin1(
 
 // Copies UTF-8 encoded bytes from a string into a buffer.
 NAPI_EXTERN napi_status NAPI_CDECL napi_get_value_string_utf8(
-    napi_env env, napi_value value, char *buf, size_t bufsize, size_t *result);
+        napi_env env, napi_value value, char *str, size_t length, size_t *result);
 
 // Copies UTF-16 encoded bytes from a string into a buffer.
 NAPI_EXTERN napi_status NAPI_CDECL napi_get_value_string_utf16(napi_env env,
@@ -322,6 +325,8 @@ napi_escape_handle(napi_env env,
                    napi_escapable_handle_scope scope,
                    napi_value escapee,
                    napi_value *result);
+
+           
 
 // Methods to support error handling
 NAPI_EXTERN napi_status NAPI_CDECL napi_throw(napi_env env, napi_value error);

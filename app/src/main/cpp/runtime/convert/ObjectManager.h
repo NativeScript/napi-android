@@ -69,6 +69,17 @@ class ObjectManager {
 
         JavaScriptMarkingMode GetMarkingMode();
 
+
+        napi_value JSINFO_PROP;
+        napi_value CALLSUPER_PROP;
+        napi_value IS_NAPI;
+
+        inline static void MarkObject(napi_env env, napi_value object, ObjectManager* objectManager) {
+            napi_value marker;
+            napi_get_boolean(env, true, &marker);
+            napi_set_property(env, object, objectManager->IS_NAPI, marker);
+        }
+
     private:
 
         struct JSInstanceInfo {
@@ -219,9 +230,6 @@ class ObjectManager {
 
         napi_ref m_poJsWrapperFunc;
 
-        napi_value JSINFO_PROP;
-        napi_value CALLSUPER_PROP;
-        napi_value IS_NAPI;
 };
 }
 

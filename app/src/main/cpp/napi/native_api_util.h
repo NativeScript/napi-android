@@ -60,7 +60,15 @@
 #define NAPI_FUNCTION_DESC(name)                                               \
   { #name, NULL, JS_##name, NULL, NULL, NULL, napi_enumerable, NULL }
 
-namespace java_bridge {
+
+
+
+namespace napi_util {
+
+    const char * PROTOTYPE = "prototype";
+    const char * OBJECT = "Object";
+    const char * SET_PROTOTYPE_OF = "setPrototypeOf";
+    const char * CONSTRUCTOR = "CONSTRUCTOR";
 
     inline napi_ref make_ref(napi_env env, napi_value value,
                              uint32_t initialCount = 1) {
@@ -75,6 +83,37 @@ namespace java_bridge {
         return value;
     }
 
+    inline napi_value get_proto(napi_env env, napi_value constructor) {
+        napi_value proto;
+        napi_get_prototype(env, constructor, &proto);
+        return proto;
+    }
+
+    inline char * get_string_value(napi_env env, napi_value str, size_t size = 256) {
+        size_t str_size = size;
+        if (str_size == 0) {
+            napi_get_value_string_utf8(env, str, nullptr, 0, &str_size);
+        }
+        char *buffer = new char[str_size];
+        napi_get_value_string_utf8(env, str, buffer, str_size, nullptr);
+        return buffer;
+    }
+
+    inline napi_status define_property(napi_env env, napi_value object, const char* propertyName, napi_value value = nullptr, napi_callback getter = nullptr, napi_callback setter = nullptr, void* data = nullptr) {
+        napi_property_descriptor desc = {
+                propertyName,  // utf8name
+                nullptr,       // name
+                nullptr,       // method
+                getter,        // getter
+                setter,        // setter
+                value,         // value
+                napi_default,  // attributes
+                data           // data
+        };
+
+        return napi_define_properties(env, object, 1, &desc);
+    }
+
     inline void napi_inherits(napi_env env, napi_value ctor,
                               napi_value super_ctor) {
         napi_value global, global_object, set_proto, ctor_proto_prop,
@@ -82,19 +121,53 @@ namespace java_bridge {
         napi_value argv[2];
 
         napi_get_global(env, &global);
-        napi_get_named_property(env, global, "Object", &global_object);
-        napi_get_named_property(env, global_object, "setPrototypeOf", &set_proto);
-        napi_get_named_property(env, ctor, "prototype", &ctor_proto_prop);
-        napi_get_named_property(env, super_ctor, "prototype", &super_ctor_proto_prop);
+        napi_get_named_property(env, global, OBJECT, &global_object);
+        napi_get_named_property(env, global_object, SET_PROTOTYPE_OF, &set_proto);
+        napi_get_named_property(env, ctor, PROTOTYPE, &ctor_proto_prop);
+        napi_get_named_property(env, super_ctor,PROTOTYPE, &super_ctor_proto_prop);
 
         argv[0] = ctor_proto_prop;
         argv[1] = super_ctor_proto_prop;
-        napi_call_function(env, global, set_proto, 2, argv, NULL);
+        napi_call_function(env, global, set_proto, 2, argv, nullptr);
 
         argv[0] = ctor;
         argv[1] = super_ctor;
-        napi_call_function(env, global, set_proto, 2, argv, NULL);
+        napi_call_function(env, global, set_proto, 2, argv, nullptr);
     }
 
+    inline bool is_of_type(napi_env env, napi_value value, napi_valuetype expected_type) {
+        napi_valuetype type;
+        napi_typeof(env, value, &type);
+        return type == expected_type;
+    }
+
+    inline bool is_undefined(napi_env env, napi_value value) {
+        napi_valuetype type;
+        napi_typeof(env, value, &type);
+        return type == napi_undefined;
+    }
+
+    inline bool is_null(napi_env env, napi_value value) {
+        napi_valuetype type;
+        napi_typeof(env, value, &type);
+        return type == napi_null;
+    }
+
+    inline napi_value get_true(napi_env env) {
+        napi_value trueValue;
+        napi_get_boolean(env, true, &trueValue);
+        return trueValue;
+    }
+
+    inline napi_value get_false(napi_env env) {
+        napi_value falseValue;
+        napi_get_boolean(env, true, &falseValue);
+        return falseValue;
+    }
+
+
+
 }
+
+
 

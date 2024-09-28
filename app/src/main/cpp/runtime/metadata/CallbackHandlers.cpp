@@ -53,6 +53,24 @@ void CallbackHandlers::Init() {
 //    MethodCache::Init();
 }
 
+napi_value CallbackHandlers::FindClass(napi_env env, const char *name) {
+    napi_value clazz = nullptr;
+    JEnv jEnv;
+    jclass javaClass = jEnv.FindClass(name);
+    if (jEnv.ExceptionCheck() == JNI_FALSE) {
+        auto runtime = Runtime::GetRuntime(env);
+        auto objectManager = runtime->GetObjectManager();
+
+        jint javaObjectID = objectManager->GetOrCreateObjectId(javaClass);
+        clazz = objectManager->GetJsObjectByJavaObject(javaObjectID);
+
+        if (clazz == nullptr) {
+            clazz = objectManager->CreateJSWrapper(javaObjectID, "Ljava/lang/Class;", javaClass);
+        }
+    }
+    return clazz;
+}
+
 vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index) {
     JEnv env;
 

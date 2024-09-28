@@ -199,7 +199,7 @@ napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* o
             bool isString = elementSignature == "Ljava/lang/String;";
 
             if (isString) {
-                jsValue = ArgConverter::jstringToV8String(env, *(jstring*) value);
+                jsValue = ArgConverter::jstringToJsString(env, *(jstring *) value);
             } else {
                 jint javaObjectID = objectManager->GetOrCreateObjectId(*(jobject*) value);
                 jsValue = objectManager->GetJsObjectByJavaObject(javaObjectID);

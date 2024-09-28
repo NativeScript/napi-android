@@ -5,6 +5,7 @@
 #ifndef TESTAPPNAPI_CALLBACKHANDLERS_H
 #define TESTAPPNAPI_CALLBACKHANDLERS_H
 #include "JEnv.h"
+#include "Runtime.h"
 #include <string>;
 
 
@@ -13,6 +14,8 @@ class CallbackHandlers {
 public:
     static void Init();
     static std::vector<std::string> GetTypeMetadata(const std::string &name, int index);
+    static napi_value FindClass(napi_env env, const char * name);
+
 private:
     static short MAX_JAVA_STRING_ARRAY_LENGTH;
 
