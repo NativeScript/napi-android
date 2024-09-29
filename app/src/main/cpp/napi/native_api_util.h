@@ -163,10 +163,28 @@ namespace napi_util {
         napi_value falseValue;
         napi_get_boolean(env, true, &falseValue);
         return falseValue;
+    } 
+
+    inline bool get_bool(napi_env env, napi_value value) {
+        bool result;
+        napi_get_value_bool(env, value, &result);
+        return result;
     }
 
+    // Same as Object.create()`
+    inline napi_value object_create_from(napi_env env, napi_value object) {
+      napi_value new_object;
+      napi_create_object(env, &new_object);
+      napi_set_named_property(env, new_object, "prototype", object);
+      return new_object;
+    }
 
-
+    inline bool strict_equal(napi_env env, napi_value v1, napi_value v2) {
+      bool equal;
+      napi_strict_equals(env, v1, v2, &equal);
+      return equal;
+    }
+    
 }
 
 

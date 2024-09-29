@@ -1,3 +1,13 @@
 {
-    "C_Cpp.default.compilerPath": "/Users/ammarahmed/Library/Android/sdk/ndk/23.1.7779620/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang-12"
+    "files.associations": {
+        "any": "cpp",
+        "map": "cpp",
+        "optional": "cpp",
+        "queue": "cpp",
+        "set": "cpp",
+        "stack": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "variant": "cpp"
+    }
 }

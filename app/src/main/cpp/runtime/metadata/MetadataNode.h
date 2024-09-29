@@ -46,8 +46,8 @@ private:
 
     napi_value CreateArrayObjectConstructor(napi_env env);
 
-    void SetInstanceMetadata(napi_env env, napi_value object, MetadataNode* node);
-    MetadataNode* GetInstanceMetadata(napi_env env, napi_value object);
+    static void SetInstanceMetadata(napi_env env, napi_value object, MetadataNode* node);
+    static MetadataNode* GetInstanceMetadata(napi_env env, napi_value object);
 
 
     static bool
@@ -92,6 +92,8 @@ private:
     static MetadataTreeNode *GetOrCreateTreeNodeByName(const std::string &className);
 
     void SetStaticMembers(napi_env env, napi_value constructor, MetadataTreeNode *treeNode);
+
+    bool IsNodeTypeInterface();
 
     std::vector<MetadataNode::MethodCallbackData *> SetInstanceMethodsFromStaticMetadata(
             napi_env env, napi_value constructor,
@@ -158,9 +160,11 @@ private:
 
     static void RegisterSymbolHasInstanceCallback(napi_env env, MetadataEntry entry, napi_value interface);
 
-    static void SymbolHasInstanceCallback(napi_env env, napi_callback_info info);
+    static napi_value SymbolHasInstanceCallback(napi_env env, napi_callback_info info);
 
-    static void SuperAccessorGetterCallback(napi_env env, napi_callback_info info);
+    static napi_value SuperAccessorGetterCallback(napi_env env, napi_callback_info info);
+
+    static bool ValidateExtendArguments(napi_env env, napi_callback_info info, bool extendLocationFound, string &extendLocation, napi_value extendName, napi_value implementationObject, bool isTypeScriptExtend);
 
     MetadataTreeNode *m_treeNode;
 

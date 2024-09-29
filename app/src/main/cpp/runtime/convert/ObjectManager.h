@@ -13,6 +13,7 @@
 #include <stack>
 #include <vector>
 #include <string>
+#include "Constants.h"
 
 
 namespace ns {
@@ -69,15 +70,16 @@ class ObjectManager {
 
         JavaScriptMarkingMode GetMarkingMode();
 
-
-        napi_value JSINFO_PROP;
-        napi_value CALLSUPER_PROP;
-        napi_value IS_NAPI;
-
-        inline static void MarkObject(napi_env env, napi_value object, ObjectManager* objectManager) {
+        inline static void MarkObject(napi_env env, napi_value object) {
             napi_value marker;
             napi_get_boolean(env, true, &marker);
-            napi_set_property(env, object, objectManager->IS_NAPI, marker);
+            napi_set_named_property(env, object, PRIVATE_IS_NAPI, marker);
+        }
+
+        inline static void MarkSuperCall(napi_env env, napi_value object) {
+            napi_value marker;
+            napi_get_boolean(env, true, &marker);
+            napi_set_named_property(env, object, PRIVATE_CALLSUPER, marker);
         }
 
     private:

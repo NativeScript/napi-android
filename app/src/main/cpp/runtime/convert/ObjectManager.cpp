@@ -9,10 +9,6 @@
 #include <sstream>
 
 
-const char * C_JSINFO = "#js_info";
-const char * C_CALLSUPER = "#supercall";
-const char * C_IS_NAPI = "#is_napi";
-
 using namespace std;
 using namespace ns;
 
@@ -81,20 +77,6 @@ void ObjectManager::SetInstanceEnv(napi_env env) {
 
 
 void ObjectManager::Init(napi_env env) {
-
-    if (JSINFO_PROP == nullptr) {
-        napi_create_string_utf8(env, C_JSINFO, strlen(C_JSINFO), &JSINFO_PROP);
-    }
-
-    if (CALLSUPER_PROP == nullptr) {
-        napi_create_string_utf8(env, C_CALLSUPER, strlen(C_CALLSUPER),
-                                &CALLSUPER_PROP);
-    }
-
-    if (IS_NAPI == nullptr) {
-        napi_create_string_utf8(env, C_IS_NAPI, strlen(C_IS_NAPI), &IS_NAPI);
-    }
-
     napi_value jsWrapper;
     napi_create_function(env, "JSWrapper", NAPI_AUTO_LENGTH, JSWrapperConstructorCallback, nullptr,
                          &jsWrapper);
@@ -104,7 +86,7 @@ void ObjectManager::Init(napi_env env) {
 
     napi_value proto;
     napi_get_prototype(env, jsWrapper, &proto);
-    napi_set_property(env, proto, IS_NAPI, hint);
+    napi_set_named_property(env, proto, PRIVATE_IS_NAPI, hint);
     m_poJsWrapperFunc = napi_util::make_ref(env, jsWrapper, 1);
 }
 
@@ -140,7 +122,7 @@ ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
     napi_handle_scope scope;
     napi_open_handle_scope(m_env, &scope);
 
-    napi_get_property(m_env, object, JSINFO_PROP, &jsInfo);
+    napi_get_named_property(m_env, object, PRIVATE_JSINFO, &jsInfo);
 
     if (jsInfo == nullptr) {
         napi_value proto;
@@ -148,7 +130,7 @@ ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
         //Typescript object layout has an object instance as child of the actual registered instance. checking for that
         if (proto != nullptr) {
             if (IsJsRuntimeObject(m_env, proto)) {
-                napi_get_property(m_env, proto, JSINFO_PROP, &jsInfo);
+                napi_get_named_property(m_env, proto, PRIVATE_JSINFO, &jsInfo);
             }
         }
     }
@@ -165,7 +147,8 @@ ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
 
 bool ObjectManager::IsJsRuntimeObject(napi_env env, napi_value object) {
     bool result;
-    napi_has_own_property(env, object, IS_NAPI, &result);
+
+    napi_has_own_named_property(env, object, PRIVATE_IS_NAPI, &result);
 
     return result;
 }
@@ -269,7 +252,7 @@ void ObjectManager::Link(napi_value object, uint32_t javaObjectID, jclass clazz)
         napi_create_external(m_env, jsInstanceInfo, JSObjectWeakCallbackStatic, state, &jsInfo);
     }
 
-    napi_set_property(m_env, object, JSINFO_PROP, jsInfo);
+    napi_set_named_property(m_env, object, PRIVATE_JSINFO, jsInfo);
     m_idToObject.emplace(javaObjectID, objectHandle);
 }
 
@@ -281,12 +264,12 @@ bool ObjectManager::CloneLink(napi_value src, napi_value dest) {
     if (success) {
         void * jsInfo;
         napi_value external;
-        napi_get_property(m_env, src, JSINFO_PROP, &external);
+        napi_get_named_property(m_env, src, PRIVATE_JSINFO, &external);
         napi_get_value_external(m_env, external, &jsInfo);
 
         napi_value jsInfoClone;
         napi_create_external(m_env, jsInfo, nullptr, nullptr, &jsInfoClone);
-        napi_set_property(m_env, dest, JSINFO_PROP, jsInfoClone);
+        napi_set_named_property(m_env, dest, PRIVATE_JSINFO, jsInfoClone);
     }
 
     return success;
@@ -422,7 +405,7 @@ void ObjectManager::ReleaseNativeCounterpart(napi_value object) {
 
     napi_value undefined;
     napi_get_undefined(m_env, &undefined);
-    napi_set_property(m_env, object, JSINFO_PROP, undefined);
+    napi_set_named_property(m_env, object, PRIVATE_JSINFO, undefined);
 }
 
 ObjectManager::JavaScriptMarkingMode ObjectManager::GetMarkingMode() {

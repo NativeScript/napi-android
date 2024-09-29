@@ -41,7 +41,7 @@ namespace ns {
         const std::string& getSig();
         const std::string& getReturnType();
         MethodReturnType getRetType();
-        const std::string& getDeclaringType();
+        std::string& getDeclaringType();
         int getParamCount();
         bool getIsFinal();
         bool getIsResolved();

@@ -2,7 +2,7 @@
 #define JENV_H_
 
 #include "jni.h"
-#include "robinhood/robin_hood.h"
+#include "robin_hood.h"
 #include <string>
 
 namespace ns {

@@ -157,10 +157,18 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_delete_property(napi_env env,
                                                         napi_value object,
                                                         napi_value key,
                                                         bool *result);
+
+
 NAPI_EXTERN napi_status NAPI_CDECL napi_has_own_property(napi_env env,
                                                          napi_value object,
                                                          napi_value key,
                                                          bool *result);
+
+NAPI_EXTERN napi_status NAPI_CDECL napi_has_own_named_property(napi_env env,
+                                                         napi_value object,
+                                                         const char *utf8name,
+                                                         bool *result);
+                                                         
 NAPI_EXTERN napi_status NAPI_CDECL napi_set_named_property(napi_env env,
                                                            napi_value object,
                                                            const char *utf8name,

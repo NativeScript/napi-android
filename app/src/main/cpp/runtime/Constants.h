@@ -10,6 +10,13 @@ const char * PROP_KEY_VALUEOF = "valueOf";
 const char * PROP_KEY_CLASS = "class";
 const char * PRIVATE_TYPE_NAME = "#typename";
 const char * CLASS_IMPLEMENTATION_OBJECT = "t::ClassImplementationObject";
+const char * PROP_KEY_SUPER = "super";
+const char * PROP_KEY_SUPERVALUE = "supervalue";
+
+const char * PRIVATE_JSINFO = "#js_info";
+const char * PRIVATE_CALLSUPER = "#supercall";
+const char * PRIVATE_IS_NAPI = "#is_napi";
+const char * PROP_KEY_TOSTRING = "toString";
 
 class Constants {
     public:

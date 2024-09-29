@@ -78,7 +78,7 @@ MethodReturnType MetadataEntry::getRetType() {
     return retType;
 }
 
-const std::string &MetadataEntry::getDeclaringType() {
+std::string &MetadataEntry::getDeclaringType() {
     if (!declaringType.empty()) return declaringType;
 
     auto reader = MetadataNode::getMetadataReader();
