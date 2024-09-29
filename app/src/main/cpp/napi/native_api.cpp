@@ -3410,12 +3410,6 @@ napi_status napi_set_named_property(napi_env env, napi_value object, const char 
         return napi_set_last_error(env, napi_object_expected);
     }
 
-    if (utf8Name == "prototype")
-    {
-        JS_SetPrototype(env->context, jsObject, jsValue);
-        return napi_clear_last_error(env);
-    }
-
     int status = JS_SetPropertyStr(env->context, jsObject, utf8Name, JS_DupValue(env->context, jsValue));
 
     if (status == -1)
