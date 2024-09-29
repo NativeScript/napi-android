@@ -18,6 +18,8 @@ const char * PRIVATE_CALLSUPER = "#supercall";
 const char * PRIVATE_IS_NAPI = "#is_napi";
 const char * PROP_KEY_TOSTRING = "toString";
 
+const char * PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT = "__isPrototypeImplementationObject";
+
 class Constants {
     public:
         const static char CLASS_NAME_LOCATION_SEPARATOR = '_';

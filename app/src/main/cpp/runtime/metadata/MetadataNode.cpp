@@ -177,6 +177,12 @@ string MetadataNode::GetTypeMetadataName(napi_env env, napi_value value)
     return napi_util::get_string_value(env, typeMetadataName);
 }
 
+MetadataNode *MetadataNode::GetNodeFromHandle(napi_env env, napi_value value)
+{
+    auto node = GetInstanceMetadata(env, value);
+    return node;
+}
+
 napi_value MetadataNode::CreateJSWrapper(napi_env env, ObjectManager *objectManager)
 {
     napi_value obj;
@@ -246,6 +252,87 @@ napi_value MetadataNode::CreateArrayWrapper(napi_env env)
     SetInstanceMetadata(env, instance, this);
 
     return arrayProxy;
+}
+
+napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object)
+{
+    auto target = object;
+    napi_value currentPrototype = target;
+
+    napi_value implementationObject;
+
+    napi_get_named_property(env, currentPrototype, CLASS_IMPLEMENTATION_OBJECT, &implementationObject);
+
+    if (implementationObject != nullptr && !napi_util::is_undefined(env, implementationObject))
+    {
+        return implementationObject;
+    }
+
+    bool hasProperty;
+    napi_has_own_named_property(env, object, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, &hasProperty);
+
+    if (hasProperty)
+    {
+        bool maybeHasOwnProperty;
+        napi_has_own_named_property(env, object, napi_util::PROTOTYPE, &maybeHasOwnProperty);
+
+        if (!maybeHasOwnProperty)
+        {
+            return nullptr;
+        }
+
+        return napi_util::get_proto(env, object);
+    }
+
+    napi_value activityImplementationObject;
+    napi_get_named_property(env, object, "t::ActivityImplementationObject", &activityImplementationObject);
+
+    if (activityImplementationObject != nullptr && !napi_util::is_undefined(env, activityImplementationObject))
+    {
+        return activityImplementationObject;
+    }
+
+    napi_value lastPrototype;
+
+    bool prototypeCycleDetected;
+
+    bool foundImplementationObject;
+
+    while (!foundImplementationObject)
+    {
+        currentPrototype = napi_util::get_proto(env, currentPrototype);
+
+        if (napi_util::is_null(env, currentPrototype))
+        {
+            break;
+        }
+
+        if (lastPrototype == currentPrototype)
+        {
+            auto abovePrototype = napi_util::get_proto(env, currentPrototype);
+            prototypeCycleDetected = abovePrototype == currentPrototype;
+            break;
+        }
+
+        if (currentPrototype == nullptr || napi_util::is_null(env, currentPrototype) || prototypeCycleDetected)
+        {
+            return nullptr;
+        }
+        else
+        {
+            napi_value implObject;
+            napi_get_named_property(env, currentPrototype, CLASS_IMPLEMENTATION_OBJECT, &implObject);
+
+            if (implObject != nullptr && !napi_util::is_undefined(env, implObject))
+            {
+                foundImplementationObject = true;
+                return currentPrototype;
+            }
+        }
+        lastPrototype = currentPrototype;
+    }
+
+    return implementationObject;
 }
 
 void MetadataNode::SetInstanceMetadata(napi_env env, napi_value object, MetadataNode *node)
@@ -1456,7 +1543,8 @@ napi_value MetadataNode::PropertyAccessorGetterCallback(napi_env env, napi_callb
     NAPI_CALLBACK_BEGIN(0)
     auto propertyCallbackData = reinterpret_cast<PropertyCallbackData *>(data);
 
-    if (propertyCallbackData->getterMethodName == "") {
+    if (propertyCallbackData->getterMethodName == "")
+    {
         return nullptr;
     }
 
@@ -1473,7 +1561,8 @@ napi_value MetadataNode::PropertyAccessorSetterCallback(napi_env env, napi_callb
     NAPI_CALLBACK_BEGIN(1)
     auto propertyCallbackData = reinterpret_cast<PropertyCallbackData *>(data);
 
-    if (propertyCallbackData->setterMethodName == "") {
+    if (propertyCallbackData->setterMethodName == "")
+    {
         return nullptr;
     }
 
@@ -1812,9 +1901,39 @@ void MetadataNode::BuildMetadata(const std::string &filesPath)
     s_metadataReader = MetadataBuilder::BuildMetadata(filesPath);
 }
 
+void MetadataNode::onDisposeEnv(napi_env env) {
+     {
+        auto it = s_metadata_node_cache.find(env);
+        if (it != s_metadata_node_cache.end()) {
+            delete it->second;
+            s_metadata_node_cache.erase(it);
+        }
+    }
+    {
+        auto it = s_arrayObjects.find(env);
+        if (it != s_arrayObjects.end()) {
+            delete it->second;
+            s_arrayObjects.erase(it);
+        }
+    }
+    {
+        for (auto it = s_treeNode2NodeCache.begin(); it != s_treeNode2NodeCache.end(); it++) {
+            auto it2 = it->second->m_ctorCachePerEnv.find(env);
+            if(it2 != it->second->m_ctorCachePerEnv.end()) {
+                delete it2->second;
+                it->second->m_ctorCachePerEnv.erase(it2);
+            }
+        }
+    }
+}
+
+
 string MetadataNode::TNS_PREFIX = "com/tns/gen/";
 MetadataReader MetadataNode::s_metadataReader;
 robin_hood::unordered_map<std::string, MetadataNode *> MetadataNode::s_name2NodeCache;
 robin_hood::unordered_map<std::string, MetadataTreeNode *> MetadataNode::s_name2TreeNodeCache;
 robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> MetadataNode::s_treeNode2NodeCache;
 robin_hood::unordered_map<napi_env, MetadataNode::MetadataNodeCache *> MetadataNode::s_metadata_node_cache;
+
+// TODO
+bool MetadataNode::s_profilerEnabled = false;

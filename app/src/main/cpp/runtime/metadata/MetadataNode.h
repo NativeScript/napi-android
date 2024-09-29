@@ -7,7 +7,6 @@
 #include "MetadataReader.h"
 #include "Runtime.h"
 
-
 using namespace ns;
 
 class MetadataNode {
@@ -18,6 +17,8 @@ public:
 
     static void CreateTopLevelNamespaces(napi_env env);
 
+    napi_value CreateWrapper(napi_env env);
+
     napi_value CreateJSWrapper(napi_env env, ns::ObjectManager *objectManager);
 
     napi_value CreateArrayWrapper(napi_env env);
@@ -26,13 +27,20 @@ public:
 
     static MetadataReader *getMetadataReader();
 
-    string GetTypeMetadataName(napi_env env, napi_value value);
+    static napi_value GetImplementationObject(napi_env env, napi_value object);
 
+    static MetadataNode* GetInstanceMetadata(napi_env env, napi_value object);
+
+    static MetadataNode* GetNodeFromHandle(napi_env env, napi_value value);
+
+    string GetTypeMetadataName(napi_env env, napi_value value);
 
     napi_value CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
                                        const std::string &proxyClassName);
 
     std::string GetName();
+
+    static void onDisposeEnv(napi_env env);
 
 private:
     struct CtorCacheData;
@@ -47,7 +55,6 @@ private:
     napi_value CreateArrayObjectConstructor(napi_env env);
 
     static void SetInstanceMetadata(napi_env env, napi_value object, MetadataNode* node);
-    static MetadataNode* GetInstanceMetadata(napi_env env, napi_value object);
 
 
     static bool
@@ -69,7 +76,6 @@ private:
 
     napi_value WrapArrayObject(napi_env env, napi_value object);
 
-    napi_value CreateWrapper(napi_env env);
 
     napi_value GetConstructorFunction(napi_env env);
 
@@ -281,5 +287,7 @@ private:
 
         robin_hood::unordered_map<std::string, MetadataNode::ExtendedClassCacheData> ExtendedCtorFuncCache;
     };
+
+    static bool s_profilerEnabled;
 
 };
