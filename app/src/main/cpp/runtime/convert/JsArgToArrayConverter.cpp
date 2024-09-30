@@ -38,11 +38,11 @@ JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, napi_callback_info in
         m_argsAsObject = new jobject[m_argsLen];
         memset(m_argsAsObject, 0, m_argsLen * sizeof(jobject));
 
-        napi_value args[m_argsLen];
-        napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+        std::vector<napi_value> argv(argc);
+        napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr);
 
         for (int i = 0; i < m_argsLen; i++) {
-            success = ConvertArg(env, args[i], i);
+            success = ConvertArg(env, argv[i], i);
 
             if (!success) {
                 break;

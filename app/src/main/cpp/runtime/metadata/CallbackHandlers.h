@@ -78,24 +78,24 @@ namespace ns
         static void SetJavaField(napi_env env, napi_value target,
                                  napi_value value, FieldCallbackData *fieldData);
 
-        static void RunOnMainThreadCallback(napi_env env, napi_callback_info info);
+        static napi_value RunOnMainThreadCallback(napi_env env, napi_callback_info info);
 
         static int RunOnMainThreadFdCallback(int fd, int events, void *data);
 
-        static void LogMethodCallback(napi_env env, napi_callback_info info);
+        static napi_value LogMethodCallback(napi_env env, napi_callback_info info);
 
-        static void TimeCallback(napi_env env, napi_callback_info info);
+        static napi_value TimeCallback(napi_env env, napi_callback_info info);
 
-        static void
+        static napi_value
         DumpReferenceTablesMethodCallback(napi_env env, napi_callback_info info);
 
-        static void DrainMicrotaskCallback(napi_env env, napi_callback_info info);
+        static napi_value DrainMicrotaskCallback(napi_env env, napi_callback_info info);
 
         static void DumpReferenceTablesMethod();
 
-        static void ExitMethodCallback(napi_env env, napi_callback_info info);
+        static napi_value ExitMethodCallback(napi_env env, napi_callback_info info);
 
-        static void CreateGlobalCastFunctions(napi_env env, napi_value globalTemplate);
+        static void CreateGlobalCastFunctions(napi_env env);
 
         static std::vector<std::string> GetTypeMetadata(const std::string &name, int index);
 
@@ -105,7 +105,7 @@ namespace ns
          * the dexFactory generates the class
          */
         static jobjectArray
-        GetMethodOverrides(JEnv &jEnv, napi_value implementationObject);
+        GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implementationObject);
 
         /*
          * Gets all interfaces declared in the 'interfaces' array inside the implementation object,
@@ -113,93 +113,93 @@ namespace ns
          * implemented when the dexFactory generates the corresponding class
          */
         static jobjectArray
-        GetImplementedInterfaces(JEnv &jEnv, napi_value implementationObject);
+        GetImplementedInterfaces(napi_env env, JEnv &jEnv, napi_value implementationObject);
 
-        static void
+        static napi_value
         EnableVerboseLoggingMethodCallback(napi_env env, napi_callback_info info);
 
-        static void
+        static napi_value
         DisableVerboseLoggingMethodCallback(napi_env env, napi_callback_info info);
 
-        static void ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info);
+        static napi_value ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info);
 
-        static napi_value FindClass(napi_env env, const std::string &className);
+        static napi_value FindClass(napi_env env, const char *name);
 
-        static void NewThreadCallback(napi_env env, napi_callback_info info);
+        // static void NewThreadCallback(napi_env env, napi_callback_info info);
 
-        /*
-         * main -> worker messaging
-         * Fired when a Worker instance's postMessage is called
-         */
-        static void
-        WorkerObjectPostMessageCallback(napi_env env, napi_callback_info info);
+        // /*
+        //  * main -> worker messaging
+        //  * Fired when a Worker instance's postMessage is called
+        //  */
+        // static void
+        // WorkerObjectPostMessageCallback(napi_env env, napi_callback_info info);
 
-        /*
-         * main -> worker messaging
-         * Fired when worker object has "postMessage" and the worker has implemented "onMessage" handler
-         * In case "onMessage" handler isn't implemented no exception is thrown
-         */
-        static void WorkerGlobalOnMessageCallback(napi_env env, jstring message);
+        // /*
+        //  * main -> worker messaging
+        //  * Fired when worker object has "postMessage" and the worker has implemented "onMessage" handler
+        //  * In case "onMessage" handler isn't implemented no exception is thrown
+        //  */
+        // static void WorkerGlobalOnMessageCallback(napi_env env, jstring message);
 
-        /*
-         * worker -> main thread messaging
-         * Fired when a Worker script's "postMessage" is called
-         */
-        static void
-        WorkerGlobalPostMessageCallback(napi_env env, napi_callback_info info);
+        // /*
+        //  * worker -> main thread messaging
+        //  * Fired when a Worker script's "postMessage" is called
+        //  */
+        // static void
+        // WorkerGlobalPostMessageCallback(napi_env env, napi_callback_info info);
 
-        /*
-         * worker -> main messaging
-         * Fired when worker has sent a message to main and the worker object has implemented "onMessage" handler
-         * In case "onMessage" handler isn't implemented no exception is thrown
-         */
-        static void
-        WorkerObjectOnMessageCallback(napi_env env, jint workerId, jstring message);
+        // /*
+        //  * worker -> main messaging
+        //  * Fired when worker has sent a message to main and the worker object has implemented "onMessage" handler
+        //  * In case "onMessage" handler isn't implemented no exception is thrown
+        //  */
+        // static void
+        // WorkerObjectOnMessageCallback(napi_env env, jint workerId, jstring message);
 
-        /*
-         * Fired when a Worker instance's terminate is called (immediately stops execution of the thread)
-         */
-        static void WorkerObjectTerminateCallback(napi_env env, napi_callback_info info);
+        // /*
+        //  * Fired when a Worker instance's terminate is called (immediately stops execution of the thread)
+        //  */
+        // static void WorkerObjectTerminateCallback(napi_env env, napi_callback_info info);
 
-        /*
-         * Fired when a Worker script's close is called
-         */
-        static void WorkerGlobalCloseCallback(napi_env env, napi_callback_info info);
+        // /*
+        //  * Fired when a Worker script's close is called
+        //  */
+        // static void WorkerGlobalCloseCallback(napi_env env, napi_callback_info info);
 
-        /*
-         * Clears the persistent Worker object handle associated with a workerId
-         * Occurs when calling a worker object's `terminate` or a worker thread's global scope `close`
-         */
-        static void ClearWorkerPersistent(int workerId);
+        // /*
+        //  * Clears the persistent Worker object handle associated with a workerId
+        //  * Occurs when calling a worker object's `terminate` or a worker thread's global scope `close`
+        //  */
+        // static void ClearWorkerPersistent(int workerId);
 
-        /*
-         * Terminates the currently executing Isolate. No scripts can be executed after this call
-         */
-        static void TerminateWorkerThread(napi_env env);
+        // /*
+        //  * Terminates the currently executing Isolate. No scripts can be executed after this call
+        //  */
+        // static void TerminateWorkerThread(napi_env env);
 
-        /*
-         * Is called when an unhandled exception is thrown inside the worker
-         * Will execute 'onerror' if one is provided inside the Worker Scope
-         * Will make the exception "bubble up" through to main, to be handled by the Worker Object
-         * if 'onerror' isn't implemented or returns false
-         */
-        static void CallWorkerScopeOnErrorHandle(napi_env env, napi_value tc);
+        // /*
+        //  * Is called when an unhandled exception is thrown inside the worker
+        //  * Will execute 'onerror' if one is provided inside the Worker Scope
+        //  * Will make the exception "bubble up" through to main, to be handled by the Worker Object
+        //  * if 'onerror' isn't implemented or returns false
+        //  */
+        // static void CallWorkerScopeOnErrorHandle(napi_env env, napi_value tc);
 
-        /*
-         * Is called when an unhandled exception bubbles up from the worker scope to the main thread Worker Object
-         * Will execute `onerror` if one is implemented for the Worker Object instance
-         * Will throw a NativeScript Exception if 'onerror' isn't implemented or returns false
-         */
-        static void
-        CallWorkerObjectOnErrorHandle(napi_env env, jint workerId, jstring message,
-                                      jstring stackTrace, jstring filename, jint lineno,
-                                      jstring threadName);
+        // /*
+        //  * Is called when an unhandled exception bubbles up from the worker scope to the main thread Worker Object
+        //  * Will execute `onerror` if one is implemented for the Worker Object instance
+        //  * Will throw a NativeScript Exception if 'onerror' isn't implemented or returns false
+        //  */
+        // static void
+        // CallWorkerObjectOnErrorHandle(napi_env env, jint workerId, jstring message,
+        //                               jstring stackTrace, jstring filename, jint lineno,
+        //                               jstring threadName);
 
-        static void RemoveIsolateEntries(napi_env env);
+        // static void RemoveIsolateEntries(napi_env env);
 
-        static void PostFrameCallback(napi_env env, napi_callback_info info);
+        static napi_value PostFrameCallback(napi_env env, napi_callback_info info);
 
-        static void RemoveFrameCallback(napi_env env, napi_callback_info info);
+        static napi_value RemoveFrameCallback(napi_env env, napi_callback_info info);
 
         struct AChoreographer;
 

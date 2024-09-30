@@ -212,7 +212,7 @@ napi_value MetadataNode::ArrayGetterCallback(napi_env env, napi_callback_info in
     napi_get_value_int32(env, index, &indexValue);
     auto node = GetInstanceMetadata(env, jsThis);
 
-    return CallbackHandlers::GetArrayElement(env, jsThis, index, node->m_name);
+    return CallbackHandlers::GetArrayElement(env, jsThis, indexValue, node->m_name);
 }
 
 napi_value MetadataNode::ArraySetterCallback(napi_env env, napi_callback_info info)
@@ -226,14 +226,18 @@ napi_value MetadataNode::ArraySetterCallback(napi_env env, napi_callback_info in
     napi_get_value_int32(env, index, &indexValue);
     auto node = GetInstanceMetadata(env, jsThis);
 
-    CallbackHandlers::SetArrayElement(env, jsThis, index, node->m_name, value);
+    CallbackHandlers::SetArrayElement(env, jsThis, indexValue, node->m_name, value);
     return value;
 }
 
 napi_value MetadataNode::ArrayLengthCallback(napi_env env, napi_callback_info info)
 {
     NAPI_CALLBACK_BEGIN(0)
-    return CallbackHandlers::GetArrayLength(env, jsThis);
+    int length = CallbackHandlers::GetArrayLength(env, jsThis);
+
+    napi_value len;
+    napi_create_int32(env, length, &len);
+    return len;
 }
 
 napi_value MetadataNode::CreateArrayWrapper(napi_env env)
@@ -1637,7 +1641,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
         if (!validArgs)
         {
-            return;
+            return nullptr;
         }
     }
 
@@ -1683,7 +1687,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
     auto baseClassCtorFunction = node->GetConstructorFunction(env);
     napi_value extendFuncCtor;
-    napi_define_class(env, fullExtendedName.c_str(), NAPI_AUTO_LENGTH, MetadataNode::ExtendedClassConstructorCallback, new ExtendedClassCallbackData(node, extendNameAndLocation, napi_util::make_ref(env, implementationObject), fullClassName), 0, nullptr, &extendFunc);
+    napi_define_class(env, fullExtendedName.c_str(), NAPI_AUTO_LENGTH, MetadataNode::ExtendedClassConstructorCallback, new ExtendedClassCallbackData(node, extendNameAndLocation, napi_util::make_ref(env, implementationObject), fullClassName), 0, nullptr, &extendFuncCtor);
     napi_value extendFuncPrototype = napi_util::get_proto(env, extendFuncCtor);
     ObjectManager::MarkObject(env, extendFuncPrototype);
 
@@ -1703,7 +1707,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
     s_name2NodeCache.emplace(fullExtendedName, node);
 
-    ExtendedClassCacheData cacheData(napi_util::make_ref(env, extendFunc), fullExtendedName, node);
+    ExtendedClassCacheData cacheData(napi_util::make_ref(env, extendFuncCtor), fullExtendedName, node);
     auto cache = GetMetadataNodeCache(env);
     cache->ExtendedCtorFuncCache.emplace(fullExtendedName, cacheData);
 
@@ -1740,10 +1744,12 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
 
 napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info)
 {
-    size_t numOfArgs;
-    napi_get_cb_info(env, info, &numOfArgs, nullptr, nullptr, nullptr);
 
-    NAPI_CALLBACK_BEGIN(numOfArgs)
+    void * data;
+    napi_value jsThis;
+    napi_get_cb_info(env, info, nullptr, nullptr, &jsThis, &data);
+
+    NAPI_GET_VARIABLE_ARGS();
 
     MetadataEntry *entry;
 
@@ -1764,7 +1770,7 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info)
         auto found = false;
         for (auto &c : candidates)
         {
-            found = (!c.isExtensionFunction && c.getParamCount() == numOfArgs) || (c.isExtensionFunction && c.getParamCount() == numOfArgs + 1);
+            found = (!c.isExtensionFunction && c.getParamCount() == argc) || (c.isExtensionFunction && c.getParamCount() == argc + 1);
             if (found)
             {
                 if (c.isExtensionFunction)
@@ -1793,7 +1799,7 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info)
         isSuper = napi_util::get_bool(env, superValue);
     }
 
-    if (numOfArgs == 0 && methodName == PROP_KEY_VALUEOF)
+    if (argc == 0 && methodName == PROP_KEY_VALUEOF)
     {
         return jsThis;
     }

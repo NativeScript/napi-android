@@ -104,7 +104,7 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
     return nullptr;
 }
 
-napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args) {
+napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t* length) {
     JEnv jenv;
 
     int argc = jenv.GetArrayLength(args) / 3;
@@ -169,6 +169,8 @@ napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args
 
         napi_set_element(env, arr, i, jsArg);
     }
+
+    *length = argc;
 
     return arr;
 }

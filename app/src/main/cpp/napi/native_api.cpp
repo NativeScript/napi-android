@@ -743,85 +743,6 @@ napi_status napi_escape_handle(napi_env env, napi_escapable_handle_scope scope, 
 
 // Error Handling
 
-napi_status napi_create_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
-{
-    CHECK_ARG(env)
-    CHECK_ARG(result)
-
-    JSValue error = JS_NewError(env->context);
-
-    JSValue msgValue = *((JSValue *)msg);
-    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
-
-    if (code != nullptr)
-    {
-        JSValue codeValue = *((JSValue *)code);
-        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
-    }
-
-    return CreateScopedResult(env, error, result);
-}
-
-napi_status napi_create_type_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
-{
-    CHECK_ARG(env)
-    CHECK_ARG(result)
-
-    JSValue error = JS_NewError(env->context);
-
-    JSValue msgValue = *((JSValue *)msg);
-    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
-    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "TypeError"), JS_PROP_C_W_E);
-
-    if (code != nullptr)
-    {
-        JSValue codeValue = *((JSValue *)code);
-        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
-    }
-
-    return CreateScopedResult(env, error, result);
-}
-
-napi_status napi_create_range_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
-{
-    CHECK_ARG(env)
-    CHECK_ARG(result)
-
-    JSValue error = JS_NewError(env->context);
-
-    JSValue msgValue = *((JSValue *)msg);
-    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
-    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "RangeError"), JS_PROP_C_W_E);
-
-    if (code != nullptr)
-    {
-        JSValue codeValue = *((JSValue *)code);
-        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
-    }
-
-    return CreateScopedResult(env, error, result);
-}
-
-napi_status napi_create_range_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
-{
-    CHECK_ARG(env)
-    CHECK_ARG(result)
-
-    JSValue error = JS_NewError(env->context);
-
-    JSValue msgValue = *((JSValue *)msg);
-    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
-    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "SyntaxError"), JS_PROP_C_W_E);
-
-    if (code != nullptr)
-    {
-        JSValue codeValue = *((JSValue *)code);
-        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
-    }
-
-    return CreateScopedResult(env, error, result);
-}
-
 napi_status napi_throw(napi_env env, napi_value error)
 {
 
@@ -1269,6 +1190,85 @@ static inline napi_status CreateScopedResult(napi_env env, JSValue value, napi_v
     }
     *result = (napi_value)&jsValueHandle->value;
     return napi_clear_last_error(env);
+}
+
+napi_status napi_create_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
+{
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+
+    if (code != nullptr)
+    {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+
+    return CreateScopedResult(env, error, result);
+}
+
+napi_status napi_create_type_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
+{
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "TypeError"), JS_PROP_C_W_E);
+
+    if (code != nullptr)
+    {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+
+    return CreateScopedResult(env, error, result);
+}
+
+napi_status napi_create_range_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
+{
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "RangeError"), JS_PROP_C_W_E);
+
+    if (code != nullptr)
+    {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+
+    return CreateScopedResult(env, error, result);
+}
+
+napi_status napi_create_syntax_error(napi_env env, napi_value code, napi_value msg, napi_value *result)
+{
+    CHECK_ARG(env)
+    CHECK_ARG(result)
+
+    JSValue error = JS_NewError(env->context);
+
+    JSValue msgValue = *((JSValue *)msg);
+    JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue), JS_PROP_C_W_E);
+    JS_DefinePropertyValueStr(env->context, error, "name", JS_NewString(env->context, "SyntaxError"), JS_PROP_C_W_E);
+
+    if (code != nullptr)
+    {
+        JSValue codeValue = *((JSValue *)code);
+        JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue), JS_PROP_C_W_E);
+    }
+
+    return CreateScopedResult(env, error, result);
 }
 
 napi_status napi_create_array(napi_env env, napi_value *result)
@@ -3327,14 +3327,15 @@ napi_status napi_delete_property(napi_env env, napi_value object, napi_value key
         return napi_set_last_error(env, napi_pending_exception);
     }
 
-    if (result != nullptr) {
+    if (result != nullptr)
+    {
         *result = status;
     }
 
     return napi_clear_last_error(env);
 }
 
-napi_status napi_has_own_named_property(napi_env env, napi_value object, const char * utf8name, bool *result)
+napi_status napi_has_own_named_property(napi_env env, napi_value object, const char *utf8name, bool *result)
 {
 
     CHECK_ARG(env)

@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <cerrno>
 #include <thread>
+#include <android/log.h>
 #include "NativeScriptAssert.h"
 #include "Runtime.h"
 

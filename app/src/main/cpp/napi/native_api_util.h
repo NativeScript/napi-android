@@ -19,6 +19,17 @@
     return NULL;                                                       \
   }
 
+#define NAPI_GET_VARIABLE_ARGS() \
+  NAPI_PREAMBLE \
+size_t argc;  \
+napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);  \
+std::vector<napi_value> argv(argc);  \
+NAPI_GUARD(napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr)); \
+{ \
+  NAPI_THROW_LAST_ERROR \
+  return NULL;  \
+}
+
 #define NAPI_ERROR_INFO                                                     \
   const napi_extended_error_info *error_info =                              \
       (napi_extended_error_info *)malloc(sizeof(napi_extended_error_info)); \
@@ -235,19 +246,21 @@ namespace napi_util
     return result;
   }
 
-template<typename Func, typename... Args>
-inline void run_in_handle_scope(napi_env env,  Func func, Args&&... args) {
+  template <typename Func, typename... Args>
+  inline void run_in_handle_scope(napi_env env, Func func, Args &&...args)
+  {
     napi_handle_scope scope;
     napi_open_handle_scope(env, &scope);
 
     // Call the provided function
-    func(std::forward<Args(args)...);
+    func(std::forward<Args>(args)...);
 
     napi_close_handle_scope(env, scope);
-}
+  }
 
-template<typename Func, typename... Args>
-inline napi_value run_in_escapable_handle_scope(napi_env env, Func func, Args&&... args) {
+  template <typename Func, typename... Args>
+  inline napi_value run_in_escapable_handle_scope(napi_env env, Func func, Args &&...args)
+  {
     napi_escapable_handle_scope scope;
     napi_value result, escaped = nullptr;
 
@@ -256,14 +269,15 @@ inline napi_value run_in_escapable_handle_scope(napi_env env, Func func, Args&&.
     // Call the provided function with forwarded arguments and get the result
     result = func(std::forward<Args>(args)...);
 
-    if (result != nullptr) {
-        // Escape the result
-        napi_escape_handle(env, scope, result, &escaped);
+    if (result != nullptr)
+    {
+      // Escape the result
+      napi_escape_handle(env, scope, result, &escaped);
     }
 
     napi_close_escapable_handle_scope(env, scope);
 
     return escaped;
-}
+  }
 
 }

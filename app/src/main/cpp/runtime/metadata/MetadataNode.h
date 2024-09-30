@@ -33,7 +33,7 @@ public:
 
     static MetadataNode* GetNodeFromHandle(napi_env env, napi_value value);
 
-    string GetTypeMetadataName(napi_env env, napi_value value);
+    static string GetTypeMetadataName(napi_env env, napi_value value);
 
     napi_value CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
                                        const std::string &proxyClassName);

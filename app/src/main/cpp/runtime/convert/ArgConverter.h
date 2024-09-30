@@ -19,7 +19,7 @@ namespace ns {
     public:
         static void Init(napi_env env, napi_value context);
 
-        static napi_value ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args);
+        static napi_value ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t* length);
 
         static napi_value ConvertFromJavaLong(napi_env env, jlong value);
 
