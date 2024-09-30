@@ -87,6 +87,7 @@ int MessageLoopTimer::PumpMessageLoopCallback(int fd, int events, void* data) {
     uint8_t msg;
     read(fd, &msg, sizeof(uint8_t));
     auto env = (napi_env) data;
+
     napi_run_microtasks(env);
 
     return 1;

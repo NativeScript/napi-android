@@ -59,10 +59,10 @@ namespace ns {
             return m_mainLooper;
         }
 
-        jobject Runtime::ConvertJsValueToJavaObject(JEnv& env, napi_value value, int classReturnType);
-        jint Runtime::GenerateNewObjectId(JNIEnv* env, jobject obj);
-        void Runtime::CreateJSInstanceNative(JNIEnv* _env, jobject obj, jobject javaObject, jint javaObjectID, jstring className);
-        jobject Runtime::CallJSMethodNative(JNIEnv* _env, jobject obj, jint javaObjectID, jstring methodName, jint retType, jboolean isConstructor, jobjectArray packagedArgs);
+        jobject ConvertJsValueToJavaObject(JEnv& env, napi_value value, int classReturnType);
+        jint GenerateNewObjectId(JNIEnv* env, jobject obj);
+        void CreateJSInstanceNative(JNIEnv* _env, jobject obj, jobject javaObject, jint javaObjectID, jstring className);
+        jobject CallJSMethodNative(JNIEnv* _env, jobject obj, jint javaObjectID, jstring methodName, jint retType, jboolean isConstructor, jobjectArray packagedArgs);
 
     private:
         Runtime(JNIEnv* env, jobject runtime, int id);

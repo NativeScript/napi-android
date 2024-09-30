@@ -3,7 +3,7 @@
 #include "NativeScriptException.h"
 #include <sstream>
 
-using namespace tns;
+using namespace ns;
 
 ArrayBufferHelper::ArrayBufferHelper()
         : m_objectManager(nullptr), m_ByteBufferClass(nullptr), m_isDirectMethodID(nullptr),
@@ -16,6 +16,7 @@ void ArrayBufferHelper::CreateConvertFunctions(napi_env env, napi_value global, 
     napi_create_external(env, this, nullptr, nullptr, &extData);
     napi_value fromFunc;
     napi_create_function(env, "from", NAPI_AUTO_LENGTH, CreateFromCallbackStatic, extData, &fromFunc);
+
     napi_value arrBufferCtorFunc;
     napi_get_named_property(env, global, "ArrayBuffer", &arrBufferCtorFunc);
     napi_set_named_property(env, arrBufferCtorFunc, "from", fromFunc);
@@ -54,67 +55,67 @@ napi_value ArrayBufferHelper::CreateFromCallbackImpl(napi_env env, size_t argc, 
 
     napi_value arg = args[0];
 
-    bool isObject;
-    napi_is_object(env, arg, &isObject);
+    bool isObject = napi_util::is_of_type(env, arg, napi_object);
+
     if (!isObject) {
         throw NativeScriptException("Wrong type of argument (object expected)");
     }
 
     auto argObj = arg;
 
-    auto obj = m_objectManager->GetJavaObjectByJsObject(argObj);
+    auto obj = m_objectManager->GetJavaObjectByJsObject(env, argObj);
 
     if (obj.IsNull()) {
         throw NativeScriptException("Wrong type of argument (object expected)");
     }
 
-    JEnv jenv;
+    JEnv jEnv;
 
     if (m_ByteBufferClass == nullptr) {
-        m_ByteBufferClass = jenv.FindClass("java/nio/ByteBuffer");
+        m_ByteBufferClass = jEnv.FindClass("java/nio/ByteBuffer");
         assert(m_ByteBufferClass != nullptr);
     }
 
-    auto isByteBuffer = jenv.IsInstanceOf(obj, m_ByteBufferClass);
+    auto isByteBuffer = jEnv.IsInstanceOf(obj, m_ByteBufferClass);
 
     if (!isByteBuffer) {
         throw NativeScriptException("Wrong type of argument (ByteBuffer expected)");
     }
 
     if (m_isDirectMethodID == nullptr) {
-        m_isDirectMethodID = jenv.GetMethodID(m_ByteBufferClass, "isDirect", "()Z");
+        m_isDirectMethodID = jEnv.GetMethodID(m_ByteBufferClass, "isDirect", "()Z");
         assert(m_isDirectMethodID != nullptr);
     }
 
-    auto ret = jenv.CallBooleanMethod(obj, m_isDirectMethodID);
+    auto ret = jEnv.CallBooleanMethod(obj, m_isDirectMethodID);
 
     auto isDirectBuffer = ret == JNI_TRUE;
 
     napi_value arrayBuffer;
 
     if (isDirectBuffer) {
-        auto data = jenv.GetDirectBufferAddress(obj);
-        auto size = jenv.GetDirectBufferCapacity(obj);
+        auto data = jEnv.GetDirectBufferAddress(obj);
+        auto size = jEnv.GetDirectBufferCapacity(obj);
 
         void* externalData = data;
         napi_create_external_arraybuffer(env, externalData, size, nullptr, nullptr, &arrayBuffer);
     } else {
         if (m_remainingMethodID == nullptr) {
-            m_remainingMethodID = jenv.GetMethodID(m_ByteBufferClass, "remaining", "()I");
+            m_remainingMethodID = jEnv.GetMethodID(m_ByteBufferClass, "remaining", "()I");
             assert(m_remainingMethodID != nullptr);
         }
 
-        int bufferRemainingSize = jenv.CallIntMethod(obj, m_remainingMethodID);
+        int bufferRemainingSize = jEnv.CallIntMethod(obj, m_remainingMethodID);
 
         if (m_getMethodID == nullptr) {
-            m_getMethodID = jenv.GetMethodID(m_ByteBufferClass, "get", "([BII)Ljava/nio/ByteBuffer;");
+            m_getMethodID = jEnv.GetMethodID(m_ByteBufferClass, "get", "([BII)Ljava/nio/ByteBuffer;");
             assert(m_getMethodID != nullptr);
         }
 
-        jbyteArray byteArray = jenv.NewByteArray(bufferRemainingSize);
-        jenv.CallObjectMethod(obj, m_getMethodID, byteArray, 0, bufferRemainingSize);
+        jbyteArray byteArray = jEnv.NewByteArray(bufferRemainingSize);
+        jEnv.CallObjectMethod(obj, m_getMethodID, byteArray, 0, bufferRemainingSize);
 
-        auto byteArrayElements = jenv.GetByteArrayElements(byteArray, 0);
+        auto byteArrayElements = jEnv.GetByteArrayElements(byteArray, 0);
 
         jbyte* data = new jbyte[bufferRemainingSize];
         memcpy(data, byteArrayElements, bufferRemainingSize);
@@ -123,7 +124,7 @@ napi_value ArrayBufferHelper::CreateFromCallbackImpl(napi_env env, size_t argc, 
             delete[] static_cast<jbyte*>(finalize_data);
         }, nullptr, &arrayBuffer);
 
-        jenv.ReleaseByteArrayElements(byteArray, byteArrayElements, 0);
+        jEnv.ReleaseByteArrayElements(byteArray, byteArrayElements, 0);
     }
 
     napi_value nativeObjectKey;

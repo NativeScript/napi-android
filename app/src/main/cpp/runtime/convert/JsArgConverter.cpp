@@ -74,7 +74,7 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
 
 JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
                                const std::string &methodSignature)
-        : m_env(env), m_methodSignature(methodSignature), m_isValid(true), m_error(Error()) {
+        : m_env(env),  m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
     m_argsLen = argc;
 
     JniSignatureParser parser(m_methodSignature);
@@ -462,7 +462,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
     switch (elementTypePrefix) {
         case 'Z': {
             arr = jenv.NewBooleanArray(arrLength);
-            jboolean bools[arrLength];
+            std::vector<jboolean> bools;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -471,12 +471,12 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_bool(env, element, &boolValue);
                 bools[i] = (jboolean) boolValue;
             }
-            jenv.SetBooleanArrayRegion((jbooleanArray) arr, 0, arrLength, bools);
+            jenv.SetBooleanArrayRegion((jbooleanArray) arr, 0, arrLength, bools.data());
             break;
         }
         case 'B': {
             arr = jenv.NewByteArray(arrLength);
-            jbyte bytes[arrLength];
+            std::vector<jbyte> bytes;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -484,12 +484,12 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_int32(env, element, &intValue);
                 bytes[i] = (jbyte) intValue;
             }
-            jenv.SetByteArrayRegion((jbyteArray) arr, 0, arrLength, bytes);
+            jenv.SetByteArrayRegion((jbyteArray) arr, 0, arrLength, bytes.data());
             break;
         }
         case 'C': {
             arr = jenv.NewCharArray(arrLength);
-            jchar chars[arrLength];
+            std::vector<jchar> chars;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -499,12 +499,12 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_string_utf8(env, element, &str[0], str_len + 1, &str_len);
                 chars[i] = (jchar) str[0];
             }
-            jenv.SetCharArrayRegion((jcharArray) arr, 0, arrLength, chars);
+            jenv.SetCharArrayRegion((jcharArray) arr, 0, arrLength, chars.data());
             break;
         }
         case 'S': {
             arr = jenv.NewShortArray(arrLength);
-            jshort shorts[arrLength];
+            std::vector<jshort> shorts;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -512,12 +512,12 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_int32(env, element, &intValue);
                 shorts[i] = (jshort) intValue;
             }
-            jenv.SetShortArrayRegion((jshortArray) arr, 0, arrLength, shorts);
+            jenv.SetShortArrayRegion((jshortArray) arr, 0, arrLength, shorts.data());
             break;
         }
         case 'I': {
             arr = jenv.NewIntArray(arrLength);
-            jint ints[arrLength];
+            std::vector<jint> ints;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -525,12 +525,12 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_int32(env, element, &intValue);
                 ints[i] = (jint) intValue;
             }
-            jenv.SetIntArrayRegion((jintArray) arr, 0, arrLength, ints);
+            jenv.SetIntArrayRegion((jintArray) arr, 0, arrLength, ints.data());
             break;
         }
         case 'J': {
             arr = jenv.NewLongArray(arrLength);
-            jlong longs[arrLength];
+            std::vector<jlong> longs;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -538,12 +538,12 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_int64(env, element, &intValue);
                 longs[i] = (jlong) intValue;
             }
-            jenv.SetLongArrayRegion((jlongArray) arr, 0, arrLength, longs);
+            jenv.SetLongArrayRegion((jlongArray) arr, 0, arrLength, longs.data());
             break;
         }
         case 'F': {
             arr = jenv.NewFloatArray(arrLength);
-            jfloat floats[arrLength];
+            std::vector<jfloat> floats;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -551,12 +551,12 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_double(env, element, &doubleValue);
                 floats[i] = (jfloat) doubleValue;
             }
-            jenv.SetFloatArrayRegion((jfloatArray) arr, 0, arrLength, floats);
+            jenv.SetFloatArrayRegion((jfloatArray) arr, 0, arrLength, floats.data());
             break;
         }
         case 'D': {
             arr = jenv.NewDoubleArray(arrLength);
-            jdouble doubles[arrLength];
+            std::vector<jdouble> doubles;
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -564,7 +564,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_value_double(env, element, &doubleValue);
                 doubles[i] = (jdouble) doubleValue;
             }
-            jenv.SetDoubleArrayRegion((jdoubleArray) arr, 0, arrLength, doubles);
+            jenv.SetDoubleArrayRegion((jdoubleArray) arr, 0, arrLength, doubles.data());
             break;
         }
         case 'L':
@@ -576,7 +576,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
                 napi_get_element(env, jsArr, i, &element);
                 JsArgToArrayConverter c(env, element, false, (int) Type::Null);
                 jobject o = c.GetConvertedArg();
-                jenv.SetObjectArrayElement((jobjectArray) arr, i, o);
+                jenv.SetObjectArrayElement((jobjectArray) arr, (int) i, o);
             }
             break;
         default:

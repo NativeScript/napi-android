@@ -149,10 +149,10 @@ void Runtime::Init(JNIEnv *jEnv, jstring filesPath)
     napi_util::napi_set_function(env, global, "__releaseNativeCounterpart", CallbackHandlers::ReleaseNativeCounterpartCallback);
     napi_util::napi_set_function(env, global, "__postFrameCallback", CallbackHandlers::PostFrameCallback);
     napi_util::napi_set_function(env, global, "__removeFrameCallback", CallbackHandlers::RemoveFrameCallback);
-    napi_util::napi_set_function(env, global, "__markingMode", [](napi_env env, napi_callback_info) -> napi_value
+    napi_util::napi_set_function(env, global, "__markingMode", [](napi_env _env, napi_callback_info) -> napi_value
                                  {
         napi_value mode;
-        napi_create_int32(env, 0, &mode);
+        napi_create_int32(_env, 0, &mode);
         return mode; });
 
 
@@ -174,12 +174,9 @@ void Runtime::Init(JNIEnv *jEnv, jstring filesPath)
 
     ArrayHelper::Init(env);
 
-    m_arrayBufferHelper.CreateConvertFunctions(context, global, m_objectManager);
+    m_arrayBufferHelper.CreateConvertFunctions(env, global, m_objectManager);
 
     m_loopTimer->Init(env);
-
-    napi_value global;
-    napi_get_global(env, &global);
 
     Console::createConsole(env, global);
     Performance::createPerformance(env, global);

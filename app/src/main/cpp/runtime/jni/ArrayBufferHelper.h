@@ -1,10 +1,9 @@
 #ifndef ARRAYBUFFERHELPER_H_
 #define ARRAYBUFFERHELPER_H_
 
-#include "v8.h"
 #include "ObjectManager.h"
 
-namespace tns {
+namespace ns {
     class ArrayBufferHelper {
         public:
             ArrayBufferHelper();
@@ -13,9 +12,9 @@ namespace tns {
 
         private:
 
-            static void CreateFromCallbackStatic(napi_env env, napi_callback_info info);
+            static napi_value CreateFromCallbackStatic(napi_env env, napi_callback_info info);
 
-            void CreateFromCallbackImpl(napi_env env, napi_callback_info info);
+            napi_value CreateFromCallbackImpl(napi_env env, size_t argc, napi_value* args);
 
             ObjectManager* m_objectManager;
 
