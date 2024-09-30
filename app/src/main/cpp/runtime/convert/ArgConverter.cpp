@@ -1,5 +1,5 @@
 #include "ArgConverter.h"
-// TODO #include "ObjectManager.h"
+#include "ObjectManager.h"
 #include "Util.h"
 #include "NativeScriptException.h"
 #include "NumericCasts.h"
@@ -18,10 +18,16 @@ void ArgConverter::Init(napi_env env, napi_value context) {
     napi_value valueOfFunc;
     napi_value toStringFunc;
 
-    napi_create_function(env, "NativeScriptLongFunctionCallback", NAPI_AUTO_LENGTH, ArgConverter::NativeScriptLongFunctionCallback, nullptr, &longNumberCtorFunc);
+    napi_create_function(env, "NativeScriptLongFunctionCallback", NAPI_AUTO_LENGTH,
+                         ArgConverter::NativeScriptLongFunctionCallback, nullptr,
+                         &longNumberCtorFunc);
     napi_create_object(env, &longNumberPrototype);
-    napi_create_function(env, "NativeScriptLongValueOfFunctionCallback", NAPI_AUTO_LENGTH, ArgConverter::NativeScriptLongValueOfFunctionCallback, nullptr, &valueOfFunc);
-    napi_create_function(env, "NativeScriptLongToStringFunctionCallback", NAPI_AUTO_LENGTH, ArgConverter::NativeScriptLongToStringFunctionCallback, nullptr, &toStringFunc);
+    napi_create_function(env, "NativeScriptLongValueOfFunctionCallback", NAPI_AUTO_LENGTH,
+                         ArgConverter::NativeScriptLongValueOfFunctionCallback, nullptr,
+                         &valueOfFunc);
+    napi_create_function(env, "NativeScriptLongToStringFunctionCallback", NAPI_AUTO_LENGTH,
+                         ArgConverter::NativeScriptLongToStringFunctionCallback, nullptr,
+                         &toStringFunc);
 
     napi_set_named_property(env, longNumberPrototype, "valueOf", valueOfFunc);
     napi_set_named_property(env, longNumberPrototype, "toString", toStringFunc);
@@ -34,12 +40,13 @@ void ArgConverter::Init(napi_env env, napi_value context) {
     cache->NanNumberObject = napi_util::make_ref(env, nanValue, 1);
 }
 
-napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info) {
+napi_value
+ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info) {
     try {
         napi_value result;
         napi_create_double(env, numeric_limits<double>::quiet_NaN(), &result);
         return result;
-    } catch (NativeScriptException& e) {
+    } catch (NativeScriptException &e) {
 //        e.ReThrowToNapi(env);
     } catch (std::exception e) {
         stringstream ss;
@@ -52,7 +59,8 @@ napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, n
     }
 }
 
-napi_value ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, napi_callback_info info) {
+napi_value
+ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, napi_callback_info info) {
     try {
         napi_value thisArg;
         napi_get_cb_info(env, info, nullptr, nullptr, &thisArg, nullptr);
@@ -61,7 +69,7 @@ napi_value ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, 
         napi_get_named_property(env, thisArg, "value", &value);
 
         return value;
-    } catch (NativeScriptException& e) {
+    } catch (NativeScriptException &e) {
 //        e.ReThrowToNapi(env);
     } catch (std::exception e) {
         stringstream ss;
@@ -86,11 +94,12 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
 
         NumericCasts::MarkAsLong(env, jsThis, argv[0]);
 
-        napi_util::napi_inherits(env, jsThis, napi_util::get_ref_value(env, cache->NanNumberObject));
+        napi_util::napi_inherits(env, jsThis,
+                                 napi_util::get_ref_value(env, cache->NanNumberObject));
 
         return jsThis;
 
-    } catch (NativeScriptException& e) {
+    } catch (NativeScriptException &e) {
 //        e.ReThrowToNapi(env);
     } catch (std::exception e) {
         stringstream ss;
@@ -104,7 +113,7 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
     return nullptr;
 }
 
-napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t* length) {
+napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t *length) {
     JEnv jenv;
 
     int argc = jenv.GetArrayLength(args) / 3;
@@ -112,7 +121,7 @@ napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args
     napi_create_array_with_length(env, argc, &arr);
 
     auto runtime = Runtime::GetRuntime(env);
-//    auto objectManager = runtime->GetObjectManager();
+    auto objectManager = runtime->GetObjectManager();
 
     int jArrayIndex = 0;
     for (int i = 0; i < argc; i++) {
@@ -152,14 +161,14 @@ napi_value ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args
                 jsArg = jstringToJsString(env, (jstring) arg);
                 break;
             case Type::JsObject: {
-//                jint javaObjectID = JType::IntValue(jenv, arg);
-//                jsArg = objectManager->GetJsObjectByJavaObject(javaObjectID);
-//
-//                if (jsArg == nullptr) {
-//                    string argClassName = jstringToString(ObjectToString(argJavaClassPath));
-//                    argClassName = Util::ConvertFromCanonicalToJniName(argClassName);
-//                    jsArg = objectManager->CreateJSWrapper(javaObjectID, argClassName);
-//                }
+                jint javaObjectID = JType::IntValue(jenv, arg);
+                jsArg = objectManager->GetJsObjectByJavaObject(javaObjectID);
+
+                if (jsArg == nullptr) {
+                    string argClassName = jstringToString(ObjectToString(argJavaClassPath));
+                    argClassName = Util::ConvertFromCanonicalToJniName(argClassName);
+                    jsArg = objectManager->CreateJSWrapper(javaObjectID, argClassName);
+                }
                 break;
             }
             case Type::Null:
@@ -187,9 +196,10 @@ napi_value ArgConverter::ConvertFromJavaLong(napi_env env, jlong value) {
         sprintf(strNumber, "%lld", longValue);
         napi_value strValue;
         napi_create_string_utf8(env, strNumber, NAPI_AUTO_LENGTH, &strValue);
-        napi_value args[1] = { strValue };
+        napi_value args[1] = {strValue};
 
-        napi_new_instance(env, napi_util::get_ref_value(env, cache->LongNumberCtorFunc), 1, args, &convertedValue);
+        napi_new_instance(env, napi_util::get_ref_value(env, cache->LongNumberCtorFunc), 1, args,
+                          &convertedValue);
     }
 
     return convertedValue;
@@ -209,8 +219,8 @@ int64_t ArgConverter::ConvertToJavaLong(napi_env env, napi_value value) {
     return longValue;
 }
 
-ArgConverter::TypeLongOperationsCache* ArgConverter::GetTypeLongCache(napi_env env) {
-    TypeLongOperationsCache* cache;
+ArgConverter::TypeLongOperationsCache *ArgConverter::GetTypeLongCache(napi_env env) {
+    TypeLongOperationsCache *cache;
     auto itFound = s_type_long_operations_cache.find(env);
     if (itFound == s_type_long_operations_cache.end()) {
         cache = new TypeLongOperationsCache;
@@ -244,4 +254,4 @@ void ArgConverter::onDisposeIsolate(napi_env env) {
     }
 }
 
-robin_hood::unordered_map<napi_env, ArgConverter::TypeLongOperationsCache*> ArgConverter::s_type_long_operations_cache;
+robin_hood::unordered_map<napi_env, ArgConverter::TypeLongOperationsCache *> ArgConverter::s_type_long_operations_cache;

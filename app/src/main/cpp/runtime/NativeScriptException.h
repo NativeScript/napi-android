@@ -1,9 +1,10 @@
 #ifndef NATIVESCRIPTEXCEPTION_H_
 #define NATIVESCRIPTEXCEPTION_H_
 
-#include "jni/JEnv.h"
-#include "jni/JniLocalRef.h"
 #include "js_native_api.h"
+#include "JEnv.h"
+#include "JniLocalRef.h"
+#include "ObjectManager.h"
 
 namespace ns {
 class NativeScriptException {
@@ -23,9 +24,31 @@ class NativeScriptException {
          */
         NativeScriptException(const std::string& message, const std::string& stackTrace);
 
+        /*
+         * Generates a NativeScriptException with javascript error from napi_env and a prepend message if any
+         */
+        NativeScriptException(napi_env env, napi_value error, const std::string& message = "");
 
+        void ReThrowToNapi(napi_env env);
+        void ReThrowToJava(napi_env env);
+
+        static void Init(napi_env env);
+
+        /*
+         * This handler is attached to Node-API to handle uncaught javascript exceptions.
+         */
+        static void OnUncaughtError(napi_env env, napi_value error);
+
+        /*
+         * Calls the global "__onUncaughtError" or "__onDiscardedError" if such is provided
+         */
+        static void CallJsFuncWithErr(napi_env env, napi_value errObj, bool isDiscarded);
 
     private:
+        /*
+         * Try to get native exception or NativeScriptException from js object
+         */
+        JniLocalRef TryGetJavaThrowableObject(JEnv& env, napi_env napiEnv, napi_value jsObj);
 
         /*
          * Gets java exception message from jthrowable
@@ -37,8 +60,32 @@ class NativeScriptException {
          */
         std::string GetExceptionStackTrace(JEnv& env, jthrowable exception);
 
+        /*
+         * Gets the member m_javaException, wraps it and creates a javascript error object from it
+         */
+        napi_value WrapJavaToJsException(napi_env env);
 
-        napi_value m_javascriptException;
+        /*
+         * Gets all the information from a java exception and puts it in a javascript error object
+         */
+        napi_value GetJavaExceptionFromEnv(napi_env env, const JniLocalRef& exc, JEnv& jenv);
+
+        /*
+         * Gets all the information from a js message and an js error object and puts it in a string
+         */
+        static std::string GetErrorMessage(napi_env env, napi_value error, const std::string& prependMessage = "");
+
+        /*
+         * Generates string stack trace from js StackTrace
+         */
+        static std::string GetErrorStackTrace(napi_env env, napi_value stackTrace);
+
+        /*
+         *	Adds a prepend message to the normal message process
+         */
+        std::string GetFullMessage(napi_env env, napi_value error, const std::string& jsExceptionMessage);
+
+        napi_ref m_javascriptException;
         JniLocalRef m_javaException;
         std::string m_message;
         std::string m_stackTrace;

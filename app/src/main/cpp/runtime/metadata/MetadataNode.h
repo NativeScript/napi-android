@@ -170,7 +170,7 @@ private:
 
     static napi_value SuperAccessorGetterCallback(napi_env env, napi_callback_info info);
 
-    static bool ValidateExtendArguments(napi_env env, napi_callback_info info, bool extendLocationFound, string &extendLocation, napi_value extendName, napi_value implementationObject, bool isTypeScriptExtend);
+    static bool ValidateExtendArguments(napi_env env, napi_callback_info info, bool extendLocationFound, string &extendLocation, napi_value* extendName, napi_value* implementationObject, bool isTypeScriptExtend);
 
     MetadataTreeNode *m_treeNode;
 

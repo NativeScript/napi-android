@@ -22,8 +22,7 @@
 using namespace std;
 using namespace ns;
 
-void CallbackHandlers::Init(napi_env env)
-{
+void CallbackHandlers::Init(napi_env env) {
     JEnv jEnv;
 
     JAVA_LANG_STRING = jEnv.FindClass("java/lang/String");
@@ -70,8 +69,7 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
                                         const ArgsWrapper &argWrapper,
                                         napi_value implementationObject,
                                         bool isInterface,
-                                        const std::string &baseClassName)
-{
+                                        const std::string &baseClassName) {
     bool success;
 
     DEBUG_WRITE("RegisterInstance called for '%s'", fullClassName.c_str());
@@ -100,12 +98,9 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
         JavaObjectIdScope objIdScope(jEnv, CURRENT_OBJECTID_FIELD_ID, runtime->GetJavaRuntime(),
                                      javaObjectID);
 
-        if (argWrapper.type == ArgType::Interface)
-        {
+        if (argWrapper.type == ArgType::Interface) {
             instance = jEnv.NewObject(generatedJavaClass, mi.mid);
-        }
-        else
-        {
+        } else {
             // resolve arguments before passing them on to the constructor
             //            JSToJavaConverter argConverter(isolate, argWrapper.args, mi.signature);
 
@@ -126,13 +121,10 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
     JniLocalRef localInstance(instance);
     success = !localInstance.IsNull();
 
-    if (success)
-    {
+    if (success) {
         jclass instanceClass = jEnv.FindClass(fullClassName);
         objectManager->SetJavaClass(jsObject, instanceClass);
-    }
-    else
-    {
+    } else {
         DEBUG_WRITE_FORCE("RegisterInstance failed with null new instance class: %s",
                           fullClassName.c_str());
     }
@@ -142,13 +134,11 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
 
 jclass CallbackHandlers::ResolveClass(napi_env env, const string &baseClassName,
                                       const string &fullClassName,
-                                      napi_value implementationObject, bool isInterface)
-{
+                                      napi_value implementationObject, bool isInterface) {
     JEnv jEnv;
     jclass globalRefToGeneratedClass = jEnv.CheckForClassInCache(fullClassName);
 
-    if (globalRefToGeneratedClass == nullptr)
-    {
+    if (globalRefToGeneratedClass == nullptr) {
 
         // get needed arguments in order to load binding
         JniLocalRef javaBaseClassName(jEnv.NewStringUTF(baseClassName.c_str()));
@@ -156,18 +146,19 @@ jclass CallbackHandlers::ResolveClass(napi_env env, const string &baseClassName,
 
         jobjectArray methodOverrides = GetMethodOverrides(env, jEnv, implementationObject);
 
-        jobjectArray implementedInterfaces = GetImplementedInterfaces(env, jEnv, implementationObject);
+        jobjectArray implementedInterfaces = GetImplementedInterfaces(env, jEnv,
+                                                                      implementationObject);
 
         auto runtime = Runtime::GetRuntime(env);
 
         // create or load generated binding (java class)
-        jclass generatedClass = (jclass)jEnv.CallObjectMethod(runtime->GetJavaRuntime(),
-                                                              RESOLVE_CLASS_METHOD_ID,
-                                                              (jstring)javaBaseClassName,
-                                                              (jstring)javaFullClassName,
-                                                              methodOverrides,
-                                                              implementedInterfaces,
-                                                              isInterface);
+        jclass generatedClass = (jclass) jEnv.CallObjectMethod(runtime->GetJavaRuntime(),
+                                                               RESOLVE_CLASS_METHOD_ID,
+                                                               (jstring) javaBaseClassName,
+                                                               (jstring) javaFullClassName,
+                                                               methodOverrides,
+                                                               implementedInterfaces,
+                                                               isInterface);
 
         globalRefToGeneratedClass = jEnv.InsertClassIntoCache(fullClassName, generatedClass);
 
@@ -179,8 +170,7 @@ jclass CallbackHandlers::ResolveClass(napi_env env, const string &baseClassName,
 }
 
 // Called by ExtendMethodCallback when extending a class
-string CallbackHandlers::ResolveClassName(napi_env env, jclass &clazz)
-{
+string CallbackHandlers::ResolveClassName(napi_env env, jclass &clazz) {
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
     auto className = objectManager->GetClassName(clazz);
@@ -188,41 +178,35 @@ string CallbackHandlers::ResolveClassName(napi_env env, jclass &clazz)
 }
 
 napi_value CallbackHandlers::GetArrayElement(napi_env env, napi_value array,
-                                             uint32_t index, const string &arraySignature)
-{
+                                             uint32_t index, const string &arraySignature) {
     return arrayElementAccessor.GetArrayElement(env, array, index, arraySignature);
 }
 
 void CallbackHandlers::SetArrayElement(napi_env env, napi_value array,
                                        uint32_t index,
-                                       const string &arraySignature, napi_value value)
-{
+                                       const string &arraySignature, napi_value value) {
 
     arrayElementAccessor.SetArrayElement(env, array, index, arraySignature, value);
 }
 
 napi_value CallbackHandlers::GetJavaField(napi_env env, napi_value caller,
-                                          FieldCallbackData *fieldData)
-{
+                                          FieldCallbackData *fieldData) {
     return fieldAccessor.GetJavaField(env, caller, fieldData);
 }
 
 void CallbackHandlers::SetJavaField(napi_env env, napi_value target,
-                                    napi_value value, FieldCallbackData *fieldData)
-{
+                                    napi_value value, FieldCallbackData *fieldData) {
     fieldAccessor.SetJavaField(env, target, value, fieldData);
 }
 
-void CallbackHandlers::AdjustAmountOfExternalAllocatedMemory(JEnv &jEnv, napi_env env)
-{
+void CallbackHandlers::AdjustAmountOfExternalAllocatedMemory(JEnv &jEnv, napi_env env) {
     auto runtime = Runtime::GetRuntime(env);
     // runtime->AdjustAmountOfExternalAllocatedMemory();
     // runtime->TryCallGC();
 }
 
 napi_value CallbackHandlers::CreateJSWrapper(napi_env env, jint javaObjectID,
-                                             const string &typeName)
-{
+                                             const string &typeName) {
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
 
@@ -230,10 +214,9 @@ napi_value CallbackHandlers::CreateJSWrapper(napi_env env, jint javaObjectID,
 }
 
 jobjectArray
-CallbackHandlers::GetImplementedInterfaces(napi_env env, JEnv &jEnv, napi_value implementationObject)
-{
-    if (implementationObject == nullptr || napi_util::is_undefined(env, implementationObject))
-    {
+CallbackHandlers::GetImplementedInterfaces(napi_env env, JEnv &jEnv,
+                                           napi_value implementationObject) {
+    if (implementationObject == nullptr || napi_util::is_undefined(env, implementationObject)) {
         return CallbackHandlers::GetJavaStringArray(jEnv, 0);
     }
 
@@ -244,18 +227,15 @@ CallbackHandlers::GetImplementedInterfaces(napi_env env, JEnv &jEnv, napi_value 
     bool isArray;
     napi_is_array(env, prop, &isArray);
 
-    if (isArray)
-    {
+    if (isArray) {
         uint32_t length;
         napi_get_array_length(env, prop, &length);
 
-        for (int j = 0; j < length; j++)
-        {
+        for (int j = 0; j < length; j++) {
             napi_value element;
             napi_get_element(env, prop, j, &element);
 
-            if (napi_util::is_of_type(env, element, napi_function))
-            {
+            if (napi_util::is_of_type(env, element, napi_function)) {
                 auto node = MetadataNode::GetTypeMetadataName(env, element);
 
                 node = Util::ReplaceAll(node, std::string("/"), std::string("."));
@@ -268,14 +248,13 @@ CallbackHandlers::GetImplementedInterfaces(napi_env env, JEnv &jEnv, napi_value 
 
     int interfacesCount = interfacesToImplement.size();
 
-    jobjectArray implementedInterfaces = CallbackHandlers::GetJavaStringArray(jEnv, interfacesCount);
-    for (int i = 0; i < interfacesCount; i++)
-    {
+    jobjectArray implementedInterfaces = CallbackHandlers::GetJavaStringArray(jEnv,
+                                                                              interfacesCount);
+    for (int i = 0; i < interfacesCount; i++) {
         jEnv.SetObjectArrayElement(implementedInterfaces, i, interfacesToImplement[i]);
     }
 
-    for (int i = 0; i < interfacesCount; i++)
-    {
+    for (int i = 0; i < interfacesCount; i++) {
         jEnv.DeleteLocalRef(interfacesToImplement[i]);
     }
 
@@ -283,10 +262,8 @@ CallbackHandlers::GetImplementedInterfaces(napi_env env, JEnv &jEnv, napi_value 
 }
 
 jobjectArray
-CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implementationObject)
-{
-    if (implementationObject == nullptr || napi_util::is_undefined(env, implementationObject))
-    {
+CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implementationObject) {
+    if (implementationObject == nullptr || napi_util::is_undefined(env, implementationObject)) {
         return CallbackHandlers::GetJavaStringArray(jEnv, 0);
     }
 
@@ -294,19 +271,18 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
 
     napi_value propNames;
 
-    napi_get_all_property_names(env, implementationObject, napi_key_own_only, napi_key_all_properties, napi_key_numbers_to_strings, &propNames);
+    napi_get_all_property_names(env, implementationObject, napi_key_own_only,
+                                napi_key_all_properties, napi_key_numbers_to_strings, &propNames);
 
     uint32_t length;
     napi_get_array_length(env, propNames, &length);
 
-    for (int i = 0; i < length; i++)
-    {
+    for (int i = 0; i < length; i++) {
         napi_value element;
         napi_get_element(env, propNames, i, &element);
         auto name = ArgConverter::ConvertToString(env, element);
 
-        if (name == "super")
-        {
+        if (name == "super") {
             continue;
         }
 
@@ -316,8 +292,7 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
 
         bool methodFound = napi_util::is_of_type(env, method, napi_function);
 
-        if (methodFound)
-        {
+        if (methodFound) {
             jstring value = jEnv.NewStringUTF(name.c_str());
             methodNames.push_back(value);
         }
@@ -326,34 +301,29 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
     int methodCount = methodNames.size();
 
     jobjectArray methodOverrides = CallbackHandlers::GetJavaStringArray(jEnv, methodCount);
-    for (int i = 0; i < methodCount; i++)
-    {
+    for (int i = 0; i < methodCount; i++) {
         jEnv.SetObjectArrayElement(methodOverrides, i, methodNames[i]);
     }
 
-    for (int i = 0; i < methodCount; i++)
-    {
+    for (int i = 0; i < methodCount; i++) {
         jEnv.DeleteLocalRef(methodNames[i]);
     }
 
     return methodOverrides;
 }
 
-napi_value CallbackHandlers::RunOnMainThreadCallback(napi_env env, napi_callback_info info)
-{
+napi_value CallbackHandlers::RunOnMainThreadCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
 
     assert(argc == 1);
-    assert(napi_typeof(env, args[0], nullptr) == napi_function);
+    assert(napi_util::is_of_type(env, args[0], napi_function));
 
     uint64_t key = ++count_;
-    napi_ref callback_ref;
-    napi_create_reference(env, args[0], 1, &callback_ref);
-
     bool inserted;
-    std::tie(std::ignore, inserted) = cache_.try_emplace(key, env, callback_ref);
+
+    std::tie(std::ignore, inserted) = cache_.try_emplace(key, env, args[0]);
     assert(inserted && "Main thread callback ID should not be duplicated");
 
     auto value = Callback(key);
@@ -363,8 +333,7 @@ napi_value CallbackHandlers::RunOnMainThreadCallback(napi_env env, napi_callback
     return nullptr;
 }
 
-int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data)
-{
+int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data) {
     struct Callback value;
     auto size = sizeof(Callback);
     ssize_t nr = read(fd, &value, sizeof(value));
@@ -372,8 +341,7 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data)
     auto key = value.id_;
 
     auto it = cache_.find(key);
-    if (it == cache_.end())
-    {
+    if (it == cache_.end()) {
         return 1;
     }
 
@@ -383,8 +351,6 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data)
     napi_open_handle_scope(env, &handle_scope);
 
     napi_value cb = napi_util::get_ref_value(env, callback_ref);
-
-    napi_reference_unref(env, callback_ref, nullptr);
 
     napi_value global;
     napi_get_global(env, &global);
@@ -396,28 +362,23 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data)
 
     napi_close_handle_scope(env, handle_scope);
 
-    if (status != napi_ok)
-    {
+    if (status != napi_ok) {
         napi_throw_error(env, nullptr, "Error calling JavaScript callback");
     }
 
     return 1;
 }
 
-napi_value CallbackHandlers::LogMethodCallback(napi_env env, napi_callback_info info)
-{
+napi_value CallbackHandlers::LogMethodCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
 
-    try
-    {
-        if (argc > 0)
-        {
+    try {
+        if (argc > 0) {
             napi_valuetype valuetype;
             napi_typeof(env, args[0], &valuetype);
-            if (valuetype == napi_string)
-            {
+            if (valuetype == napi_string) {
                 size_t str_size;
                 napi_get_value_string_utf8(env, args[0], nullptr, 0, &str_size);
                 std::string message(str_size + 1, '\0');
@@ -426,19 +387,16 @@ napi_value CallbackHandlers::LogMethodCallback(napi_env env, napi_callback_info 
             }
         }
     }
-    catch (NativeScriptException &e)
-    {
+    catch (NativeScriptException &e) {
         // e.ReThrowToNapi(env);
     }
-    catch (std::exception &e)
-    {
+    catch (std::exception &e) {
         std::stringstream ss;
         ss << "Error: c++ exception: " << e.what() << std::endl;
         NativeScriptException nsEx(ss.str());
         // nsEx.ReThrowToNapi(env);
     }
-    catch (...)
-    {
+    catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         // nsEx.ReThrowToNapi(env);
     }
@@ -446,134 +404,117 @@ napi_value CallbackHandlers::LogMethodCallback(napi_env env, napi_callback_info 
     return nullptr;
 }
 
-napi_value CallbackHandlers::DrainMicrotaskCallback(napi_env env, napi_callback_info info)
-{
+napi_value CallbackHandlers::DrainMicrotaskCallback(napi_env env, napi_callback_info info) {
     napi_run_microtasks(env);
     return nullptr;
 }
 
-napi_value CallbackHandlers::TimeCallback(napi_env env, napi_callback_info info)
-{
+napi_value CallbackHandlers::TimeCallback(napi_env env, napi_callback_info info) {
 
     auto nano = std::chrono::time_point_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now());
+            std::chrono::system_clock::now());
     double duration = nano.time_since_epoch().count();
     napi_value result;
     napi_create_double(env, duration, &result);
     return result;
 }
 
-napi_value CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info)
-{
+napi_value
+CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info) {
     // NOOP
     return nullptr;
 }
 
-void CallbackHandlers::validateProvidedArgumentsLength(napi_env env, napi_callback_info info, int expectedSize)
-{
+void CallbackHandlers::validateProvidedArgumentsLength(napi_env env, napi_callback_info info,
+                                                       int expectedSize) {
     size_t argc = 0;
     napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);
-    if ((int)argc != expectedSize)
-    {
+    if ((int) argc != expectedSize) {
         throw NativeScriptException("Unexpected arguments count!");
     }
 }
 
-napi_value CallbackHandlers::DumpReferenceTablesMethodCallback(napi_env env, napi_callback_info info)
-{
+napi_value
+CallbackHandlers::DumpReferenceTablesMethodCallback(napi_env env, napi_callback_info info) {
     DumpReferenceTablesMethod();
     return nullptr;
 }
 
-void CallbackHandlers::DumpReferenceTablesMethod()
-{
-    try
-    {
+void CallbackHandlers::DumpReferenceTablesMethod() {
+    try {
         JEnv jEnv;
         jclass vmDbgClass = jEnv.FindClass("dalvik/system/VMDebug");
-        if (vmDbgClass != nullptr)
-        {
+        if (vmDbgClass != nullptr) {
             jmethodID mid = jEnv.GetStaticMethodID(vmDbgClass, "dumpReferenceTables", "()V");
-            if (mid != 0)
-            {
+            if (mid != 0) {
                 jEnv.CallStaticVoidMethod(vmDbgClass, mid);
             }
         }
     }
-    catch (NativeScriptException &e)
-    {
+    catch (NativeScriptException &e) {
         // e.ReThrowToV8();
     }
-    catch (std::exception e)
-    {
+    catch (std::exception e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
         // nsEx.ReThrowToV8();
     }
-    catch (...)
-    {
+    catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         // nsEx.ReThrowToV8();
     }
 }
 
-napi_value CallbackHandlers::EnableVerboseLoggingMethodCallback(napi_env env, napi_callback_info info)
-{
-    try
-    {
+napi_value
+CallbackHandlers::EnableVerboseLoggingMethodCallback(napi_env env, napi_callback_info info) {
+    try {
         ns::LogEnabled = true;
         JEnv jEnv;
-        jEnv.CallVoidMethod(Runtime::GetRuntime(env)->GetJavaRuntime(), ENABLE_VERBOSE_LOGGING_METHOD_ID);
+        jEnv.CallVoidMethod(Runtime::GetRuntime(env)->GetJavaRuntime(),
+                            ENABLE_VERBOSE_LOGGING_METHOD_ID);
     }
-    catch (NativeScriptException &e)
-    {
+    catch (NativeScriptException &e) {
         // e.ReThrowToV8();
     }
-    catch (std::exception e)
-    {
+    catch (std::exception e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
         // nsEx.ReThrowToV8();
     }
-    catch (...)
-    {
+    catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         // nsEx.ReThrowToV8();
     }
     return nullptr;
 }
 
-napi_value CallbackHandlers::DisableVerboseLoggingMethodCallback(napi_env env, napi_callback_info info)
-{
-    try
-    {
+napi_value
+CallbackHandlers::DisableVerboseLoggingMethodCallback(napi_env env, napi_callback_info info) {
+    try {
         ns::LogEnabled = false;
         JEnv jEnv;
-        jEnv.CallVoidMethod(Runtime::GetRuntime(env)->GetJavaRuntime(), DISABLE_VERBOSE_LOGGING_METHOD_ID);
+        jEnv.CallVoidMethod(Runtime::GetRuntime(env)->GetJavaRuntime(),
+                            DISABLE_VERBOSE_LOGGING_METHOD_ID);
     }
-    catch (NativeScriptException &e)
-    {
+    catch (NativeScriptException &e) {
         // e.ReThrowToV8();
     }
-    catch (std::exception e)
-    {
+    catch (std::exception e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
         // nsEx.ReThrowToV8();
     }
-    catch (...)
-    {
+    catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         // nsEx.ReThrowToV8();
     }
     return nullptr;
 }
 
-napi_value CallbackHandlers::ExitMethodCallback(napi_env env, napi_callback_info info)
-{
+napi_value CallbackHandlers::ExitMethodCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(1);
     auto msg = ArgConverter::ConvertToString(env, argv[0]);
     DEBUG_WRITE_FATAL("FORCE EXIT: %s", msg.c_str());
@@ -581,15 +522,13 @@ napi_value CallbackHandlers::ExitMethodCallback(napi_env env, napi_callback_info
     return nullptr;
 }
 
-void CallbackHandlers::CreateGlobalCastFunctions(napi_env env)
-{
+void CallbackHandlers::CreateGlobalCastFunctions(napi_env env) {
     napi_value global;
     napi_get_global(env, &global);
     castFunctions.CreateGlobalCastFunctions(env, global);
 }
 
-vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index)
-{
+vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index) {
     JEnv env;
 
     string canonicalName = Util::ConvertFromJniToCanonicalName(name);
@@ -598,7 +537,7 @@ vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index)
     jint idx = index;
 
     JniLocalRef pubApi(
-        env.CallStaticObjectMethod(RUNTIME_CLASS, GET_TYPE_METADATA, (jstring)className, idx));
+            env.CallStaticObjectMethod(RUNTIME_CLASS, GET_TYPE_METADATA, (jstring) className, idx));
 
     jsize length = env.GetArrayLength(pubApi);
 
@@ -606,8 +545,7 @@ vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index)
 
     vector<string> result;
 
-    for (jsize i = 0; i < length; i++)
-    {
+    for (jsize i = 0; i < length; i++) {
         JniLocalRef s(env.GetObjectArrayElement(pubApi, i));
         const char *pc = env.GetStringUTFChars(s, nullptr);
         result.push_back(string(pc));
@@ -617,32 +555,26 @@ vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index)
     return result;
 }
 
-napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *jEnv,
+napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
                                           napi_value jsObject, const string &methodName,
-                                          jobjectArray args)
-{
+                                          jobjectArray args) {
 
-    JEnv env(jEnv);
+    JEnv jEnv(_jEnv);
     napi_value result;
 
     napi_value method;
 
     napi_get_named_property(env, jsObject, methodName.c_str(), &method);
 
-    if (method == nullptr || napi_util::is_undefined(env, method))
-    {
+    if (method == nullptr || napi_util::is_undefined(env, method)) {
         stringstream ss;
         ss << "Cannot find method '" << methodName << "' implementation";
         throw NativeScriptException(ss.str());
-    }
-    else if (!napi_util::is_of_type(env, method, napi_function))
-    {
+    } else if (!napi_util::is_of_type(env, method, napi_function)) {
         stringstream ss;
         ss << "Property '" << methodName << "' is not a function";
         throw NativeScriptException(ss.str());
-    }
-    else
-    {
+    } else {
 
         napi_escapable_handle_scope escapeScope;
         napi_open_escapable_handle_scope(env, &escapeScope);
@@ -659,29 +591,25 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *jEnv,
     return result;
 }
 
-napi_value CallbackHandlers::FindClass(napi_env env, const char *name)
-{
+napi_value CallbackHandlers::FindClass(napi_env env, const char *name) {
     napi_value clazz = nullptr;
     JEnv jEnv;
     jclass javaClass = jEnv.FindClass(name);
-    if (jEnv.ExceptionCheck() == JNI_FALSE)
-    {
+    if (jEnv.ExceptionCheck() == JNI_FALSE) {
         auto runtime = Runtime::GetRuntime(env);
         auto objectManager = runtime->GetObjectManager();
 
         jint javaObjectID = objectManager->GetOrCreateObjectId(javaClass);
         clazz = objectManager->GetJsObjectByJavaObject(javaObjectID);
 
-        if (clazz == nullptr)
-        {
+        if (clazz == nullptr) {
             clazz = objectManager->CreateJSWrapper(javaObjectID, "Ljava/lang/Class;", javaClass);
         }
     }
     return clazz;
 }
 
-int CallbackHandlers::GetArrayLength(napi_env env, napi_value arr)
-{
+int CallbackHandlers::GetArrayLength(napi_env env, napi_value arr) {
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
 
@@ -694,10 +622,8 @@ int CallbackHandlers::GetArrayLength(napi_env env, napi_value arr)
     return length;
 }
 
-jobjectArray CallbackHandlers::GetJavaStringArray(JEnv &jEnv, int length)
-{
-    if (length > CallbackHandlers::MAX_JAVA_STRING_ARRAY_LENGTH)
-    {
+jobjectArray CallbackHandlers::GetJavaStringArray(JEnv &jEnv, int length) {
+    if (length > CallbackHandlers::MAX_JAVA_STRING_ARRAY_LENGTH) {
         stringstream ss;
         ss << "You are trying to override more methods than the limit of "
            << CallbackHandlers::MAX_JAVA_STRING_ARRAY_LENGTH;
@@ -705,7 +631,7 @@ jobjectArray CallbackHandlers::GetJavaStringArray(JEnv &jEnv, int length)
     }
 
     JniLocalRef tmpArr(jEnv.NewObjectArray(length, JAVA_LANG_STRING, nullptr));
-    return (jobjectArray)jEnv.NewGlobalRef(tmpArr);
+    return (jobjectArray) jEnv.NewGlobalRef(tmpArr);
 }
 
 CallbackHandlers::func_AChoreographer_getInstance AChoreographer_getInstance_;
@@ -716,8 +642,8 @@ CallbackHandlers::func_AChoreographer_postFrameCallbackDelayed AChoreographer_po
 CallbackHandlers::func_AChoreographer_postFrameCallback64 AChoreographer_postFrameCallback64_;
 CallbackHandlers::func_AChoreographer_postFrameCallbackDelayed64 AChoreographer_postFrameCallbackDelayed64_;
 
-void CallbackHandlers::PostCallback(napi_env env, napi_callback_info info, CallbackHandlers::FrameCallbackCacheEntry *entry)
-{
+void CallbackHandlers::PostCallback(napi_env env, napi_callback_info info,
+                                    CallbackHandlers::FrameCallbackCacheEntry *entry) {
     size_t argc = 2;
     napi_value args[2];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -728,57 +654,46 @@ void CallbackHandlers::PostCallback(napi_env env, napi_callback_info info, Callb
     napi_valuetype delayType;
     napi_typeof(env, delay, &delayType);
 
-    if (android_get_device_api_level() >= 29)
-    {
-        if (delayType == napi_number)
-        {
+    if (android_get_device_api_level() >= 29) {
+        if (delayType == napi_number) {
             uint32_t delayValue;
             napi_get_value_uint32(env, delay, &delayValue);
-            AChoreographer_postFrameCallbackDelayed64_(instance, entry->frameCallback64_, entry, delayValue);
-        }
-        else
-        {
+            AChoreographer_postFrameCallbackDelayed64_(instance, entry->frameCallback64_, entry,
+                                                       delayValue);
+        } else {
             AChoreographer_postFrameCallback64_(instance, entry->frameCallback64_, entry);
         }
-    }
-    else
-    {
-        if (delayType == napi_number)
-        {
+    } else {
+        if (delayType == napi_number) {
             int64_t delayValue;
             napi_get_value_int64(env, delay, &delayValue);
-            AChoreographer_postFrameCallbackDelayed_(instance, entry->frameCallback_, entry, static_cast<long>(delayValue));
-        }
-        else
-        {
+            AChoreographer_postFrameCallbackDelayed_(instance, entry->frameCallback_, entry,
+                                                     static_cast<long>(delayValue));
+        } else {
             AChoreographer_postFrameCallback_(instance, entry->frameCallback_, entry);
         }
     }
 }
 
-napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info info)
-{
+napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info info) {
 
-    if (android_get_device_api_level() >= 24)
-    {
+    if (android_get_device_api_level() >= 24) {
         InitChoreographer();
 
         size_t argc = 2;
         napi_value args[2];
         napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
 
-        if (argc < 1)
-        {
+        if (argc < 1) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
-            return;
+            return nullptr;
         }
 
         napi_valuetype argType;
         napi_typeof(env, args[0], &argType);
-        if (argType != napi_function)
-        {
+        if (argType != napi_function) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
-            return;
+            return nullptr;
         }
 
         napi_value func = args[0];
@@ -791,20 +706,17 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
 
         napi_valuetype pIdType;
         napi_typeof(env, pId, &pIdType);
-        if (pIdType == napi_number)
-        {
+        if (pIdType == napi_number) {
             int32_t id;
             napi_get_value_int32(env, pId, &id);
             auto cb = frameCallbackCache_.find(id);
-            if (cb != frameCallbackCache_.end())
-            {
+            if (cb != frameCallbackCache_.end()) {
                 bool shouldReschedule = !cb->second.isScheduled();
                 cb->second.markScheduled();
-                if (shouldReschedule)
-                {
+                if (shouldReschedule) {
                     PostCallback(env, info, &cb->second);
                 }
-                return;
+                return nullptr;
             }
         }
 
@@ -822,28 +734,24 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
     }
 }
 
-napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_info info)
-{
-    if (android_get_device_api_level() >= 24)
-    {
+napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_info info) {
+    if (android_get_device_api_level() >= 24) {
         InitChoreographer();
 
         size_t argc = 1;
         napi_value args[1];
         napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
 
-        if (argc < 1)
-        {
+        if (argc < 1) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
-            return;
+            return nullptr;
         }
 
         napi_valuetype argType;
         napi_typeof(env, args[0], &argType);
-        if (argType != napi_function)
-        {
+        if (argType != napi_function) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
-            return;
+            return nullptr;
         }
 
         napi_value func = args[0];
@@ -854,43 +762,37 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
         napi_value pId;
         napi_get_property(env, func, idKey, &pId);
 
-        if (pId != nullptr && napi_util::is_of_type(env, pId, napi_number))
-        {
+        if (pId != nullptr && napi_util::is_of_type(env, pId, napi_number)) {
             int32_t id;
             napi_get_value_int32(env, pId, &id);
             auto cb = frameCallbackCache_.find(id);
-            if (cb != frameCallbackCache_.end())
-            {
+            if (cb != frameCallbackCache_.end()) {
                 cb->second.markRemoved();
             }
         }
     }
 }
 
-void CallbackHandlers::InitChoreographer()
-{
-    if (AChoreographer_getInstance_ == nullptr)
-    {
+void CallbackHandlers::InitChoreographer() {
+    if (AChoreographer_getInstance_ == nullptr) {
         void *lib = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
-        if (lib != nullptr)
-        {
+        if (lib != nullptr) {
             AChoreographer_getInstance_ = reinterpret_cast<func_AChoreographer_getInstance>(
-                dlsym(lib, "AChoreographer_getInstance"));
+                    dlsym(lib, "AChoreographer_getInstance"));
             AChoreographer_postFrameCallback_ = reinterpret_cast<func_AChoreographer_postFrameCallback>(
-                dlsym(lib, "AChoreographer_postFrameCallback"));
+                    dlsym(lib, "AChoreographer_postFrameCallback"));
             AChoreographer_postFrameCallbackDelayed_ = reinterpret_cast<func_AChoreographer_postFrameCallbackDelayed>(
-                dlsym(lib, "AChoreographer_postFrameCallbackDelayed"));
+                    dlsym(lib, "AChoreographer_postFrameCallbackDelayed"));
 
             assert(AChoreographer_getInstance_);
             assert(AChoreographer_postFrameCallback_);
             assert(AChoreographer_postFrameCallbackDelayed_);
 
-            if (android_get_device_api_level() >= 29)
-            {
+            if (android_get_device_api_level() >= 29) {
                 AChoreographer_postFrameCallback64_ = reinterpret_cast<func_AChoreographer_postFrameCallback64>(
-                    dlsym(lib, "AChoreographer_postFrameCallback64"));
+                        dlsym(lib, "AChoreographer_postFrameCallback64"));
                 AChoreographer_postFrameCallbackDelayed64_ = reinterpret_cast<func_AChoreographer_postFrameCallbackDelayed64>(
-                    dlsym(lib, "AChoreographer_postFrameCallbackDelayed64"));
+                        dlsym(lib, "AChoreographer_postFrameCallbackDelayed64"));
 
                 assert(AChoreographer_postFrameCallback64_);
                 assert(AChoreographer_postFrameCallbackDelayed64_);
