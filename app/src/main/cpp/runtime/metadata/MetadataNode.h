@@ -35,7 +35,7 @@ public:
 
     static string GetTypeMetadataName(napi_env env, napi_value value);
 
-    napi_value CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
+    static napi_value CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
                                        const std::string &proxyClassName);
 
     std::string GetName();

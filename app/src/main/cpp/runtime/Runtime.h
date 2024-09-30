@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include "native_api_util.h"
 #include "ObjectManager.h"
+#include "ArrayBufferHelper.h"
 
 namespace ns {
     class Runtime {
@@ -58,6 +59,11 @@ namespace ns {
             return m_mainLooper;
         }
 
+        jobject Runtime::ConvertJsValueToJavaObject(JEnv& env, napi_value value, int classReturnType);
+        jint Runtime::GenerateNewObjectId(JNIEnv* env, jobject obj);
+        void Runtime::CreateJSInstanceNative(JNIEnv* _env, jobject obj, jobject javaObject, jint javaObjectID, jstring className);
+        jobject Runtime::CallJSMethodNative(JNIEnv* _env, jobject obj, jint javaObjectID, jstring methodName, jint retType, jboolean isConstructor, jobjectArray packagedArgs);
+
     private:
         Runtime(JNIEnv* env, jobject runtime, int id);
 
@@ -74,13 +80,15 @@ namespace ns {
         volatile bool m_runGC;
 
         ObjectManager* m_objectManager;
-// TODO      ArrayBufferHelper m_arrayBufferHelper;
 
+        ArrayBufferHelper m_arrayBufferHelper;
+        
         bool m_isMainThread;
 
         static int GetAndroidVersion();
 
         static int m_androidVersion;
+
 
         static JavaVM *java_vm;
 

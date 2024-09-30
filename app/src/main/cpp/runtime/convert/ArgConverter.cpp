@@ -9,7 +9,7 @@
 using namespace std;
 using namespace ns;
 
-void ArgConverter::Init(napi_env env, napi_value context) {
+void ArgConverter::Init(napi_env env) {
     auto cache = GetTypeLongCache(env);
 
     napi_value longNumberCtorFunc;

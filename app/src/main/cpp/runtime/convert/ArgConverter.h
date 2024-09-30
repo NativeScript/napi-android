@@ -17,7 +17,7 @@ namespace ns {
 
     class ArgConverter {
     public:
-        static void Init(napi_env env, napi_value context);
+        static void Init(napi_env env);
 
         static napi_value ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t* length);
 
