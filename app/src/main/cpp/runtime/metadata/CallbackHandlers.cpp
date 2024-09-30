@@ -54,10 +54,10 @@ void CallbackHandlers::Init(napi_env env) {
                                                          "()V");
     assert(ENABLE_VERBOSE_LOGGING_METHOD_ID != nullptr);
 
-    INIT_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "initWorker",
-                                                   "(Ljava/lang/String;Ljava/lang/String;I)V");
+    // INIT_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "initWorker",
+    //                                                "(Ljava/lang/String;Ljava/lang/String;I)V");
 
-    assert(INIT_WORKER_METHOD_ID != nullptr);
+    // assert(INIT_WORKER_METHOD_ID != nullptr);
 
     MetadataNode::Init(env);
 

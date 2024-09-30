@@ -1,7 +1,7 @@
 package org.nativescript.runtime.napi.system.classes.loading.impl;
 
 
-import com.tns.system.classloaders.ClassLoadersCollection;
+import org.nativescript.runtime.napi.system.classloaders.ClassLoadersCollection;
 
 import org.nativescript.runtime.napi.system.classes.caching.ClassCache;
 import org.nativescript.runtime.napi.system.classes.loading.ClassStorageService;

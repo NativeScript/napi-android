@@ -17,7 +17,7 @@ void MethodCache::Init()
 {
     JEnv jEnv;
 
-    RUNTIME_CLASS = jEnv.FindClass("com/tns/Runtime");
+    RUNTIME_CLASS = jEnv.FindClass("org/nativescript/runtime/napi/Runtime");
     assert(RUNTIME_CLASS != nullptr);
 
     RESOLVE_METHOD_OVERLOAD_METHOD_ID = jEnv.GetMethodID(RUNTIME_CLASS, "resolveMethodOverload", "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;");

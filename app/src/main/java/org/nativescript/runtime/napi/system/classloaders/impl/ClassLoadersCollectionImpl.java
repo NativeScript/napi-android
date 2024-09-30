@@ -1,6 +1,6 @@
-package com.tns.system.classloaders.impl;
+package org.nativescript.runtime.napi.system.classloaders.impl;
 
-import com.tns.system.classloaders.ClassLoadersCollection;
+import org.nativescript.runtime.napi.system.classloaders.ClassLoadersCollection;
 
 import java.util.Collection;
 import java.util.Collections;

@@ -822,11 +822,11 @@ void JEnv::Init(JavaVM *jvm) {
     s_jvm = jvm;
 
     JEnv env;
-//    RUNTIME_CLASS = env.FindClass("com/ns/Runtime");
-//    assert(RUNTIME_CLASS != nullptr);
-//    GET_CACHED_CLASS_METHOD_ID = env.GetStaticMethodID(RUNTIME_CLASS, "getCachedClass",
-//                                                       "(Ljava/lang/String;)Ljava/lang/Class;");
-//    assert(GET_CACHED_CLASS_METHOD_ID != nullptr);
+   RUNTIME_CLASS = env.FindClass("org/nativescript/runtime/napi/Runtime");
+   assert(RUNTIME_CLASS != nullptr);
+   GET_CACHED_CLASS_METHOD_ID = env.GetStaticMethodID(RUNTIME_CLASS, "getCachedClass",
+                                                      "(Ljava/lang/String;)Ljava/lang/Class;");
+   assert(GET_CACHED_CLASS_METHOD_ID != nullptr);
 }
 
 jclass JEnv::GetObjectClass(jobject obj) {

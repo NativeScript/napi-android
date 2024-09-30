@@ -21,7 +21,7 @@ ObjectManager::ObjectManager(jobject javaRuntimeObject) :
         m_cache(NewWeakGlobalRefCallback, DeleteWeakGlobalRefCallback, 1000, this) {
 
     JEnv env;
-    auto runtimeClass = env.FindClass("com/tns/Runtime");
+    auto runtimeClass = env.FindClass("org/nativescript/runtime/napi/Runtime");
     assert(runtimeClass != nullptr);
 
     GET_JAVAOBJECT_BY_ID_METHOD_ID = env.GetMethodID(runtimeClass, "getJavaObjectByID",
@@ -63,11 +63,10 @@ ObjectManager::ObjectManager(jobject javaRuntimeObject) :
     auto useGlobalRefs = env.CallStaticBooleanMethod(runtimeClass, useGlobalRefsMethodID);
     m_useGlobalRefs = useGlobalRefs == JNI_TRUE;
 
-    auto getMarkingModeOrdinalMethodID = env.GetMethodID(runtimeClass, "getMarkingModeOrdinal",
-                                                         "()I");
-    jint markingMode = env.CallIntMethod(m_javaRuntimeObject, getMarkingModeOrdinalMethodID);
-    m_markingMode = static_cast<JavaScriptMarkingMode>(markingMode);
-
+    // auto getMarkingModeOrdinalMethodID = env.GetMethodID(runtimeClass, "getMarkingModeOrdinal",
+                                                        //  "()I");
+    // jint markingMode = env.CallIntMethod(m_javaRuntimeObject, getMarkingModeOrdinalMethodID);
+    // m_markingMode = static_cast<JavaScriptMarkingMode>(markingMode);
 
 }
 

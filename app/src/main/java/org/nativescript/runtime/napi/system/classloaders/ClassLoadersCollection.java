@@ -1,4 +1,4 @@
-package com.tns.system.classloaders;
+package org.nativescript.runtime.napi.system.classloaders;
 
 import java.util.Collection;
 

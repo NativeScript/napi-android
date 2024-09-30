@@ -314,7 +314,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     }
 
                     auto type = node->GetName();
-                    auto nullObjName = "com/tns/NullObject";
+                    auto nullObjName = "org/nativescript/runtime/napi/NullObject";
                     auto nullObjCtorSig = "(Ljava/lang/Class;)V";
 
                     jclass nullClazz = jenv.FindClass(nullObjName);

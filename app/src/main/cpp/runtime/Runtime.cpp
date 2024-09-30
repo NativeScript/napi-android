@@ -49,18 +49,18 @@ void Runtime::Init(JavaVM *vm) {
 Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
         : m_id(id), m_lastUsedMemory(0) {
     m_runtime = jEnv->NewGlobalRef(runtime);
-//    m_objectManager = new ObjectManager(m_runtime);
+    m_objectManager = new ObjectManager(m_runtime);
     m_loopTimer = new MessageLoopTimer();
     id_to_runtime_cache.emplace(id, this);
 
 
-//    if (GET_USED_MEMORY_METHOD_ID == nullptr) {
-//        auto RUNTIME_CLASS = env->FindClass("com/tns/Runtime");
-//        assert(RUNTIME_CLASS != nullptr);
-//
-//        GET_USED_MEMORY_METHOD_ID = env->GetMethodID(RUNTIME_CLASS, "getUsedMemory", "()J");
-//        assert(GET_USED_MEMORY_METHOD_ID != nullptr);
-//    }
+   if (GET_USED_MEMORY_METHOD_ID == nullptr) {
+       auto RUNTIME_CLASS = jEnv->FindClass("org/nativescript/runtime/napi/Runtime");
+       assert(RUNTIME_CLASS != nullptr);
+
+       GET_USED_MEMORY_METHOD_ID = jEnv->GetMethodID(RUNTIME_CLASS, "getUsedMemory", "()J");
+       assert(GET_USED_MEMORY_METHOD_ID != nullptr);
+   }
 }
 
 Runtime *Runtime::GetRuntime(int runtimeId) {
@@ -111,13 +111,14 @@ void Runtime::Init(JNIEnv *jEnv, jstring filesPath) {
     DEBUG_WRITE("Initializing NativeScript NAPI Runtime");
 
 
-//  TODO  NativeScriptException::Init();
 
     NAPICreateJSRuntime(&rt);
     NAPICreateEnv(&env, rt);
     napi_open_handle_scope(env, &global_scope);
 
-    CallbackHandlers::Init();
+    NativeScriptException::Init(env);
+
+    CallbackHandlers::Init(env);
     if (!s_mainThreadInitialized) {
         MetadataNode::BuildMetadata(filesRoot);
     }
