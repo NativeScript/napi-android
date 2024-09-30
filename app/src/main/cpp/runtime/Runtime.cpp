@@ -52,6 +52,10 @@ void Runtime::Init(JavaVM *vm)
     }
 }
 
+Runtime* Runtime::Current() {
+    return Runtime::s_current_rt;
+}
+
 Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
     : m_id(id), m_lastUsedMemory(0)
 {
@@ -68,6 +72,7 @@ Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
         GET_USED_MEMORY_METHOD_ID = jEnv->GetMethodID(RUNTIME_CLASS, "getUsedMemory", "()J");
         assert(GET_USED_MEMORY_METHOD_ID != nullptr);
     }
+    Runtime::s_current_rt = this;
 }
 
 Runtime *Runtime::GetRuntime(int runtimeId)
@@ -398,3 +403,5 @@ int Runtime::m_androidVersion = Runtime::GetAndroidVersion();
 ALooper *Runtime::m_mainLooper = nullptr;
 
 int Runtime::m_mainLooper_fd[2];
+
+Runtime* Runtime::s_current_rt = nullptr;

@@ -114,7 +114,7 @@ extern "C" JNIEXPORT jboolean Java_org_nativescript_runtime_napi_Runtime_notifyG
     }
 
 //    jboolean success = runtime->NotifyGC(env, obj) ? JNI_TRUE : JNI_FALSE;
-    return success;
+    return true;
 }
 
 extern "C" JNIEXPORT void Java_org_nativescript_runtime_napi_Runtime_lock(JNIEnv* env, jobject obj, jint runtimeId) {
@@ -139,7 +139,7 @@ extern "C" JNIEXPORT void Java_org_nativescript_runtime_napi_Runtime_passExcepti
 
 
     try {
-        runtime->PassExceptionToJsNative(env, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded);
+//        runtime->PassExceptionToJsNative(env, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded);
     } catch (NativeScriptException& e) {
         e.ReThrowToJava(runtime->GetNapiEnv());
     } catch (std::exception e) {
@@ -153,21 +153,13 @@ extern "C" JNIEXPORT void Java_org_nativescript_runtime_napi_Runtime_passExcepti
     }
 }
 
-extern "C" JNIEXPORT jint Java_org_nativescript_runtime_napi_Runtime_getPointerSize(JNIEnv* env, jobject obj) {
+extern "C" JNIEXPORT jint Java_org_nativescript_runtime_napi_Runtime_getPointerSize(JNIEnv* env, jclass obj) {
     return sizeof(void*);
 }
 
 
-extern "C" JNIEXPORT jint Java_org_nativescript_runtime_napi_Runtime_getCurrentRuntimeId(JNIEnv* _env, jobject obj) {
-//    Isolate* isolate = Isolate::TryGetCurrent();
-//    if (isolate == nullptr) {
-//        return -1;
-//    }
-//
-//    Runtime* runtime = Runtime::GetRuntime(isolate);
-//    int id = runtime->GetId();
-
-    return 0;
+extern "C" JNIEXPORT jint Java_org_nativescript_runtime_napi_Runtime_getCurrentRuntimeId(JNIEnv* _env, jclass obj) {
+    return Runtime::Current()->GetId();
 }
 
 

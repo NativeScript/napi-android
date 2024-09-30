@@ -327,7 +327,6 @@ void ObjectManager::ReleaseJSInstance(napi_ref object, JSInstanceInfo *jsInstanc
     m_released.insert(object, javaObjectID);
     napi_delete_reference(m_env, object);
 
-    delete object;
     delete jsInstanceInfo;
 
     DEBUG_WRITE("ReleaseJSObject instance disposed. id:%d", javaObjectID);

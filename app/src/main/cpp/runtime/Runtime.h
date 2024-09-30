@@ -59,6 +59,8 @@ namespace ns {
             return m_mainLooper;
         }
 
+        static Runtime* Runtime::Current()
+
         jobject ConvertJsValueToJavaObject(JEnv& env, napi_value value, int classReturnType);
         jint GenerateNewObjectId(JNIEnv* env, jobject obj);
         void CreateJSInstanceNative(JNIEnv* _env, jobject obj, jobject javaObject, jint javaObjectID, jstring className);
@@ -104,6 +106,7 @@ namespace ns {
 
         static robin_hood::unordered_map<napi_env, Runtime*> env_to_runtime_cache;
 
+        static Runtime* s_current_rt;
 
     };
 
