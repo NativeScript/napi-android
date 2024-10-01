@@ -59,16 +59,17 @@ std::string MethodInfo::GetSignature() { //use nodeId's to read the whole signat
 
 std::string MethodInfo::GetDeclaringType() {
     auto m_reader = MetadataNode::getMetadataReader();
-    uint16_t nodeId = *declaringTypePtr;
 
-    return m_reader->ReadTypeName(nodeId);
+    return m_reader->ReadTypeName(declaringNodeId);
 }
 
 int MethodInfo::GetSizeOfReadMethodInfo() {
+    
     if (!sizeMeasured) {
+        sizeMeasured = true;
         // name
         nameOffset = *reinterpret_cast<uint32_t*>(m_pData);
-        m_pData += nameOffset;
+        m_pData += sizeof(uint32_t);
         // resolved data
         resolvedData = *reinterpret_cast<uint8_t*>(m_pData);
         m_pData += sizeof(uint8_t);
@@ -81,20 +82,18 @@ int MethodInfo::GetSizeOfReadMethodInfo() {
             uint16_t* nodeIdPtr = reinterpret_cast<uint16_t*>(m_pData);
             nodeIds.resize(m_signatureLength);
             for (int i = 0; i < m_signatureLength; i++) {
-                uint16_t nodeId = *nodeIdPtr++;
-                nodeIds[i] = nodeId;
+                nodeIds[i] = *nodeIdPtr++;
             }
             m_pData +=  m_signatureLength * sizeof(uint16_t);
-            paramCount = m_signatureLength - 1;
         }
 
         // declaring type
         if (isStatic) {
-            declaringTypePtr = reinterpret_cast<uint16_t*>(m_pData);
+            auto declaringTypePtr = reinterpret_cast<uint16_t*>(m_pData);
+            declaringNodeId = *declaringTypePtr;
             m_pData += sizeof(uint16_t);
         }
 
-        sizeMeasured = true;
     }
 
     return m_pData - m_pStartData;

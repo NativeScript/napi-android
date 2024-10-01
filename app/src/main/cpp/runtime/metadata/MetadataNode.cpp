@@ -973,6 +973,7 @@ void MetadataNode::SetInstanceFieldsFromStaticMetadata(
         auto fieldInfo = new FieldCallbackData(&entry);
         fieldInfo->metadata->declaringType = curType;
         napi_value proto = napi_util::get_proto(env, constructor);
+        DEBUG_WRITE("%s", entry.getName().c_str());
         napi_util::define_property(env, proto, entry.getName().c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                    fieldInfo);
@@ -1080,7 +1081,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
         } else if (chKind == 'F') {
             entry.type = NodeType::Field;
             auto *fieldInfo = new FieldCallbackData(&entry);
-            napi_util::define_property(env, proto, entry.name.c_str(), nullptr,
+            napi_util::define_property(env, proto, entry.getName().c_str(), nullptr,
                                        FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                        fieldInfo);
         }
