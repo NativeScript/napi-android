@@ -462,7 +462,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
     switch (elementTypePrefix) {
         case 'Z': {
             arr = jenv.NewBooleanArray(arrLength);
-            std::vector<jboolean> bools;
+            std::vector<jboolean> bools(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -476,7 +476,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
         }
         case 'B': {
             arr = jenv.NewByteArray(arrLength);
-            std::vector<jbyte> bytes;
+            std::vector<jbyte> bytes(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -489,7 +489,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
         }
         case 'C': {
             arr = jenv.NewCharArray(arrLength);
-            std::vector<jchar> chars;
+            std::vector<jchar> chars(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -504,7 +504,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
         }
         case 'S': {
             arr = jenv.NewShortArray(arrLength);
-            std::vector<jshort> shorts;
+            std::vector<jshort> shorts(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -517,7 +517,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
         }
         case 'I': {
             arr = jenv.NewIntArray(arrLength);
-            std::vector<jint> ints;
+            std::vector<jint> ints(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -530,7 +530,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
         }
         case 'J': {
             arr = jenv.NewLongArray(arrLength);
-            std::vector<jlong> longs;
+            std::vector<jlong> longs(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -543,7 +543,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
         }
         case 'F': {
             arr = jenv.NewFloatArray(arrLength);
-            std::vector<jfloat> floats;
+            std::vector<jfloat> floats(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
@@ -556,7 +556,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
         }
         case 'D': {
             arr = jenv.NewDoubleArray(arrLength);
-            std::vector<jdouble> doubles;
+            std::vector<jdouble> doubles(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);

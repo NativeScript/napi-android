@@ -12,9 +12,9 @@ namespace ns {
     public:
 
         MethodInfo(uint8_t *pValue)
-                : isStatic(false), m_pData(pValue), m_pStartData(pValue), m_signatureLength(0),
+                : isStatic(false), paramCount(0), m_pData(pValue), m_pStartData(pValue), m_signatureLength(0),
                   sizeMeasured(false), nameOffset(0), resolvedData(0),
-                  nodeIdPtr(nullptr), declaringTypePtr(nullptr) {
+                  declaringTypePtr(nullptr){
         }
 
         std::string GetName();
@@ -30,6 +30,7 @@ namespace ns {
         int GetSizeOfReadMethodInfo();
 
         bool isStatic;
+        int paramCount;
 
     private:
         uint8_t *m_pData; //where we currently read
@@ -39,8 +40,8 @@ namespace ns {
 
         uint8_t nameOffset;
         uint8_t resolvedData;
-        uint16_t *nodeIdPtr;
         uint16_t *declaringTypePtr;
+        std::vector<uint16_t> nodeIds;
 
 
     };

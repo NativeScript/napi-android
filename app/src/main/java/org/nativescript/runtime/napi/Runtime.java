@@ -1,6 +1,7 @@
 package org.nativescript.runtime.napi;
 
 import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.Keep;
 
@@ -52,6 +53,9 @@ public class Runtime {
 
     public static native int getPointerSize();
 
+    private final Object keyNotFoundObject = new Object();
+    private int currentObjectId = -1;
+
     private HashMap<Integer, Object> strongInstances = new HashMap<>();
 
     private HashMap<Integer, WeakReference<Object>> weakInstances = new HashMap<>();
@@ -63,8 +67,6 @@ public class Runtime {
     private final Map<Class<?>, JavaScriptImplementation> loadedJavaScriptExtends = new HashMap<Class<?>, JavaScriptImplementation>();
 
     private final java.lang.Runtime dalvikRuntime = java.lang.Runtime.getRuntime();
-
-    private final Object keyNotFoundObject = new Object();
 
     private ArrayList<Constructor<?>> ctorCache = new ArrayList<Constructor<?>>();
 
@@ -222,6 +224,52 @@ public class Runtime {
         }
 
         return content;
+    }
+
+    public static void initInstance(Object instance) {
+        try {
+            Runtime runtime = Runtime.getCurrentRuntime();
+
+            int objectId = runtime.currentObjectId;
+
+            if (objectId != -1) {
+                runtime.makeInstanceStrong(instance, objectId);
+            } else {
+                runtime.createJSInstance(instance);
+            }
+        } finally {
+        }
+    }
+
+    private static Handler getMainThreadHandler() {
+        return new Handler(Looper.getMainLooper());
+    }
+
+    private static boolean isNotOnMainThread() {
+        return Looper.myLooper() != Looper.getMainLooper();
+    }
+
+    public static void initInstanceFromPossibleNonMainThread(final Object instance) {
+        if (isNotOnMainThread()) {
+            Runnable runnable = new Runnable() {
+                @Override
+                public void run() {
+                    initInstance(instance);
+                }
+            };
+
+            RunnableFuture<Void> task = new FutureTask<>(runnable, null);
+            getMainThreadHandler().post(task);
+
+            try {
+                task.get(); // this will block until Runnable completes
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+
+        } else {
+            initInstance(instance);
+        }
     }
 
     private boolean isInitializedImpl() {

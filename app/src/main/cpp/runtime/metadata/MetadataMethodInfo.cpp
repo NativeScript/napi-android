@@ -11,7 +11,6 @@ std::string MethodInfo::GetName() {
 }
 
 uint8_t MethodInfo::CheckIsResolved() {
-
     return resolvedData;
 }
 
@@ -26,7 +25,7 @@ std::string MethodInfo::GetSignature() { //use nodeId's to read the whole signat
     string signature = "(";
     string ret;
     for (int i = 0; i < m_signatureLength; i++) {
-        uint16_t nodeId = *nodeIdPtr++;
+        uint16_t nodeId = nodeIds[i];
         string curArgTypeName = m_reader->ReadTypeName(nodeId);
         MetadataTreeNode* node = m_reader->GetNodeById(nodeId);
 
@@ -55,9 +54,6 @@ std::string MethodInfo::GetSignature() { //use nodeId's to read the whole signat
     }
     signature += ")" + ret;
 
-    int sizeofReadNodeIds = m_signatureLength * sizeof(uint16_t);
-    m_pData += sizeofReadNodeIds;
-
     return signature;
 }
 
@@ -65,26 +61,39 @@ std::string MethodInfo::GetDeclaringType() {
     auto m_reader = MetadataNode::getMetadataReader();
     uint16_t nodeId = *declaringTypePtr;
 
-    string declTypeName = m_reader->ReadTypeName(nodeId);
-
-    return declTypeName;
+    return m_reader->ReadTypeName(nodeId);
 }
 
 int MethodInfo::GetSizeOfReadMethodInfo() {
     if (!sizeMeasured) {
+        // name
         nameOffset = *reinterpret_cast<uint32_t*>(m_pData);
+        m_pData += nameOffset;
+        // resolved data
         resolvedData = *reinterpret_cast<uint8_t*>(m_pData);
+        m_pData += sizeof(uint8_t);
+        // sig length
         m_signatureLength = *reinterpret_cast<uint16_t*>(m_pData);
+        m_pData += sizeof(uint16_t);
 
-        int sizeofReadNodeIds = m_signatureLength * sizeof(uint16_t);
-        m_pData += sizeofReadNodeIds;
-
-        if (isStatic) {
-            declaringTypePtr = reinterpret_cast<uint16_t*>(m_pData);
+        // signature
+        if (m_signatureLength > 0) {
+            uint16_t* nodeIdPtr = reinterpret_cast<uint16_t*>(m_pData);
+            nodeIds.resize(m_signatureLength);
+            for (int i = 0; i < m_signatureLength; i++) {
+                uint16_t nodeId = *nodeIdPtr++;
+                nodeIds[i] = nodeId;
+            }
+            m_pData +=  m_signatureLength * sizeof(uint16_t);
+            paramCount = m_signatureLength - 1;
         }
 
+        // declaring type
+        if (isStatic) {
+            declaringTypePtr = reinterpret_cast<uint16_t*>(m_pData);
+            m_pData += sizeof(uint16_t);
+        }
 
-        m_pData = m_pData + sizeof(nameOffset) + sizeof(resolvedData) + sizeof(nodeIdPtr) + sizeof(declaringTypePtr);
         sizeMeasured = true;
     }
 
