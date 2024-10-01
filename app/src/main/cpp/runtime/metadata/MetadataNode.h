@@ -1,4 +1,5 @@
-#pragma once
+#ifndef METADATA_NODE_H
+#define METADATA_NODE_H
 
 #include <string>
 #include "MetadataTreeNode.h"
@@ -291,3 +292,5 @@ private:
     static bool s_profilerEnabled;
 
 };
+
+#endif //METADATA_NODE_H

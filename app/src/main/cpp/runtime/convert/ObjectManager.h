@@ -4,7 +4,6 @@
 #include "js_native_api.h"
 #include "JEnv.h"
 #include "JniLocalRef.h"
-//#include "ArgsWrapper.h"
 #include "JniLocalRef.h"
 #include "DirectBuffer.h"
 #include "LRUCache.h"

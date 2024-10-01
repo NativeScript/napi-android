@@ -111,7 +111,7 @@ void NativeScriptException::Init(napi_env env) {
     THROWABLE_CLASS = jenv.FindClass("java/lang/Throwable");
     assert(THROWABLE_CLASS != nullptr);
 
-    NATIVESCRIPTEXCEPTION_CLASS = jenv.FindClass("org/nativescript/runtime/NativeScriptException");
+    NATIVESCRIPTEXCEPTION_CLASS = jenv.FindClass("org/nativescript/runtime/napi/NativeScriptException");
     assert(NATIVESCRIPTEXCEPTION_CLASS != nullptr);
 
     NATIVESCRIPTEXCEPTION_JSVALUE_CTOR_ID = jenv.GetMethodID(NATIVESCRIPTEXCEPTION_CLASS, "<init>", "(Ljava/lang/String;Ljava/lang/String;J)V");

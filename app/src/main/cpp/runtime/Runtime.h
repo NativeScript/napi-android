@@ -1,4 +1,5 @@
-#pragma once
+#ifndef RUNTIME_H
+#define RUNTIME_H
 
 #include "jni.h"
 #include <string>
@@ -27,8 +28,6 @@ namespace ns {
         static void Init(JNIEnv *_env, jobject obj, int runtimeId, jstring filesPath);
 
         void Init(JNIEnv *env, jstring filesPath);
-
-//        jint GenerateNewObjectId(JNIEnv *env, jobject obj);
 
         jobject GetJavaRuntime() const;
 
@@ -59,7 +58,7 @@ namespace ns {
             return m_mainLooper;
         }
 
-        static Runtime* Runtime::Current()
+        static Runtime* Current();
 
         jobject ConvertJsValueToJavaObject(JEnv& env, napi_value value, int classReturnType);
         jint GenerateNewObjectId(JNIEnv* env, jobject obj);
@@ -111,3 +110,5 @@ namespace ns {
     };
 
 } // ns
+
+#endif //RUNTIME_H

@@ -37,7 +37,7 @@ import java.util.Set;
  * thread on this collection, possibly removing keys.
  *
  * @since 1.2
- * @see HashMap
+ * @see java.util.HashMap
  * @see WeakReference
  */
 public class NativeScriptWeakHashMap<K, V extends Number> extends NativeScriptAbstractMap<K, V> implements Map<K, V> {

@@ -3,22 +3,20 @@
 
 #include <string>
 
-const char * PROP_KEY_EXTEND = "extend";
-const char * PROP_KEY_NULLOBJECT = "null";
-const char * PROP_KEY_NULL_NODE_NAME = "nullNode";
-const char * PROP_KEY_VALUEOF = "valueOf";
-const char * PROP_KEY_CLASS = "class";
-const char * PRIVATE_TYPE_NAME = "#typename";
-const char * CLASS_IMPLEMENTATION_OBJECT = "t::ClassImplementationObject";
-const char * PROP_KEY_SUPER = "super";
-const char * PROP_KEY_SUPERVALUE = "supervalue";
-
-const char * PRIVATE_JSINFO = "#js_info";
-const char * PRIVATE_CALLSUPER = "#supercall";
-const char * PRIVATE_IS_NAPI = "#is_napi";
-const char * PROP_KEY_TOSTRING = "toString";
-
-const char * PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT = "__isPrototypeImplementationObject";
+#define  PROP_KEY_EXTEND "extend"
+#define PROP_KEY_NULLOBJECT "null"
+#define PROP_KEY_NULL_NODE_NAME "nullNode"
+#define  PROP_KEY_VALUEOF "valueOf"
+#define  PROP_KEY_CLASS "class"
+#define  PRIVATE_TYPE_NAME "#typename"
+#define  CLASS_IMPLEMENTATION_OBJECT "t::ClassImplementationObject"
+#define  PROP_KEY_SUPER "super"
+#define  PROP_KEY_SUPERVALUE "supervalue"
+#define  PRIVATE_JSINFO "#js_info"
+#define  PRIVATE_CALLSUPER "#supercall"
+#define  PRIVATE_IS_NAPI "#is_napi"
+#define  PROP_KEY_TOSTRING "toString"
+#define  PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT "__isPrototypeImplementationObject"
 
 class Constants {
     public:

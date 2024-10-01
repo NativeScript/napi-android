@@ -1,3 +1,6 @@
+#ifndef NATIVE_API_UTIL_H_
+#define NATIVE_API_UTIL_H_
+
 #include "js_native_api.h"
 #include <dlfcn.h>
 #include <sstream>
@@ -71,13 +74,15 @@ NAPI_GUARD(napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr)); \
 #define NAPI_FUNCTION_DESC(name) \
   {#name, NULL, JS_##name, NULL, NULL, NULL, napi_enumerable, NULL}
 
+#define PROTOTYPE "prototype"
+#define OBJECT "Object"
+#define SET_PROTOTYPE_OF "setPrototypeOf"
+#define CONSTRUCTOR "CONSTRUCTOR"
+
 namespace napi_util
 {
 
-  const char *PROTOTYPE = "prototype";
-  const char *OBJECT = "Object";
-  const char *SET_PROTOTYPE_OF = "setPrototypeOf";
-  const char *CONSTRUCTOR = "CONSTRUCTOR";
+
 
   inline napi_ref make_ref(napi_env env, napi_value value,
                            uint32_t initialCount = 1)
@@ -288,3 +293,5 @@ namespace napi_util
   }
 
 }
+
+#endif /* NATIVE_API_UTIL_H_ */

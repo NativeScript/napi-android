@@ -10,7 +10,6 @@
 #include "CallbackHandlers.h"
 #include "NativeScriptAssert.h"
 #include "File.h"
-#include "Constants.h"
 #include "Runtime.h"
 #include "ArgConverter.h"
 #include "FieldCallbackData.h"
@@ -159,7 +158,7 @@ napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *ob
 
         napi_util::set_prototype(env, extInstance, napi_util::get_proto(env, extendedCtorFunc));
 
-        napi_set_named_property(env, extInstance, napi_util::CONSTRUCTOR, extendedCtorFunc);
+        napi_set_named_property(env, extInstance, CONSTRUCTOR, extendedCtorFunc);
 
         SetInstanceMetadata(env, extInstance, cacheData.node);
     }
@@ -187,7 +186,7 @@ napi_value MetadataNode::CreateJSWrapper(napi_env env, ObjectManager *objectMana
     } else {
         obj = objectManager->GetEmptyObject(env);
         napi_value ctorFunc = GetConstructorFunction(env);
-        napi_set_named_property(env, obj, napi_util::CONSTRUCTOR, ctorFunc);
+        napi_set_named_property(env, obj, CONSTRUCTOR, ctorFunc);
         napi_util::set_prototype(env, obj, napi_util::get_proto(env, ctorFunc));
         SetInstanceMetadata(env, obj, this);
     }
@@ -264,7 +263,7 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 
     if (hasProperty) {
         bool maybeHasOwnProperty;
-        napi_has_own_named_property(env, object, napi_util::PROTOTYPE, &maybeHasOwnProperty);
+        napi_has_own_named_property(env, object, PROTOTYPE, &maybeHasOwnProperty);
 
         if (!maybeHasOwnProperty) {
             return nullptr;
@@ -1777,6 +1776,8 @@ robin_hood::unordered_map<std::string, MetadataNode *> MetadataNode::s_name2Node
 robin_hood::unordered_map<std::string, MetadataTreeNode *> MetadataNode::s_name2TreeNodeCache;
 robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> MetadataNode::s_treeNode2NodeCache;
 robin_hood::unordered_map<napi_env, MetadataNode::MetadataNodeCache *> MetadataNode::s_metadata_node_cache;
+robin_hood::unordered_map<napi_env, napi_value> MetadataNode::s_arrayObjects;
+robin_hood::unordered_map<napi_env, napi_ref> MetadataNode::s_envToArrayProxyFunction;
 
 // TODO
 bool MetadataNode::s_profilerEnabled = false;

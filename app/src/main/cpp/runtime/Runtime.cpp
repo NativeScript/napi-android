@@ -14,7 +14,6 @@
 #include "Version.h"
 #include "SIGHandler.h"
 #include "ArgConverter.h"
-#include "Constants.h"
 #include "NativeScriptAssert.h"
 #include "CallbackHandlers.h"
 #include "MetadataNode.h"

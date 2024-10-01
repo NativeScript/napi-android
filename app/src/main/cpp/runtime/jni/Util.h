@@ -1,8 +1,8 @@
-#include <string>
-#include <vector>
-
 #ifndef UTIL_H_
 #define UTIL_H_
+
+#include <string>
+#include <vector>
 
 namespace ns {
 class Util {
