@@ -116,7 +116,7 @@ string MethodCache::EncodeSignature(napi_env env, const string &className, const
     size_t len;
     napi_get_cb_info(env, info, &len, nullptr, nullptr, nullptr);
 
-    napi_value args[len];
+    std::vector<napi_value> args(len);
     napi_get_cb_info(env, info, &len, args, nullptr, nullptr);
 
     stringstream s;

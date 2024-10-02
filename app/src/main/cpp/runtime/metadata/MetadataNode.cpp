@@ -352,7 +352,7 @@ napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_cal
 
     ArgsWrapper argWrapper(info, ArgType::Class);
 
-    // TODO   bool success = CallbackHandlers::RegisterInstance(isolate, thiz, fullClassName, argWrapper, implementationObject, false, extData->node->m_name);
+    bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argWrapper, implementationObject, false, extData->node->m_name);
 
     return jsThis;
 }
@@ -401,7 +401,7 @@ napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callbac
 
     ArgsWrapper argsWrapper(info, ArgType::Interface);
 
-    // TODO  auto success = CallbackHandlers::RegisterInstance(isolate, thiz, className, argWrapper, implementationObject, true);
+    auto success = CallbackHandlers::RegisterInstance(env, jsThis, className, argWrapper, implementationObject, true);
     return jsThis;
 }
 
@@ -417,7 +417,7 @@ napi_value MetadataNode::ConstructorFunctionCallback(napi_env env, napi_callback
 
     string fullClassName = CreateFullClassName(className, extendName);
 
-    // TODO  bool success = CallbackHandlers::RegisterInstance(isolate, thiz, fullClassName, argWrapper, Local<Object>(), false, className);
+    bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argWrapper, nullptr, false, className);
     return jsThis;
 }
 
@@ -470,13 +470,12 @@ bool MetadataNode::GetExtendLocation(napi_env env, std::string &extendLocation,
     return true;
 }
 
-bool MetadataNode::ValidateExtendArguments(napi_env env, napi_callback_info info,
+bool MetadataNode::ValidateExtendArguments(napi_env env, size_t argc, napi_value* argv,
                                            bool extendLocationFound, string &extendLocation,
                                            napi_value* extendName, napi_value* implementationObject,
                                            bool isTypeScriptExtend) {
-    NAPI_CALLBACK_BEGIN(2);
-
-    if (napi_util::is_undefined(env, argv[2])) {
+   
+    if (argc == 1) {
         if (!extendLocationFound) {
             stringstream ss;
             ss << "Invalid extend() call. No name specified for extend at location: "
@@ -496,7 +495,7 @@ bool MetadataNode::ValidateExtendArguments(napi_env env, napi_callback_info info
         }
 
         *implementationObject = argv[0];
-    } else if (!napi_util::is_undefined(env, argv[2]) || isTypeScriptExtend) {
+    } else if (argc == 2 || isTypeScriptExtend) {
         if (!napi_util::is_of_type(env, argv[0], napi_string)) {
             stringstream ss;
             ss << "Invalid extend() call. No name for extend specified at location: "
@@ -1441,7 +1440,7 @@ napi_value MetadataNode::PropertyAccessorSetterCallback(napi_env env, napi_callb
 }
 
 napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN(3)
+    NAPI_CALLBACK_BEGIN_VARGS()
 
     napi_value extendName;
     napi_value implementationObject;
@@ -1450,11 +1449,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
     auto hasDot = false;
     auto isTypeScriptExtend = false;
 
-    if (!napi_util::is_undefined(env, argv[2])) {
-        if (napi_util::is_of_type(env, argv[2], napi_boolean)) {
-            napi_get_value_bool(env, argv[2], &isTypeScriptExtend);
-        };
-    } else {
+     if (argc == 2) {
         if (!napi_util::is_of_type(env, argv[0], napi_string)) {
             stringstream ss;
             ss << "Invalid extend() call. No name for extend specified at location: "
@@ -1475,14 +1470,19 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
         string strName = napi_util::get_string_value(env, argv[0]);
         hasDot = strName.find(".") != string::npos;
+    } else if (argc == 3) {
+        if (napi_util::is_of_type(env, argv[2], napi_boolean)) {
+            napi_get_value_bool(env, argv[2], &isTypeScriptExtend);
+        };
     }
+    
 
     if (hasDot) {
         extendName = argv[0];
         implementationObject = argv[1];
     } else {
         auto isValidExtendLocation = GetExtendLocation(env, extendLocation, isTypeScriptExtend);
-        auto validArgs = ValidateExtendArguments(env, info, isValidExtendLocation, extendLocation,
+        auto validArgs = ValidateExtendArguments(env, argc, argv,, isValidExtendLocation, extendLocation,
                                                  &extendName, &implementationObject,
                                                  isTypeScriptExtend);
 
@@ -1596,12 +1596,7 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
 }
 
 napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
-
-    void *data;
-    napi_value jsThis;
-    napi_get_cb_info(env, info, nullptr, nullptr, &jsThis, &data);
-
-    NAPI_GET_VARIABLE_ARGS();
+    NAPI_CALLBACK_BEGIN_VARGS()
 
     MetadataEntry *entry;
 
@@ -1610,7 +1605,7 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
 
     string *className;
     const auto &first = callbackData->candidates.front();
-    const auto &methodName = first.name;
+    const auto &methodName = first.getName();
 
     while ((callbackData != nullptr) && (entry == nullptr)) {
         auto &candidates = callbackData->candidates;
@@ -1651,7 +1646,7 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
         return jsThis;
     } else {
         bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();
-        // return CallbackHandlers::CallJavaMethod(thiz, *className, methodName, entry, isFromInterface, first.isStatic, isSuper, info);
+        return CallbackHandlers::CallJavaMethod(thiz, *className, methodName, entry, isFromInterface, first.isStatic, isSuper, argc, argv.data());
     }
 
     return nullptr;

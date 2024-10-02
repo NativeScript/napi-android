@@ -64,6 +64,363 @@ void CallbackHandlers::Init(napi_env env) {
     MethodCache::Init();
 }
 
+napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &className,
+                                      const string &methodName, MetadataEntry *entry,
+                                      bool isFromInterface, bool isStatic,
+                                      bool isSuper,
+                                      size_t argc, napi_value* argv) {
+
+    JEnv env;
+
+    jclass clazz;
+    jmethodID mid;
+    string *sig = nullptr;
+    string *returnType = nullptr;
+    auto retType = MethodReturnType::Unknown;
+    MethodCache::CacheMethodInfo mi;
+    
+    string entrySignature = entry->getSig();
+
+    auto isolate = args.GetIsolate();
+
+    if ((entry != nullptr) && entry->getIsResolved()) {
+        isStatic = entry->isStatic;
+
+        if (entry->memberId == nullptr) {
+            clazz = env.FindClass(className);
+
+            if (clazz == nullptr) {
+                MetadataNode *callerNode = MetadataNode::GetNodeFromHandle(caller);
+                const string callerClassName = callerNode->GetName();
+
+                DEBUG_WRITE("Cannot resolve class: %s while calling method: %s callerClassName: %s",
+                            className.c_str(), methodName.c_str(), callerClassName.c_str());
+                clazz = env.FindClass(callerClassName);
+                if (clazz == nullptr) {
+                    //todo: plamen5kov: throw exception here
+                    DEBUG_WRITE("Cannot resolve caller's class name: %s", callerClassName.c_str());
+                     return nullptr;
+                }
+
+                if (isStatic) {
+                    if (isFromInterface) {
+                        auto methodAndClassPair = env.GetInterfaceStaticMethodIDAndJClass(className,
+                                                                                          methodName,
+                                                                                          entrySignature);
+                        entry->memberId = methodAndClassPair.first;
+                        clazz = methodAndClassPair.second;
+                    } else {
+                        entry->memberId = env.GetStaticMethodID(clazz, methodName, entrySignature);
+                    }
+                } else {
+                    entry->memberId = env.GetMethodID(clazz, methodName, entrySignature);
+                }
+
+                if (entry->memberId == nullptr) {
+                    //todo: plamen5kov: throw exception here
+                    DEBUG_WRITE("Cannot resolve a method %s on caller class: %s",
+                                methodName.c_str(), callerClassName.c_str());
+                    return nullptr;
+                }
+            } else {
+                if (isStatic) {
+                    if (isFromInterface) {
+                        auto methodAndClassPair = env.GetInterfaceStaticMethodIDAndJClass(className,
+                                                                                          methodName,
+                                                                                          entrySignature);
+                        entry->memberId = methodAndClassPair.first;
+                        clazz = methodAndClassPair.second;
+                    } else {
+                        entry->memberId = env.GetStaticMethodID(clazz, methodName, entrySignature);
+                    }
+                } else {
+                    entry->memberId = env.GetMethodID(clazz, methodName, entrySignature);
+                }
+
+                if (entry->memberId == nullptr) {
+                    //todo: plamen5kov: throw exception here
+                    DEBUG_WRITE("Cannot resolve a method %s on class: %s", methodName.c_str(),
+                                className.c_str());
+                    return nullptr;
+                }
+            }
+            entry->clazz = clazz;
+        }
+
+        mid = reinterpret_cast<jmethodID>(entry->memberId);
+        clazz = entry->clazz;
+        sig = &entrySignature;
+        returnType = &entry->getReturnType();
+        retType = entry->getRetType();
+    } else {
+        DEBUG_WRITE("Resolving method: %s on className %s", methodName.c_str(), className.c_str());
+
+        clazz = env.FindClass(className);
+        if (clazz != nullptr) {
+            mi = MethodCache::ResolveMethodSignature(className, methodName, args, isStatic);
+            if (mi.mid == nullptr) {
+                DEBUG_WRITE("Cannot resolve class=%s, method=%s, isStatic=%d, isSuper=%d",
+                            className.c_str(), methodName.c_str(), isStatic, isSuper);
+                 return nullptr;
+            }
+        } else {
+            MetadataNode *callerNode = MetadataNode::GetNodeFromHandle(caller);
+            const string callerClassName = callerNode->GetName();
+            DEBUG_WRITE("Resolving method on caller class: %s.%s on className %s",
+                        callerClassName.c_str(), methodName.c_str(), className.c_str());
+            mi = MethodCache::ResolveMethodSignature(callerClassName, methodName, args, isStatic);
+            if (mi.mid == nullptr) {
+                DEBUG_WRITE(
+                        "Cannot resolve class=%s, method=%s, isStatic=%d, isSuper=%d, callerClass=%s",
+                        className.c_str(), methodName.c_str(), isStatic, isSuper,
+                        callerClassName.c_str());
+                 return nullptr;
+            }
+        }
+
+        clazz = mi.clazz;
+        mid = mi.mid;
+        sig = &mi.signature;
+        returnType = &mi.returnType;
+        retType = mi.retType;
+    }
+
+    if (!isStatic) {
+        DEBUG_WRITE("CallJavaMethod called %s.%s. Instance id: %d, isSuper=%d", className.c_str(),
+                    methodName.c_str(), caller.IsEmpty() ? -42 : caller->GetIdentityHash(),
+                    isSuper);
+    } else {
+        DEBUG_WRITE("CallJavaMethod called %s.%s. static method", className.c_str(),
+                    methodName.c_str());
+    }
+
+//    JSToJavaConverter argConverter = (entry != nullptr && entry->isExtensionFunction)
+//                                     ? JSToJavaConverter(isolate, args, *sig, entry, caller)
+//                                     : JSToJavaConverter(isolate, args, *sig, entry);
+
+    JsArgConverter argConverter = (entry != nullptr && entry->isExtensionFunction)
+                                        ? JsArgConverter(env, caller, args.data(), argc, *sig, entry)
+                                        : JsArgConverter(env, args.data(), argc, false, *sig, entry);
+
+
+    if (!argConverter.IsValid()) {
+        JsArgConverter::Error err = argConverter.GetError();
+        throw NativeScriptException(err.msg);
+    }
+
+    JniLocalRef callerJavaObject;
+
+    jvalue *javaArgs = argConverter.ToArgs();
+
+    auto runtime = Runtime::GetRuntime(env);
+    auto objectManager = runtime->GetObjectManager();
+
+    if (!isStatic) {
+        callerJavaObject = objectManager->GetJavaObjectByJsObject(env, caller);
+        if (callerJavaObject.IsNull()) {
+            stringstream ss;
+            if (args.IsConstructCall()) {
+                ss << "No java object found on which to call \"" << methodName
+                   << "\" method. It is possible your Javascript object is not linked with the corresponding Java class. Try passing context(this) to the constructor function.";
+            } else {
+                ss << "Failed calling " << methodName << " on a " << className
+                   << " instance. The JavaScript instance no longer has available Java instance counterpart.";
+            }
+            throw NativeScriptException(ss.str());
+        }
+    }
+    
+    napi_value returnValue;
+
+    switch (retType) {
+        case MethodReturnType::Void: {
+            if (isStatic) {
+                env.CallStaticVoidMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                env.CallNonvirtualVoidMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                env.CallVoidMethodA(callerJavaObject, mid, javaArgs);
+            }
+            break;
+        }
+        case MethodReturnType::Boolean: {
+            jboolean result;
+            if (isStatic) {
+                result = env.CallStaticBooleanMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualBooleanMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallBooleanMethodA(callerJavaObject, mid, javaArgs);
+            }
+
+            napi_get_boolean(env, result != 0, &returnValue);
+            break;
+        }
+        case MethodReturnType::Byte: {
+            jbyte result;
+            if (isStatic) {
+                result = env.CallStaticByteMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualByteMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallByteMethodA(callerJavaObject, mid, javaArgs);
+            }
+
+            napi_create_int32(env, result, &returnValue);
+            break;
+        }
+        case MethodReturnType::Char: {
+            jchar result;
+            if (isStatic) {
+                result = env.CallStaticCharMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualCharMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallCharMethodA(callerJavaObject, mid, javaArgs);
+            }
+
+            JniLocalRef str(env.NewString(&result, 1));
+            jboolean bol = true;
+            const char *resP = env.GetStringUTFChars(str, &bol);
+            returnValue = ArgConverter::convertToJsString(isolate, resP, 1);
+            env.ReleaseStringUTFChars(str, resP);
+            break;
+        }
+        case MethodReturnType::Short: {
+            jshort result;
+            if (isStatic) {
+                result = env.CallStaticShortMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualShortMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallShortMethodA(callerJavaObject, mid, javaArgs);
+            }
+            
+            napi_create_int32(env, result, &returnValue);
+
+            break;
+        }
+        case MethodReturnType::Int: {
+            jint result;
+            if (isStatic) {
+                result = env.CallStaticIntMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualIntMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+               result = env.CallIntMethodA(callerJavaObject, mid, javaArgs);
+            }
+            napi_create_int32(env, result, &returnValue);
+            break;
+
+        }
+        case MethodReturnType::Long: {
+            jlong result;
+            if (isStatic) {
+                result = env.CallStaticLongMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualLongMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallLongMethodA(callerJavaObject, mid, javaArgs);
+            }
+            returnValue = ArgConverter::ConvertFromJavaLong(env, result);
+            break;
+        }
+        case MethodReturnType::Float: {
+            jfloat result;
+            if (isStatic) {
+                result = env.CallStaticFloatMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualFloatMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallFloatMethodA(callerJavaObject, mid, javaArgs);
+            }
+            returnValue = napi_create_double(env, (double) result, &returnValue);
+            break;
+        }
+        case MethodReturnType::Double: {
+            jdouble result;
+            if (isStatic) {
+                result = env.CallStaticDoubleMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualDoubleMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallDoubleMethodA(callerJavaObject, mid, javaArgs);
+            }
+            returnValue = napi_create_double(env, (double) result, &returnValue);
+            break;
+        }
+        case MethodReturnType::String: {
+            jobject result = nullptr;
+            bool exceptionOccurred;
+
+            if (isStatic) {
+                result = env.CallStaticObjectMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualObjectMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallObjectMethodA(callerJavaObject, mid, javaArgs);
+            }
+
+            if (result != nullptr) {
+                returnValue = ArgConverter::jstringToJsString(env, static_cast<jstring>(result));
+                env.DeleteLocalRef(result);
+            } else {
+                napi_get_null(env, &returnValue);
+            }
+
+            break;
+        }
+        case MethodReturnType::Object: {
+            jobject result = nullptr;
+            bool exceptionOccurred;
+
+            if (isStatic) {
+                result = env.CallStaticObjectMethodA(clazz, mid, javaArgs);
+            } else if (isSuper) {
+                result = env.CallNonvirtualObjectMethodA(callerJavaObject, clazz, mid, javaArgs);
+            } else {
+                result = env.CallObjectMethodA(callerJavaObject, mid, javaArgs);
+            }
+
+            if (result != nullptr) {
+                auto isString = env.IsInstanceOf(result, JAVA_LANG_STRING);
+
+                if (isString) {
+                    returnValue = ArgConverter::jstringToJsString(env, (jstring) result);
+                } else {
+                    jint javaObjectID = objectManager->GetOrCreateObjectId(result);
+                    returnValue = objectManager->GetJsObjectByJavaObject(javaObjectID);
+
+                    if (returnValue == nullptr || napi_util::is_undefined(env, returnValue)) {
+                        objectResult = objectManager->CreateJSWrapper(javaObjectID, *returnType,
+                                                                      result);
+                    }
+                }
+
+                env.DeleteLocalRef(result);
+            } else {
+                 napi_get_null(env, &returnValue);
+            }
+
+            break;
+        }
+        default: {
+            assert(false);
+            break;
+        }
+    }
+
+
+    return returnValue;
+
+//    static uint32_t adjustMemCount = 0;
+//
+//    if ((++adjustMemCount % 2) == 0) {
+//        AdjustAmountOfExternalAllocatedMemory(env, isolate);
+//    }
+}
+
+
 bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
                                         const std::string &fullClassName,
                                         const ArgsWrapper &argWrapper,
@@ -105,7 +462,12 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
             //            JSToJavaConverter argConverter(isolate, argWrapper.args, mi.signature);
 
             napi_callback_info info = argWrapper.args;
-            NAPI_GET_VARIABLE_ARGS()
+            size_t argc;
+            napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);
+            std::vector<napi_value> argv(argc);
+            if (argc > 0) {
+                napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr);
+            }
 
             JsArgConverter argConverter(env, argv.data(), argc, mi.signature);
             auto ctorArgs = argConverter.ToArgs();

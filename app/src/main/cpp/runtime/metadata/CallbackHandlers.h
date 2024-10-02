@@ -61,11 +61,11 @@ namespace ns
 
         static int GetArrayLength(napi_env env, napi_value arr);
 
-        static void
+        static napi_value
         CallJavaMethod(napi_env env, napi_value caller, const std::string &className,
                        const std::string &methodName, MetadataEntry *entry, bool isFromInterface,
                        bool isStatic, bool isSuper,
-                       napi_value args);
+                       size_t argc, napi_value* argv);
 
         static napi_value
         CallJSMethod(napi_env env, JNIEnv *jEnv, napi_value jsObject,

@@ -17,7 +17,7 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value caller, napi_value *args
     m_argsLen = 1 + napiProvidedArgumentsLength;
 
     if (m_argsLen > 0) {
-        if ((entry != nullptr) && (entry->isResolved)) {
+        if ((entry != nullptr) && (entry->getIsResolved())) {
             if (entry->parsedSig.empty()) {
                 JniSignatureParser parser(m_methodSignature);
                 entry->parsedSig = parser.Parse();
@@ -51,7 +51,7 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
     m_argsLen = !hasImplementationObject ? argc : argc - 1;
 
     if (m_argsLen > 0) {
-        if ((entry != nullptr) && (entry->isResolved)) {
+        if ((entry != nullptr) && (entry->getIsResolved())) {
             if (entry->parsedSig.empty()) {
                 JniSignatureParser parser(m_methodSignature);
                 entry->parsedSig = parser.Parse();

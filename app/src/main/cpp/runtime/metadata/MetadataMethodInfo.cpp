@@ -64,7 +64,7 @@ std::string MethodInfo::GetDeclaringType() {
 }
 
 int MethodInfo::GetSizeOfReadMethodInfo() {
-    
+
     if (!sizeMeasured) {
         sizeMeasured = true;
         // name
@@ -93,6 +93,8 @@ int MethodInfo::GetSizeOfReadMethodInfo() {
             declaringNodeId = *declaringTypePtr;
             m_pData += sizeof(uint16_t);
         }
+
+
 
     }
 

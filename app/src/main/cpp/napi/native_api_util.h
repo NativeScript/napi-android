@@ -4,7 +4,6 @@
 #include "js_native_api.h"
 #include <dlfcn.h>
 #include <sstream>
-#include "NativeScriptAssert.h"
 
 #define NAPI_EXPORT __attribute__((visibility("default")))
 
@@ -22,16 +21,25 @@
     return NULL;                                                       \
   }
 
-#define NAPI_GET_VARIABLE_ARGS() \
-  NAPI_PREAMBLE \
-size_t argc;  \
-napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);  \
-std::vector<napi_value> argv(argc);  \
-NAPI_GUARD(napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr)); \
-{ \
-  NAPI_THROW_LAST_ERROR \
-  return NULL;  \
-}
+#define NAPI_CALLBACK_BEGIN_VARGS()                                               \
+  NAPI_PREAMBLE                                                                   \
+  size_t argc;                                                                    \
+  void *data;                                                                     \
+  napi_value jsThis;                                                              \
+  NAPI_GUARD(napi_get_cb_info(env, info, &argc, nullptr, &jsThis, &data))         \
+  {                                                                               \
+    NAPI_THROW_LAST_ERROR                                                         \
+    return NULL;                                                                  \
+  }                                                                               \
+  std::vector<napi_value> argv(argc);                                             \
+  if (argc > 0)                                                                   \
+  {                                                                               \
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr)) \
+    {                                                                             \
+      NAPI_THROW_LAST_ERROR                                                       \
+      return NULL;                                                                \
+    }                                                                             \
+  }
 
 #define NAPI_ERROR_INFO                                                     \
   const napi_extended_error_info *error_info =                              \
@@ -53,7 +61,6 @@ NAPI_GUARD(napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr)); \
     msg << "Node-API returned error: " << status << "\n    " << #expr \
         << "\n    ^\n    "                                            \
         << "at " << __FILE__ << ":" << __LINE__ << "";                \
-    DEBUG_WRITE("%s", msg.str().c_str());                             \
   }                                                                   \
   if (status != napi_ok)
 
@@ -81,8 +88,6 @@ NAPI_GUARD(napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr)); \
 
 namespace napi_util
 {
-
-
 
   inline napi_ref make_ref(napi_env env, napi_value value,
                            uint32_t initialCount = 1)
@@ -118,7 +123,9 @@ namespace napi_util
     return buffer;
   }
 
-  inline napi_status define_property(napi_env env, napi_value object, const char *propertyName, napi_value value = nullptr, napi_callback getter = nullptr, napi_callback setter = nullptr, void *data = nullptr)
+  inline napi_status define_property(napi_env env, napi_value object, const char *propertyName,
+                                     napi_value value = nullptr, napi_callback getter = nullptr,
+                                     napi_callback setter = nullptr, void *data = nullptr)
   {
     napi_property_descriptor desc = {
         propertyName, // utf8name
@@ -284,8 +291,11 @@ namespace napi_util
 
     return escaped;
   }
-  
-  inline napi_value napi_set_function(napi_env env, napi_value object, const char * name, napi_callback callback, void * data = nullptr) {
+
+  inline napi_value
+  napi_set_function(napi_env env, napi_value object, const char *name, napi_callback callback,
+                    void *data = nullptr)
+  {
     napi_value fn;
     napi_create_function(env, nullptr, 0, callback, data, &fn);
     napi_set_named_property(env, object, name, fn);
