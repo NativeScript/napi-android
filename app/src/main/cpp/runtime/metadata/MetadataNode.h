@@ -53,7 +53,7 @@ private:
 
     static string CreateFullClassName(const std::string& className, const std::string& extendNameAndLocation);
 
-    napi_value CreateArrayObjectConstructor(napi_env env);
+    static napi_value CreateArrayObjectConstructor(napi_env env);
 
     static void SetInstanceMetadata(napi_env env, napi_value object, MetadataNode* node);
 
@@ -75,7 +75,7 @@ private:
             napi_value ctor);
 
 
-    napi_value WrapArrayObject(napi_env env, napi_value object);
+    static napi_value WrapArrayObject(napi_env env, napi_value object);
 
 
     napi_value GetConstructorFunction(napi_env env);
@@ -89,7 +89,7 @@ private:
     static bool IsValidExtendName(napi_env env, napi_value name);
     static bool GetExtendLocation(napi_env env, std::string& extendLocation, bool isTypeScriptExtend);
     static ExtendedClassCacheData GetCachedExtendedClassData(napi_env env, const std::string& proxyClassName);
-    static std::string GetJniClassName(MetadataEntry entry);
+    static std::string GetJniClassName(const MetadataEntry &entry);
 
 
     static void SetClassAccessor(napi_env env, napi_value constructor);
@@ -98,11 +98,9 @@ private:
 
     static MetadataTreeNode *GetOrCreateTreeNodeByName(const std::string &className);
 
-    void SetStaticMembers(napi_env env, napi_value constructor, MetadataTreeNode *treeNode);
-
     bool IsNodeTypeInterface();
 
-    std::vector<MetadataNode::MethodCallbackData *> SetInstanceMethodsFromStaticMetadata(
+    std::vector<MetadataNode::MethodCallbackData *> SetClassMembersFromStaticMetadata(
             napi_env env, napi_value constructor,
             std::vector<MethodCallbackData *> &instanceMethodsCallbackData,
             const std::vector<MethodCallbackData *> &baseInstanceMethodsCallbackData,
@@ -114,14 +112,12 @@ private:
             const std::vector<MethodCallbackData *> &baseInstanceMethodsCallbackData,
             MetadataTreeNode *treeNode);
 
-    void SetInstanceFieldsFromStaticMetadata(
-            napi_env env, napi_value constructor, MetadataTreeNode *treeNode);
 
-    MethodCallbackData *tryGetExtensionMethodCallbackData(
-            std::unordered_map<std::string, MethodCallbackData *> collectedMethodCallbackData,
-            std::string lookupName);
+    inline static MethodCallbackData *tryGetExtensionMethodCallbackData(
+            const robin_hood::unordered_map<std::string, MethodCallbackData *> &collectedMethodCallbackData,
+            const std::string &lookupName);
 
-    std::vector<MetadataNode::MethodCallbackData *> SetInstanceMembers(
+    std::vector<MetadataNode::MethodCallbackData *> SetClassMembers(
             napi_env env, napi_value constructor,
             std::vector<MethodCallbackData *> &instanceMethodsCallbackData,
             const std::vector<MethodCallbackData *> &baseInstanceMethodsCallbackData,
@@ -158,20 +154,20 @@ private:
 
     static napi_value ConstructorFunctionCallback(napi_env env, napi_callback_info info);
 
-    void SetInnerTypes(napi_env env, napi_value constructor, MetadataTreeNode *treeNode);
+    static void SetInnerTypes(napi_env env, napi_value constructor, MetadataTreeNode *treeNode);
 
     static napi_value SetInnerTypeCallback(napi_env env, napi_callback_info info);
 
     static napi_value NullValueOfCallback(napi_env env, napi_callback_info info);
 
 
-    static void RegisterSymbolHasInstanceCallback(napi_env env, MetadataEntry entry, napi_value interface);
+    static void RegisterSymbolHasInstanceCallback(napi_env env, const MetadataEntry &entry, napi_value interface);
 
     static napi_value SymbolHasInstanceCallback(napi_env env, napi_callback_info info);
 
     static napi_value SuperAccessorGetterCallback(napi_env env, napi_callback_info info);
 
-    static bool ValidateExtendArguments(napi_env env, napi_callback_info info, bool extendLocationFound, string &extendLocation, napi_value* extendName, napi_value* implementationObject, bool isTypeScriptExtend);
+    static bool ValidateExtendArguments(napi_env env, size_t argc, napi_value * argv, bool extendLocationFound, string &extendLocation, napi_value* extendName, napi_value* implementationObject, bool isTypeScriptExtend);
 
     MetadataTreeNode *m_treeNode;
 
@@ -217,7 +213,7 @@ private:
                 node(_node), parent(nullptr), isSuper(false) {
         }
 
-        std::vector<MetadataEntry> candidates;
+        std::vector<MetadataEntry *> candidates;
         MetadataNode *node;
         MethodCallbackData *parent;
         bool isSuper;

@@ -289,7 +289,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         napi_value privateValue;
                         napi_get_named_property(m_env, arg, "nullNode", &privateValue);
 
-                        if (privateValue != nullptr) {
+                        if (!napi_util::is_null_or_undefined(env, privateValue)) {
                             SetConvertedObject(index, nullptr);
                             success = true;
                             break;

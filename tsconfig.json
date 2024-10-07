@@ -1,0 +1,28 @@
+{
+    "compilerOptions": {
+      "strict": true,
+      "target": "es2017",
+      "module": "esnext",
+      "moduleResolution": "node",
+      "lib": ["es2017", "DOM"],
+      "sourceMap": true,
+      "noEmitHelpers": true,
+      "importHelpers": true,
+      "baseUrl": ".",
+      "allowJs": true,
+      "types": [
+        "node"
+      ],
+      "allowSyntheticDefaultImports": true,
+      "esModuleInterop": true,
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+      "skipLibCheck": true,
+      "outDir": "dist",
+      "downlevelIteration": true,
+      "maxNodeModuleJsDepth": 5,
+      "isolatedModules": true
+    },
+    "include": ["app/src/main/assets/app"],
+    "files": ["./types-android/index.d.ts"],
+  }

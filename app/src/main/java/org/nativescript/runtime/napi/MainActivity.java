@@ -11,6 +11,7 @@ import org.nativescript.runtime.napi.databinding.ActivityMainBinding;
 import java.io.File;
 
 public class MainActivity extends AppCompatActivity {
+    Runtime m_runtime;
 
 
 
@@ -45,7 +46,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (appDir != null) {
-            startNAPIRuntime(appDir);
+            m_runtime = new Runtime();
+            m_runtime.logger = new LogcatLogger(this.getApplicationContext());
+            m_runtime.startRuntimeBridge(appDir);
         }
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
@@ -59,6 +62,4 @@ public class MainActivity extends AppCompatActivity {
 //        Log.d("BRIDGE", "Called from QuickJS");
     }
 
-
-    public native void startNAPIRuntime(String filesPath);
 }

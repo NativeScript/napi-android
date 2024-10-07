@@ -85,64 +85,8 @@ MetadataTreeNode* MetadataReader::BuildTree() {
 }
 
 
-MetadataEntry MetadataReader::ReadInstanceFieldEntry(uint8_t **data) {
-    MetadataEntry entry(nullptr, NodeType::Field);
-    entry.fi = *reinterpret_cast<FieldInfo **>(data);
-    entry.isTypeMember = true;
-
-    *data += sizeof(FieldInfo);
-
-    return entry;
-}
-
-MetadataEntry MetadataReader::ReadStaticFieldEntry(uint8_t **data) {
-    MetadataEntry entry(nullptr, NodeType::StaticField);
-    entry.fi = *reinterpret_cast<StaticFieldInfo **>(data);
-    entry.isStatic = true;
-    entry.isTypeMember = false;
-
-    *data += sizeof(StaticFieldInfo);
-
-    return entry;
-}
-
-MetadataEntry MetadataReader::ReadInstanceMethodEntry(uint8_t **data) {
-    MetadataEntry entry(nullptr, NodeType::Method);
-    entry.isTypeMember = true;
-
-    entry.mi = new MethodInfo(*data); //method info pointer+
-    *data += entry.mi->GetSizeOfReadMethodInfo();
-
-    return entry;
-}
-
 MetadataTreeNode *MetadataReader::GetNodeById(uint16_t nodeId) {
     return m_v[nodeId];
-}
-
-MetadataEntry MetadataReader::ReadStaticMethodEntry(uint8_t **data) {
-    MetadataEntry entry(nullptr, NodeType::Method);
-    entry.mi = new MethodInfo(*data);
-    entry.mi->isStatic = true;
-    entry.isStatic = true;
-
-    *data += entry.mi->GetSizeOfReadMethodInfo();
-
-    return entry;
-}
-
-MetadataEntry MetadataReader::ReadExtensionFunctionEntry(uint8_t **data) {
-    MetadataEntry entry(nullptr, NodeType::Method);
-
-    entry.mi = new MethodInfo(*data); //static method info pointer
-
-    entry.mi->isStatic = true;
-    entry.isExtensionFunction = true;
-    entry.isStatic = true;
-
-    *data += entry.mi->GetSizeOfReadMethodInfo();
-
-    return entry;
 }
 
 

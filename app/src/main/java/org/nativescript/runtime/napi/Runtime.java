@@ -66,13 +66,15 @@ public class Runtime {
 
     private final Map<Class<?>, JavaScriptImplementation> loadedJavaScriptExtends = new HashMap<Class<?>, JavaScriptImplementation>();
 
+    public native void startNAPIRuntime(String filesPath, int runtimeId);
+
     private final java.lang.Runtime dalvikRuntime = java.lang.Runtime.getRuntime();
 
     private ArrayList<Constructor<?>> ctorCache = new ArrayList<Constructor<?>>();
 
     private static final ClassStorageService classStorageService = new ClassStorageServiceImpl(ClassCacheImpl.INSTANCE, org.nativescript.runtime.napi.system.classloaders.impl.ClassLoadersCollectionImpl.INSTANCE);
 
-    private Logger logger;
+    public Logger logger;
 
     public Logger getLogger() {
         return this.logger;
@@ -92,6 +94,11 @@ public class Runtime {
     private final static ThreadLocal<Runtime> currentRuntime = new ThreadLocal<Runtime>();
     private final static Map<Integer, Runtime> runtimeCache = new ConcurrentHashMap<>();
     public static boolean nativeLibraryLoaded;
+
+    public void startRuntimeBridge(String filesPath) {
+        this.startNAPIRuntime(filesPath, this.runtimeId);
+    }
+
 
     public Runtime(ClassResolver classResolver, GcListener gcListener, int runtimeId, int workerId, HashMap<Integer, Object> strongInstances, HashMap<Integer, WeakReference<Object>> weakInstances, NativeScriptHashMap<Object, Integer> strongJavaObjectToId, NativeScriptWeakHashMap<Object, Integer> weakJavaObjectToId) {
         this.classResolver = classResolver;
@@ -115,8 +122,7 @@ public class Runtime {
 
                 classResolver = new ClassResolver(classStorageService);
                 currentRuntime.set(this);
-
-                this.threadScheduler = new WorkThreadScheduler(new Handler());
+                this.threadScheduler = new WorkThreadScheduler(new Handler(Looper.myLooper()));
 
                 runtimeCache.put(this.runtimeId, this);
                 gcListener = null;
@@ -799,7 +805,7 @@ public class Runtime {
         final int returnType = TypeIDs.GetObjectTypeId(retType);
         Object ret = null;
 
-        boolean isWorkThread =  false;//threadScheduler.getThread().equals(Thread.currentThread());
+        boolean isWorkThread =  threadScheduler.getThread().equals(Thread.currentThread());
 
         final Object[] tmpArgs = extendConstructorArgs(methodName, isConstructor, args);
         final boolean discardUncaughtJsExceptions = false;

@@ -40,9 +40,10 @@ CastType NumericCasts::GetCastType(napi_env env, napi_value object) {
     napi_create_string_utf8(env, s_castMarker, NAPI_AUTO_LENGTH, &key);
 
     napi_value hidden;
+
     napi_get_named_property(env, object, s_castMarker, &hidden);
 
-    if (hidden != nullptr) {
+    if (hidden != nullptr && !napi_util::is_undefined(env, hidden)) {
         int32_t castType;
         napi_get_value_int32(env, hidden, &castType);
         ret = static_cast<CastType>(castType);

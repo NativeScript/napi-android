@@ -14,7 +14,7 @@ MetadataEntry::MetadataEntry(MetadataTreeNode *m_treeNode, NodeType nodeType) :
         paramCount(-1), isFinal(false), isResolved(false), retTypeParsed(false),
         isFinalSet(false), isResolvedSet(false) {}
 
-const std::string &MetadataEntry::getName() {
+std::string &MetadataEntry::getName() {
     if (!name.empty()) return name;
 
     auto reader = MetadataNode::getMetadataReader();
@@ -30,7 +30,7 @@ const std::string &MetadataEntry::getName() {
     return name;
 }
 
-const std::string &MetadataEntry::getSig() {
+std::string &MetadataEntry::getSig() {
     if (!sig.empty()) return sig;
 
     auto reader = MetadataNode::getMetadataReader();
@@ -49,7 +49,7 @@ const std::string &MetadataEntry::getSig() {
     return sig;
 }
 
-const std::string &MetadataEntry::getReturnType() {
+std::string &MetadataEntry::getReturnType() {
     if (!returnType.empty()) return returnType;
 
     auto reader = MetadataNode::getMetadataReader();
@@ -98,7 +98,7 @@ int MetadataEntry::getParamCount() {
     if (type == NodeType::Method) {
         auto sigLength = mi->GetSignatureLength();
         if (sigLength > 0) {
-            paramCount = mi->GetSignatureLength() - 1;
+            paramCount = sigLength - 1;
         } else {
             paramCount = 0;
         }

@@ -64,6 +64,7 @@ namespace ns {
         jint GenerateNewObjectId(JNIEnv* env, jobject obj);
         void CreateJSInstanceNative(JNIEnv* _env, jobject obj, jobject javaObject, jint javaObjectID, jstring className);
         jobject CallJSMethodNative(JNIEnv* _env, jobject obj, jint javaObjectID, jstring methodName, jint retType, jboolean isConstructor, jobjectArray packagedArgs);
+        void PassExceptionToJsNative(JNIEnv* env, jobject obj, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded);
 
     private:
         Runtime(JNIEnv* env, jobject runtime, int id);

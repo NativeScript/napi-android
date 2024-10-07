@@ -64,8 +64,7 @@ namespace ns
         static napi_value
         CallJavaMethod(napi_env env, napi_value caller, const std::string &className,
                        const std::string &methodName, MetadataEntry *entry, bool isFromInterface,
-                       bool isStatic, bool isSuper,
-                       size_t argc, napi_value* argv);
+                       bool isStatic, bool isSuper, napi_callback_info info);
 
         static napi_value
         CallJSMethod(napi_env env, JNIEnv *jEnv, napi_value jsObject,

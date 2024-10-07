@@ -35,10 +35,10 @@ namespace ns {
             JEnv jenv;
             auto chars = jenv.GetStringChars(value, NULL);
             auto length = jenv.GetStringLength(value);
-            auto v8String = convertToJsString(env, chars, length);
+            auto jsString = convertToJsString(env, chars, length);
             jenv.ReleaseStringChars(value, chars);
 
-            return v8String;
+            return jsString;
         }
 
         static std::string jstringToString(jstring value) {
@@ -72,12 +72,8 @@ namespace ns {
 
         inline static jstring ConvertToJavaString(napi_env env, napi_value jsValue) {
             JEnv jenv;
-            size_t str_len;
-            napi_get_value_string_utf16(env, jsValue, nullptr, 0, &str_len);
-            std::u16string str(str_len, '\0');
-            napi_get_value_string_utf16(env, jsValue, reinterpret_cast<char16_t *>(&str[0]),
-                                        str_len + 1, &str_len);
-            return jenv.NewString(reinterpret_cast<const jchar *>(str.data()), str_len);
+            const char * str = napi_util::get_string_value(env, jsValue);
+            return jenv.NewStringUTF(str);
         }
 
         inline static napi_value convertToJsString(napi_env env, const jchar *data, int length) {

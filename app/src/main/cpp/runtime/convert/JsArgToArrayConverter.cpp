@@ -393,19 +393,19 @@ jobjectArray JsArgToArrayConverter::ToJavaArray() {
             throw NativeScriptException(ss.str());
         }
 
-        JEnv env;
+        JEnv jEnv;
 
         if (JsArgToArrayConverter::JAVA_LANG_OBJECT_CLASS == nullptr) {
-            JsArgToArrayConverter::JAVA_LANG_OBJECT_CLASS = env.FindClass("java/lang/Object");
+            JsArgToArrayConverter::JAVA_LANG_OBJECT_CLASS = jEnv.FindClass("java/lang/Object");
         }
 
         JniLocalRef tmpArr(
-                env.NewObjectArray(m_argsLen, JsArgToArrayConverter::JAVA_LANG_OBJECT_CLASS,
+                jEnv.NewObjectArray(m_argsLen, JsArgToArrayConverter::JAVA_LANG_OBJECT_CLASS,
                                    nullptr));
-        m_arr = (jobjectArray) env.NewGlobalRef(tmpArr);
+        m_arr = (jobjectArray) jEnv.NewGlobalRef(tmpArr);
 
         for (int i = 0; i < m_argsLen; i++) {
-            env.SetObjectArrayElement(m_arr, i, m_argsAsObject[i]);
+            jEnv.SetObjectArrayElement(m_arr, i, m_argsAsObject[i]);
         }
     }
 

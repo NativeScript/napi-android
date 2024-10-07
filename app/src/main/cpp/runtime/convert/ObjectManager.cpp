@@ -147,7 +147,7 @@ ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
 bool ObjectManager::IsJsRuntimeObject(napi_env env, napi_value object) {
     bool result;
 
-    napi_has_own_named_property(env, object, PRIVATE_IS_NAPI, &result);
+    napi_has_named_property(env, object, PRIVATE_IS_NAPI, &result);
 
     return result;
 }

@@ -28,7 +28,7 @@ android {
             signingConfig signingConfigs.debug
             externalNativeBuild {
                 cmake {
-                    cppFlags "-flto -O3 -fno-rtti -fdata-sections -ffunction-sections"
+                    cppFlags "-flto -Ofast -fno-rtti -fdata-sections -ffunction-sections"
                 }
             }
         }

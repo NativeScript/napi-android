@@ -8,7 +8,7 @@ namespace ns {
 struct FieldCallbackData {
     FieldCallbackData(MetadataEntry *metadata)
         :
-        fid(nullptr), clazz(nullptr), metadata(metadata) {
+        metadata(metadata), fid(nullptr), clazz(nullptr) {
 
     }
 

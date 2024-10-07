@@ -6,7 +6,6 @@ using namespace ns;
 
 std::string MethodInfo::GetName() {
     string methodName = MetadataNode::getMetadataReader()->ReadName(nameOffset);
-
     return methodName;
 }
 
@@ -15,8 +14,6 @@ uint8_t MethodInfo::CheckIsResolved() {
 }
 
 uint16_t MethodInfo::GetSignatureLength() {
-    m_signatureLength = *reinterpret_cast<uint16_t*>(m_pData);
-
     return m_signatureLength;
 }
 

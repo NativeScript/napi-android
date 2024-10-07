@@ -54,11 +54,11 @@ class MethodCache {
         static jmethodID RESOLVE_CONSTRUCTOR_SIGNATURE_ID;
 
         /*
-         * "s_mthod_ctor_signature_cache" holding all resolved CacheMethodInfo against an encoded_signature string.
+         * "s_method_ctor_signature_cache" holding all resolved CacheMethodInfo against an encoded_signature string.
          *  Used for caching the resolved constructor or method signature.
          * The encoded signature has template: <className>.S/I.<methodName>.<argsCount>.<arg1class>.<...>
          */
-        static robin_hood::unordered_map<std::string, CacheMethodInfo> s_mthod_ctor_signature_cache;
+        static robin_hood::unordered_map<std::string, CacheMethodInfo> s_method_ctor_signature_cache;
 };
 }
 

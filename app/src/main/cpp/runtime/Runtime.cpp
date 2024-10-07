@@ -131,6 +131,8 @@ void Runtime::Init(JNIEnv *jEnv, jstring filesPath)
     NAPICreateEnv(&env, rt);
     napi_open_handle_scope(env, &global_scope);
 
+    env_to_runtime_cache.emplace(env, this);
+
     NativeScriptException::Init(env);
 
     m_objectManager->SetInstanceEnv(env);
@@ -248,6 +250,9 @@ void Runtime::DestroyRuntime()
     env_to_runtime_cache.erase(env);
     napi_close_handle_scope(env, this->global_scope);
     NAPIFreeEnv(env);
+
+
+
 }
 
 jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile)
@@ -391,6 +396,44 @@ jobject Runtime::ConvertJsValueToJavaObject(JEnv &jEnv, napi_value value, int cl
     }
 
     return javaResult;
+}
+
+void Runtime::PassExceptionToJsNative(JNIEnv* jEnv, jobject obj, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded) {
+    napi_env napiEnv = env;
+
+    std::string errMsg = ArgConverter::jstringToString(message);
+
+    napi_value errObj;
+    napi_value errMsgNapi;
+    napi_create_string_utf8(napiEnv, errMsg.c_str(), NAPI_AUTO_LENGTH, &errMsgNapi);
+    napi_create_error(napiEnv, nullptr, errMsgNapi, &errObj);
+
+    // Create a new native exception js object
+    jint javaObjectID = m_objectManager->GetOrCreateObjectId((jobject) exception);
+    napi_value nativeExceptionObject = m_objectManager->GetJsObjectByJavaObject(javaObjectID);
+
+    if (nativeExceptionObject == nullptr) {
+        std::string className = m_objectManager->GetClassName((jobject) exception);
+        // Create proxy object that wraps the java err
+        nativeExceptionObject = m_objectManager->CreateJSWrapper(javaObjectID, className);
+        if (nativeExceptionObject == nullptr) {
+            napi_create_object(napiEnv, &nativeExceptionObject);
+        }
+    }
+
+    // Create a JS error object
+    napi_value fullStackTraceNapi;
+    napi_create_string_utf8(napiEnv, ArgConverter::jstringToString(fullStackTrace).c_str(), NAPI_AUTO_LENGTH, &fullStackTraceNapi);
+    napi_set_named_property(napiEnv, errObj, "nativeException", nativeExceptionObject);
+    napi_set_named_property(napiEnv, errObj, "stackTrace", fullStackTraceNapi);
+    if (jsStackTrace != nullptr) {
+        napi_value jsStackTraceNapi;
+        napi_create_string_utf8(napiEnv, ArgConverter::jstringToString(jsStackTrace).c_str(), NAPI_AUTO_LENGTH, &jsStackTraceNapi);
+        napi_set_named_property(napiEnv, errObj, "stack", jsStackTraceNapi);
+    }
+
+    // Pass err to JS
+    NativeScriptException::CallJsFuncWithErr(env, errObj, isDiscarded);
 }
 
 JavaVM *Runtime::java_vm = nullptr;

@@ -32,9 +32,9 @@ MethodCache::CacheMethodInfo MethodCache::ResolveMethodSignature(napi_env env, c
     CacheMethodInfo method_info;
 
     auto encoded_method_signature = EncodeSignature(env, className, methodName, info, isStatic);
-    auto it = s_mthod_ctor_signature_cache.find(encoded_method_signature);
+    auto it = s_method_ctor_signature_cache.find(encoded_method_signature);
 
-    if (it == s_mthod_ctor_signature_cache.end())
+    if (it == s_method_ctor_signature_cache.end())
     {
         auto signature = ResolveJavaMethod(env, info, className, methodName);
 
@@ -42,8 +42,8 @@ MethodCache::CacheMethodInfo MethodCache::ResolveMethodSignature(napi_env env, c
 
         if (!signature.empty())
         {
-            JEnv env;
-            auto clazz = env.FindClass(className);
+            JEnv jEnv;
+            auto clazz = jEnv.FindClass(className);
             assert(clazz != nullptr);
             method_info.clazz = clazz;
             method_info.signature = signature;
@@ -51,10 +51,10 @@ MethodCache::CacheMethodInfo MethodCache::ResolveMethodSignature(napi_env env, c
             method_info.retType = MetadataReader::GetReturnType(method_info.returnType);
             method_info.isStatic = isStatic;
             method_info.mid = isStatic
-                                  ? env.GetStaticMethodID(clazz, methodName, signature)
-                                  : env.GetMethodID(clazz, methodName, signature);
+                                  ? jEnv.GetStaticMethodID(clazz, methodName, signature)
+                                  : jEnv.GetMethodID(clazz, methodName, signature);
 
-            s_mthod_ctor_signature_cache.emplace(encoded_method_signature, method_info);
+            s_method_ctor_signature_cache.emplace(encoded_method_signature, method_info);
         }
     }
     else
@@ -71,9 +71,9 @@ MethodCache::CacheMethodInfo MethodCache::ResolveConstructorSignature(napi_env e
 
     auto &args = argWrapper.args;
     auto encoded_ctor_signature = EncodeSignature(env, fullClassName, "<init>", args, false);
-    auto it = s_mthod_ctor_signature_cache.find(encoded_ctor_signature);
+    auto it = s_method_ctor_signature_cache.find(encoded_ctor_signature);
 
-    if (it == s_mthod_ctor_signature_cache.end())
+    if (it == s_method_ctor_signature_cache.end())
     {
         auto signature = ResolveConstructor(env, args, javaClass, isInterface);
 
@@ -81,12 +81,12 @@ MethodCache::CacheMethodInfo MethodCache::ResolveConstructorSignature(napi_env e
 
         if (!signature.empty())
         {
-            JEnv env;
+            JEnv jEnv;
             constructor_info.clazz = javaClass;
             constructor_info.signature = signature;
-            constructor_info.mid = env.GetMethodID(javaClass, "<init>", signature);
+            constructor_info.mid = jEnv.GetMethodID(javaClass, "<init>", signature);
 
-            s_mthod_ctor_signature_cache.emplace(encoded_ctor_signature, constructor_info);
+            s_method_ctor_signature_cache.emplace(encoded_ctor_signature, constructor_info);
         }
     }
     else
@@ -113,20 +113,21 @@ string MethodCache::EncodeSignature(napi_env env, const string &className, const
     sig.append(methodName);
     sig.append(".");
 
-    size_t len;
-    napi_get_cb_info(env, info, &len, nullptr, nullptr, nullptr);
-
-    std::vector<napi_value> args(len);
-    napi_get_cb_info(env, info, &len, args, nullptr, nullptr);
+    size_t argc;
+    napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);
+    std::vector<napi_value> argv(argc);
+    if (argc > 0) {
+        napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr);
+    }
 
     stringstream s;
-    s << len;
+    s << argc;
     sig.append(s.str());
 
-    for (int i = 0; i < len; i++)
+    for (int i = 0; i < argc; i++)
     {
         sig.append(".");
-        sig.append(GetType(env, args[i]));
+        sig.append(GetType(env, argv[i]));
     }
 
     return sig;
@@ -136,7 +137,7 @@ string MethodCache::GetType(napi_env env, napi_value value)
 {
     napi_valuetype valueType;
     napi_typeof(env, value, &valueType);
-    string type = nullptr;
+    string type = "";
 
     if (napi_util::is_of_type(env, value, napi_object))
     {
@@ -160,7 +161,7 @@ string MethodCache::GetType(napi_env env, napi_value value)
     
 
     // Helper function to check if a value is of a specific type
-    static auto is_type = [&](std::function<napi_status(napi_env, napi_value, bool *)> check_func) -> bool
+    static auto is_type = [&](const std::function<napi_status(napi_env, napi_value, bool *)>& check_func) -> bool
     {
         bool result;
         check_func(env, value, &result);
@@ -334,7 +335,7 @@ string MethodCache::ResolveConstructor(napi_env env, napi_callback_info info, jc
     return resolvedSignature;
 }
 
-robin_hood::unordered_map<string, MethodCache::CacheMethodInfo> MethodCache::s_mthod_ctor_signature_cache;
+robin_hood::unordered_map<string, MethodCache::CacheMethodInfo> MethodCache::s_method_ctor_signature_cache;
 jclass MethodCache::RUNTIME_CLASS = nullptr;
 jmethodID MethodCache::RESOLVE_METHOD_OVERLOAD_METHOD_ID = nullptr;
 jmethodID MethodCache::RESOLVE_CONSTRUCTOR_SIGNATURE_ID = nullptr;

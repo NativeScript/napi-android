@@ -20,15 +20,63 @@ namespace ns {
                        uint8_t *nameData, uint32_t valueLength, uint8_t *valueData,
                        GetTypeMetadataCallback getTypeMetadataCallack);
 
-        MetadataEntry ReadInstanceMethodEntry(uint8_t **data);
+        inline static MetadataEntry* ReadInstanceFieldEntry(uint8_t **data) {
+            auto entry = new MetadataEntry(nullptr, NodeType::Field);
+            entry->fi = *reinterpret_cast<FieldInfo **>(data);
+            entry->isTypeMember = true;
 
-        MetadataEntry ReadStaticMethodEntry(uint8_t **data);
+            *data += sizeof(FieldInfo);
 
-        MetadataEntry ReadExtensionFunctionEntry(uint8_t **data);
+            return entry;
+        }
 
-        MetadataEntry ReadInstanceFieldEntry(uint8_t **data);
+        inline static MetadataEntry* ReadStaticFieldEntry(uint8_t **data) {
+            auto entry = new MetadataEntry(nullptr, NodeType::StaticField);
+            entry->sfi = *reinterpret_cast<StaticFieldInfo **>(data);
+            entry->isStatic = true;
+            entry->isTypeMember = false;
 
-        MetadataEntry ReadStaticFieldEntry(uint8_t **data);
+            *data += sizeof(StaticFieldInfo);
+
+            return entry;
+        }
+
+        inline static MetadataEntry* ReadInstanceMethodEntry(uint8_t **data) {
+            auto entry = new MetadataEntry(nullptr, NodeType::Method);
+            entry->isTypeMember = true;
+
+            entry->mi = new MethodInfo(*data); //method info pointer+
+            *data += entry->mi->GetSizeOfReadMethodInfo();
+
+            return entry;
+        }
+
+
+        inline static MetadataEntry* ReadStaticMethodEntry(uint8_t **data) {
+            auto entry = new MetadataEntry(nullptr, NodeType::Method);
+            entry->isTypeMember = true;
+            entry->mi = new MethodInfo(*data);
+            entry->mi->isStatic = true;
+            entry->isStatic = true;
+
+            *data += entry->mi->GetSizeOfReadMethodInfo();
+
+            return entry;
+        }
+
+        inline static MetadataEntry* ReadExtensionFunctionEntry(uint8_t **data) {
+            auto entry = new MetadataEntry(nullptr, NodeType::Method);
+
+            entry->mi = new MethodInfo(*data); //static method info pointer
+
+            entry->mi->isStatic = true;
+            entry->isExtensionFunction = true;
+            entry->isStatic = true;
+
+            *data += entry->mi->GetSizeOfReadMethodInfo();
+
+            return entry;
+        }
 
         inline std::string ReadTypeName(uint16_t nodeId) {
             MetadataTreeNode *treeNode = GetNodeById(nodeId);

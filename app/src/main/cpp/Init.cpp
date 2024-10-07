@@ -8,10 +8,9 @@ using namespace std;
 using namespace ns;
 
 extern "C" JNIEXPORT void JNICALL
-Java_org_nativescript_runtime_napi_MainActivity_startNAPIRuntime(JNIEnv* env, jobject obj, jstring filesPath) {
-    int runtime_id = 1;
-    Runtime::Init(env, obj, runtime_id, filesPath);
-    auto *rt = Runtime::GetRuntime(runtime_id);
+Java_org_nativescript_runtime_napi_Runtime_startNAPIRuntime(JNIEnv* env, jobject obj, jstring filesPath, jint runtimeId) {
+    Runtime::Init(env, obj, runtimeId, filesPath);
+    auto *rt = Runtime::GetRuntime(runtimeId);
 
     rt->RunScript(env, obj, filesPath);
 }
@@ -139,7 +138,7 @@ extern "C" JNIEXPORT void Java_org_nativescript_runtime_napi_Runtime_passExcepti
 
 
     try {
-//        runtime->PassExceptionToJsNative(env, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded);
+        runtime->PassExceptionToJsNative(env, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded);
     } catch (NativeScriptException& e) {
         e.ReThrowToJava(runtime->GetNapiEnv());
     } catch (std::exception e) {
@@ -151,6 +150,36 @@ extern "C" JNIEXPORT void Java_org_nativescript_runtime_napi_Runtime_passExcepti
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToJava(runtime->GetNapiEnv());
     }
+}
+
+extern "C" JNIEXPORT jobject Java_org_nativescript_runtime_napi_Runtime_runScript(JNIEnv* _env, jobject obj, jint runtimeId, jstring scriptFile) {
+    jobject result = nullptr;
+
+    auto runtime = TryGetRuntime(runtimeId);
+    if (runtime == nullptr) {
+        return result;
+    }
+
+    napi_env napiEnv = runtime->GetNapiEnv();
+//    napi_handle_scope handleScope;
+//    napi_open_handle_scope(napiEnv, &handleScope);
+
+    try {
+        result = runtime->RunScript(_env, obj, scriptFile);
+    } catch (NativeScriptException& e) {
+        e.ReThrowToJava(napiEnv);
+    } catch (std::exception e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what() << std::endl;
+        NativeScriptException nsEx(ss.str());
+        nsEx.ReThrowToJava(napiEnv);
+    } catch (...) {
+        NativeScriptException nsEx(std::string("Error: c++ exception!"));
+        nsEx.ReThrowToJava(napiEnv);
+    }
+
+//    napi_close_handle_scope(napiEnv, handleScope);
+    return result;
 }
 
 extern "C" JNIEXPORT jint Java_org_nativescript_runtime_napi_Runtime_getPointerSize(JNIEnv* env, jclass obj) {

@@ -37,9 +37,9 @@ namespace ns {
 
         MetadataEntry(MetadataTreeNode* m_treeNode, NodeType nodeType);
 
-        const std::string& getName();
-        const std::string& getSig();
-        const std::string& getReturnType();
+        std::string& getName();
+        std::string& getSig();
+        std::string& getReturnType();
         MethodReturnType getRetType();
         std::string& getDeclaringType();
         int getParamCount();

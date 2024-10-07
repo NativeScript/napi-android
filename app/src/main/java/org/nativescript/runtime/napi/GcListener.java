@@ -32,6 +32,7 @@ public class GcListener {
                     PhantomReference<Object> ref = createRef();
                     @SuppressWarnings("unchecked")
                     PhantomReference<Objects> o = (PhantomReference<Objects>)GcListener.this.q.remove();
+
                     long currentUpdateTime = System.nanoTime();
                     if ((currentUpdateTime - lastUpdateTime) > throttleTime) {
                         GcListener.this.notifyGc();
