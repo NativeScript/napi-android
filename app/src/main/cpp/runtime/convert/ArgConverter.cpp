@@ -40,23 +40,23 @@ void ArgConverter::Init(napi_env env) {
     cache->NanNumberObject = napi_util::make_ref(env, nanValue, 1);
 }
 
-napi_value
-ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info) {
+napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info) {
     try {
         napi_value result;
         napi_create_double(env, numeric_limits<double>::quiet_NaN(), &result);
         return result;
     } catch (NativeScriptException &e) {
-//        e.ReThrowToNapi(env);
+        e.ReThrowToNapi(env);
     } catch (std::exception e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
-//        nsEx.ReThrowToNapi(env);
+        nsEx.ReThrowToNapi(env);
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
-//        nsEx.ReThrowToNapi(env);
+        nsEx.ReThrowToNapi(env);
     }
+    return nullptr;
 }
 
 napi_value
@@ -70,15 +70,15 @@ ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, napi_callba
 
         return value;
     } catch (NativeScriptException &e) {
-//        e.ReThrowToNapi(env);
+        e.ReThrowToNapi(env);
     } catch (std::exception e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
-//        nsEx.ReThrowToNapi(env);
+        nsEx.ReThrowToNapi(env);
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
-//        nsEx.ReThrowToNapi(env);
+       nsEx.ReThrowToNapi(env);
     }
     return nullptr;
 }
@@ -100,15 +100,15 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
         return jsThis;
 
     } catch (NativeScriptException &e) {
-//        e.ReThrowToNapi(env);
+      e.ReThrowToNapi(env);
     } catch (std::exception e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
-//        nsEx.ReThrowToNapi(env);
+          nsEx.ReThrowToNapi(env);
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
-//        nsEx.ReThrowToNapi(env);
+     nsEx.ReThrowToNapi(env);
     }
     return nullptr;
 }

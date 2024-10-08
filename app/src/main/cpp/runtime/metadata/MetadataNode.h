@@ -171,13 +171,11 @@ private:
 
     MetadataTreeNode *m_treeNode;
 
-    robin_hood::unordered_map<napi_env, napi_ref> m_ctorCachePerEnv;
-
     std::string m_name;
     std::string m_implType;
     bool m_isArray;
 
-    static bool IsJavascriptKeyword(std::string word);
+    static bool IsJavascriptKeyword(const std::string &word);
 
     static std::string TNS_PREFIX;
     static MetadataReader s_metadataReader;
@@ -213,7 +211,7 @@ private:
                 node(_node), parent(nullptr), isSuper(false) {
         }
 
-        std::vector<MetadataEntry *> candidates;
+        std::vector<MetadataEntry> candidates;
         MetadataNode *node;
         MethodCallbackData *parent;
         bool isSuper;

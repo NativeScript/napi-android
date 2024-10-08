@@ -6,13 +6,13 @@
 
 namespace ns {
 struct FieldCallbackData {
-    FieldCallbackData(MetadataEntry *metadata)
+    FieldCallbackData(MetadataEntry metadata)
         :
         metadata(metadata), fid(nullptr), clazz(nullptr) {
 
     }
 
-    MetadataEntry* metadata;
+    MetadataEntry metadata;
     jfieldID fid;
     jclass clazz;
 };

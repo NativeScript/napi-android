@@ -261,10 +261,10 @@ bool ObjectManager::CloneLink(napi_value src, napi_value dest) {
     auto success = jsInfo != nullptr;
 
     if (success) {
-        void * jsInfo;
+        void * _jsInfo;
         napi_value external;
         napi_get_named_property(m_env, src, PRIVATE_JSINFO, &external);
-        napi_get_value_external(m_env, external, &jsInfo);
+        napi_get_value_external(m_env, external, &_jsInfo);
 
         napi_value jsInfoClone;
         napi_create_external(m_env, jsInfo, nullptr, nullptr, &jsInfoClone);

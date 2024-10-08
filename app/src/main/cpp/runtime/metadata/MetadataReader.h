@@ -20,60 +20,60 @@ namespace ns {
                        uint8_t *nameData, uint32_t valueLength, uint8_t *valueData,
                        GetTypeMetadataCallback getTypeMetadataCallack);
 
-        inline static MetadataEntry* ReadInstanceFieldEntry(uint8_t **data) {
-            auto entry = new MetadataEntry(nullptr, NodeType::Field);
-            entry->fi = *reinterpret_cast<FieldInfo **>(data);
-            entry->isTypeMember = true;
+        inline static MetadataEntry ReadInstanceFieldEntry(uint8_t **data) {
+            MetadataEntry entry(nullptr, NodeType::Field);
+            entry.fi = *reinterpret_cast<FieldInfo **>(data);
+            entry.isStatic = false;
+            entry.isTypeMember = false;
 
             *data += sizeof(FieldInfo);
 
             return entry;
         }
 
-        inline static MetadataEntry* ReadStaticFieldEntry(uint8_t **data) {
-            auto entry = new MetadataEntry(nullptr, NodeType::StaticField);
-            entry->sfi = *reinterpret_cast<StaticFieldInfo **>(data);
-            entry->isStatic = true;
-            entry->isTypeMember = false;
+        inline static MetadataEntry ReadStaticFieldEntry(uint8_t **data) {
+            MetadataEntry entry(nullptr, NodeType::StaticField);
+            entry.sfi = *reinterpret_cast<StaticFieldInfo **>(data);
+            entry.isStatic = true;
+            entry.isTypeMember = false;
 
             *data += sizeof(StaticFieldInfo);
 
             return entry;
         }
 
-        inline static MetadataEntry* ReadInstanceMethodEntry(uint8_t **data) {
-            auto entry = new MetadataEntry(nullptr, NodeType::Method);
-            entry->isTypeMember = true;
+        inline static MetadataEntry ReadInstanceMethodEntry(uint8_t **data) {
+            MetadataEntry entry(nullptr, NodeType::Method);
+            entry.isTypeMember = true;
 
-            entry->mi = new MethodInfo(*data); //method info pointer+
-            *data += entry->mi->GetSizeOfReadMethodInfo();
-
-            return entry;
-        }
-
-
-        inline static MetadataEntry* ReadStaticMethodEntry(uint8_t **data) {
-            auto entry = new MetadataEntry(nullptr, NodeType::Method);
-            entry->isTypeMember = true;
-            entry->mi = new MethodInfo(*data);
-            entry->mi->isStatic = true;
-            entry->isStatic = true;
-
-            *data += entry->mi->GetSizeOfReadMethodInfo();
+            entry.mi = MethodInfo(*data); // Assign MethodInfo object directly
+            *data += entry.mi.GetSizeOfReadMethodInfo();
 
             return entry;
         }
 
-        inline static MetadataEntry* ReadExtensionFunctionEntry(uint8_t **data) {
-            auto entry = new MetadataEntry(nullptr, NodeType::Method);
+        inline static MetadataEntry ReadStaticMethodEntry(uint8_t **data) {
+            MetadataEntry entry(nullptr, NodeType::Method);
+            entry.isTypeMember = true;
 
-            entry->mi = new MethodInfo(*data); //static method info pointer
+            entry.mi = MethodInfo(*data); // Assign MethodInfo object directly
+            entry.mi.isStatic = true;
+            entry.isStatic = true;
 
-            entry->mi->isStatic = true;
-            entry->isExtensionFunction = true;
-            entry->isStatic = true;
+            *data += entry.mi.GetSizeOfReadMethodInfo();
 
-            *data += entry->mi->GetSizeOfReadMethodInfo();
+            return entry;
+        }
+
+        inline static MetadataEntry ReadExtensionFunctionEntry(uint8_t **data) {
+            MetadataEntry entry(nullptr, NodeType::Method);
+
+            entry.mi = MethodInfo(*data); // Assign MethodInfo object directly
+            entry.mi.isStatic = true;
+            entry.isExtensionFunction = true;
+            entry.isStatic = true;
+
+            *data += entry.mi.GetSizeOfReadMethodInfo();
 
             return entry;
         }
@@ -130,8 +130,8 @@ namespace ns {
         MetadataTreeNode *GetNodeById(uint16_t nodeId);
 
         inline bool IsNodeTypeArray(uint8_t type) {
-            bool isArray = (((type & MetadataTreeNode::PRIMITIVE) == 0)
-                            && ((type & MetadataTreeNode::ARRAY) == MetadataTreeNode::ARRAY));
+            bool isArray = (((type & MetadataTreeNode::PRIMITIVE) == 0) &&
+                            ((type & MetadataTreeNode::ARRAY) == MetadataTreeNode::ARRAY));
 
             return isArray;
         }
@@ -143,16 +143,16 @@ namespace ns {
         }
 
         inline bool IsNodeTypeClass(uint8_t type) {
-            bool isClass = (((type & MetadataTreeNode::PRIMITIVE) == 0)
-                            && ((type & MetadataTreeNode::CLASS) == MetadataTreeNode::CLASS));
+            bool isClass = (((type & MetadataTreeNode::PRIMITIVE) == 0) &&
+                            ((type & MetadataTreeNode::CLASS) == MetadataTreeNode::CLASS));
 
             return isClass;
         }
 
         inline bool IsNodeTypeInterface(uint8_t type) {
-            bool isInterface = (((type & MetadataTreeNode::PRIMITIVE) == 0)
-                                && ((type & MetadataTreeNode::INTERFACE) ==
-                                    MetadataTreeNode::INTERFACE));
+            bool isInterface = (((type & MetadataTreeNode::PRIMITIVE) == 0) &&
+                                ((type & MetadataTreeNode::INTERFACE) ==
+                                 MetadataTreeNode::INTERFACE));
 
             return isInterface;
         }
@@ -162,11 +162,6 @@ namespace ns {
 
             return isPackage;
         }
-
-//        inline static void FillReturnType(MetadataEntry& entry) {
-//            entry.returnType = ParseReturnType(entry.sig);
-//            entry.retType = GetReturnType(entry.returnType);
-//        }
 
         inline static std::string ParseReturnType(const std::string &signature) {
             int idx = signature.find(')');
@@ -209,8 +204,7 @@ namespace ns {
                 case 'L':
                     retType = (returnType == "Ljava/lang/String;")
                               ? MethodReturnType::String
-                              :
-                              MethodReturnType::Object;
+                              : MethodReturnType::Object;
                     break;
                 default:
                     assert(false);
@@ -220,8 +214,8 @@ namespace ns {
         }
 
     private:
-
         static const uint32_t ARRAY_OFFSET = 1000000000;
+//TODO        static const uint32_t ARRAY_OFFSET = INT32_MAX; // 2147483647
 
         MetadataTreeNode *BuildTree();
 

@@ -697,7 +697,7 @@ MetadataEntry MetadataNode::GetChildMetadataForPackage(MetadataNode *node, const
     const auto &children = *node->m_treeNode->children;
 
     for (auto treeNodeChild: children) {
-        if (propName == treeNodeChild->name.c_str()) {
+        if (strcmp(treeNodeChild->name.c_str(), propName) == 0) {
             child.name = propName;
             child.treeNode = treeNodeChild;
             child.type = static_cast<NodeType>(s_metadataReader.GetNodeType(treeNodeChild));
@@ -717,7 +717,7 @@ MetadataEntry MetadataNode::GetChildMetadataForPackage(MetadataNode *node, const
     return child;
 }
 
-bool MetadataNode::IsJavascriptKeyword(const std::string word) {
+bool MetadataNode::IsJavascriptKeyword(const std::string &word) {
     static set<string> keywords;
 
     if (keywords.empty()) {
@@ -802,7 +802,7 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
             //        return true;
             //    }
             // });
-               RegisterSymbolHasInstanceCallback(env, child, cachedItem);
+            RegisterSymbolHasInstanceCallback(env, child, cachedItem);
         }
 
         //                if (node->m_name == "org/json" && child.name == "JSONObject") {
@@ -813,7 +813,8 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
     return napi_util::get_ref_value(env, methodInfo->value);
 }
 
-void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const MetadataEntry &entry, napi_value interface) {
+void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const MetadataEntry &entry,
+                                                     napi_value interface) {
     if (napi_util::is_undefined(env, interface) || napi_util::is_null(env, interface)) {
         return;
     }
@@ -827,7 +828,8 @@ void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const Metadat
 
     napi_value hasInstance = napi_util::symbolFor(env, "hasInstance");
     napi_value method;
-    napi_create_function(env, "hasInstance", NAPI_AUTO_LENGTH, SymbolHasInstanceCallback, clazz, &method);
+    napi_create_function(env, "hasInstance", NAPI_AUTO_LENGTH, SymbolHasInstanceCallback, clazz,
+                         &method);
 
     napi_property_descriptor desc = {
             nullptr, // utf8name
@@ -879,7 +881,7 @@ napi_value MetadataNode::SymbolHasInstanceCallback(napi_env env, napi_callback_i
 
 std::string MetadataNode::GetJniClassName(const MetadataEntry &entry) {
     std::stack<string> s;
-    MetadataTreeNode* node = entry.treeNode;
+    MetadataTreeNode *node = entry.treeNode;
     while (node != nullptr && !node->name.empty()) {
         s.push(node->name);
         node = node->parent;
@@ -975,7 +977,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     for (auto i = 0; i < extensionFunctionsCount; i++) {
         auto entry = MetadataReader::ReadExtensionFunctionEntry(&curPtr);
 
-        auto &methodName = entry->getName();
+        auto &methodName = entry.getName();
         if (methodName != lastMethodName) {
             callbackData = tryGetExtensionMethodCallbackData(collectedExtensionMethods,
                                                              methodName);
@@ -994,7 +996,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
             }
         }
 
-        callbackData->candidates.push_back(entry);
+        callbackData->candidates.push_back(std::move(entry));
     }
 
     auto instanceMethodCount = *reinterpret_cast<uint16_t *>(curPtr);
@@ -1003,7 +1005,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
 
     for (auto i = 0; i < instanceMethodCount; i++) {
         auto entry = MetadataReader::ReadInstanceMethodEntry(&curPtr);
-        auto &methodName = entry->getName();
+        auto &methodName = entry.getName();
         if (methodName != lastMethodName) {
             callbackData = tryGetExtensionMethodCallbackData(collectedExtensionMethods,
                                                              methodName);
@@ -1024,7 +1026,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
             auto itFound = std::find_if(baseInstanceMethodsCallbackData.begin(),
                                         baseInstanceMethodsCallbackData.end(),
                                         [&methodName](MethodCallbackData *x) {
-                                            return x->candidates.front()->name == methodName;
+                                            return x->candidates.front().name == methodName;
                                         });
             if (itFound != baseInstanceMethodsCallbackData.end()) {
                 callbackData->parent = *itFound;
@@ -1033,17 +1035,17 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
             lastMethodName = methodName;
         }
 
-        callbackData->candidates.push_back(entry);
+        callbackData->candidates.push_back(std::move(entry));
     }
 
     auto instanceFieldCount = *reinterpret_cast<uint16_t *>(curPtr);
     curPtr += sizeof(uint16_t);
     for (auto i = 0; i < instanceFieldCount; i++) {
         auto entry = MetadataReader::ReadInstanceFieldEntry(&curPtr);
+        auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
-        fieldInfo->metadata->declaringType = curType;
-
-        napi_util::define_property(env, prototype, entry->getName().c_str(), nullptr,
+        fieldInfo->metadata.declaringType = curType;
+        napi_util::define_property(env, prototype, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                    fieldInfo);
     }
@@ -1061,7 +1063,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
         std::string getterMethodName;
         if (hasGetter >= 1) {
             auto entry = MetadataReader::ReadInstanceMethodEntry(&curPtr);
-            getterMethodName = entry->getName();
+            getterMethodName = entry.getName();
         }
 
         auto hasSetter = *reinterpret_cast<uint16_t *>(curPtr);
@@ -1070,7 +1072,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
         std::string setterMethodName;
         if (hasSetter >= 1) {
             auto entry = MetadataReader::ReadInstanceMethodEntry(&curPtr);
-            setterMethodName = entry->getName();
+            setterMethodName = entry.getName();
         }
 
         auto propertyInfo = new PropertyCallbackData(propertyName, getterMethodName,
@@ -1092,7 +1094,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     for (auto i = 0; i < staticMethodCout; i++) {
         auto entry = MetadataReader::ReadStaticMethodEntry(&curPtr);
         // In java there can be multiple methods of same name with different parameters.
-        auto &methodName = entry->getName();
+        auto &methodName = entry.getName();
         if (methodName != lastMethodName) {
             callbackData = new MethodCallbackData(this);
             napi_value method;
@@ -1101,7 +1103,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
             napi_set_named_property(env, constructor, methodName.c_str(), method);
             lastMethodName = methodName;
         }
-        callbackData->candidates.push_back(entry);
+        callbackData->candidates.push_back(std::move(entry));
     }
 
     napi_value extendMethod;
@@ -1114,8 +1116,9 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     curPtr += sizeof(uint16_t);
     for (auto i = 0; i < staticFieldCout; i++) {
         auto entry = MetadataReader::ReadStaticFieldEntry(&curPtr);
+        auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
-        napi_util::define_property(env, constructor, entry->getName().c_str(), nullptr,
+        napi_util::define_property(env, constructor, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                    fieldInfo);
     }
@@ -1183,16 +1186,16 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
 
         assert((chKind == 'M') || (chKind == 'F'));
 
-        auto entry = new MetadataEntry(nullptr, NodeType::Field);
+        MetadataEntry entry(nullptr, NodeType::Field);
 
-        entry->name = name;
-        entry->sig = signature;
-        entry->paramCount = paramCount;
-        entry->isStatic = false;
+        entry.name = name;
+        entry.sig = signature;
+        entry.paramCount = paramCount;
+        entry.isStatic = false;
 
         if (chKind == 'M') {
-            if (entry->name != lastMethodName) {
-                entry->type = NodeType::Method;
+            if (entry.name != lastMethodName) {
+                entry.type = NodeType::Method;
                 callbackData = new MethodCallbackData(this);
                 instanceMethodData.push_back(callbackData);
                 instanceMethodsCallbackData.push_back(callbackData);
@@ -1200,24 +1203,24 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
                 auto itFound = std::find_if(baseInstanceMethodsCallbackData.begin(),
                                             baseInstanceMethodsCallbackData.end(),
                                             [&entry](MethodCallbackData *x) {
-                                                return x->candidates.front()->name == entry->name;
+                                                return x->candidates.front().name == entry.name;
                                             });
                 if (itFound != baseInstanceMethodsCallbackData.end()) {
                     callbackData->parent = *itFound;
                 }
 
                 napi_value method;
-                napi_create_function(env, entry->name.c_str(), NAPI_AUTO_LENGTH, MethodCallback,
+                napi_create_function(env, entry.name.c_str(), NAPI_AUTO_LENGTH, MethodCallback,
                                      callbackData, &method);
-                napi_set_named_property(env, proto, entry->name.c_str(), method);
+                napi_set_named_property(env, proto, entry.name.c_str(), method);
 
-                lastMethodName = entry->name;
+                lastMethodName = entry.name;
             }
-            callbackData->candidates.push_back(entry);
+            callbackData->candidates.push_back(std::move(entry));
         } else if (chKind == 'F') {
-            entry->type = NodeType::Field;
+            entry.type = NodeType::Field;
             auto *fieldInfo = new FieldCallbackData(entry);
-            napi_util::define_property(env, proto, entry->getName().c_str(), nullptr,
+            napi_util::define_property(env, proto, entry.name.c_str(), nullptr,
                                        FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                        fieldInfo);
         }
@@ -1334,9 +1337,6 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
 
     napi_ref constructorRef = napi_util::make_ref(env, constructor);
 
-    // insert env-specific persistent function handle
-    node->m_ctorCachePerEnv.insert({env, constructorRef});
-
     if (baseConstructor != nullptr && !napi_util::is_undefined(env, baseConstructor)) {
         napi_util::set_prototype(env, constructor, baseConstructor);
     }
@@ -1361,9 +1361,10 @@ napi_value MetadataNode::SetInnerTypeCallback(napi_env env, napi_callback_info i
     NAPI_CALLBACK_BEGIN(0)
     auto curChild = reinterpret_cast<MetadataTreeNode *>(data);
     auto childNode = GetOrCreateInternal(curChild);
-    auto itFound = childNode->m_ctorCachePerEnv.find(env);
-    if (itFound != childNode->m_ctorCachePerEnv.end()) {
-        return napi_util::get_ref_value(env, itFound->second);
+    auto cache = GetMetadataNodeCache(env);
+    auto itFound = cache->CtorFuncCache.find(curChild);
+    if (itFound != cache->CtorFuncCache.end()) {
+        return napi_util::get_ref_value(env,itFound->second.constructorFunction);
     }
     napi_value constructor = childNode->GetConstructorFunction(env);
     return constructor;
@@ -1406,10 +1407,11 @@ napi_value MetadataNode::NullValueOfCallback(napi_env env, napi_callback_info in
 napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(0);
     auto fieldData = reinterpret_cast<FieldCallbackData *>(data);
+    auto &fieldMetadata = fieldData->metadata;
 
-    if (!fieldData->metadata->isStatic
+    if (!fieldMetadata.isStatic
         // check whether there's a declaring type to get the class from it
-        || (fieldData->metadata->getDeclaringType().empty())) {
+        || (fieldMetadata.getDeclaringType().empty())) {
 
         return nullptr;
     }
@@ -1420,15 +1422,15 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
 napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(1);
     auto fieldData = reinterpret_cast<FieldCallbackData *>(data);
+    auto &fieldMetadata = fieldData->metadata;
 
-    if (!fieldData->metadata->isStatic) {
-
+    if (!fieldMetadata.isStatic) {
         return nullptr;
     }
 
-    if (fieldData->metadata->getIsFinal()) {
+    if (fieldMetadata.getIsFinal()) {
         stringstream ss;
-        ss << "You are trying to set \"" << fieldData->metadata->getName()
+        ss << "You are trying to set \"" << fieldMetadata.getName()
            << "\" which is a final field! Final fields can only be read.";
         string exceptionMessage = ss.str();
 
@@ -1600,7 +1602,6 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 }
 
 
-
 napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(0)
 
@@ -1635,14 +1636,14 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
 napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN_VARGS()
 
-    MetadataEntry * entry = nullptr;
+    MetadataEntry *entry = nullptr;
 
     auto callbackData = reinterpret_cast<MethodCallbackData *>(data);
     auto initialCallbackData = reinterpret_cast<MethodCallbackData *>(data);
 
     string *className;
-    auto first = callbackData->candidates.front();
-    auto methodName = first->getName();
+    auto &first = callbackData->candidates.front();
+    auto &methodName = first.getName();
 
     while ((callbackData != nullptr) && (entry == nullptr)) {
         auto &candidates = callbackData->candidates;
@@ -1652,13 +1653,13 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
         // Iterates through all methods and finds the best match based on the number of arguments
         auto found = false;
         for (auto &c: candidates) {
-            found = (!c->isExtensionFunction && c->getParamCount() == argc) ||
-                    (c->isExtensionFunction && c->getParamCount() == argc + 1);
+            found = (!c.isExtensionFunction && c.getParamCount() == argc) ||
+                    (c.isExtensionFunction && c.getParamCount() == argc + 1);
             if (found) {
-                if (c->isExtensionFunction) {
-                    className = &c->getDeclaringType();
+                if (c.isExtensionFunction) {
+                    className = &c.getDeclaringType();
                 }
-                entry = c;
+                entry = &c;
                 DEBUG_WRITE("MetaDataEntry Method %s's signature is: %s", entry->getName().c_str(),
                             entry->getSig().c_str());
                 break;
@@ -1673,7 +1674,7 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
 
     auto isSuper = false;
 
-    if (!first->isStatic) {
+    if (!first.isStatic) {
         napi_value superValue;
         napi_get_named_property(env, jsThis, PRIVATE_CALLSUPER, &superValue);
         isSuper = napi_util::get_bool(env, superValue);
@@ -1684,7 +1685,7 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
     } else {
         bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();
         return CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
-                                                isFromInterface, first->isStatic, isSuper, info);
+                                                isFromInterface, first.isStatic, isSuper, info);
     }
 
     return nullptr;
@@ -1737,14 +1738,14 @@ void MetadataNode::SetMissingBaseMethods(
 
         for (auto i = 0; i < instanceMethodCount; i++) {
             auto entry = MetadataReader::ReadInstanceMethodEntry(&curPtr);
-
-            auto isConstructor = entry->getName() == "<init>";
+            auto &methodName = entry.getName();
+            auto isConstructor = methodName == "<init>";
             if (isConstructor) {
                 continue;
             }
 
             for (auto data: instanceMethodData) {
-                if (data->candidates.front()->getName() == entry->getName()) {
+                if (data->candidates.front().name == methodName) {
                     callbackData = data;
                     break;
                 }
@@ -1754,21 +1755,21 @@ void MetadataNode::SetMissingBaseMethods(
                 callbackData = new MethodCallbackData(this);
                 napi_value proto = napi_util::get_proto(env, constructor);
                 napi_value method;
-                napi_create_function(env, entry->getName().c_str(), NAPI_AUTO_LENGTH, MethodCallback,
+                napi_create_function(env, methodName.c_str(), NAPI_AUTO_LENGTH, MethodCallback,
                                      callbackData, &method);
-                napi_set_named_property(env, proto, entry->getName().c_str(), method);
+                napi_set_named_property(env, proto, methodName.c_str(), method);
             }
 
             bool foundSameSig = false;
-            for (auto m: callbackData->candidates) {
-                foundSameSig = m->getSig() == entry->getSig();
+            for (auto &m: callbackData->candidates) {
+                foundSameSig = m.getSig() == entry.getSig();
                 if (foundSameSig) {
                     break;
                 }
             }
 
             if (!foundSameSig) {
-                callbackData->candidates.push_back(entry);
+                callbackData->candidates.push_back(std::move(entry));
             }
         }
     }
@@ -1790,15 +1791,6 @@ void MetadataNode::onDisposeEnv(napi_env env) {
         auto it = s_arrayObjects.find(env);
         if (it != s_arrayObjects.end()) {
             s_arrayObjects.erase(it);
-        }
-    }
-    {
-        for (auto &it: s_treeNode2NodeCache) {
-            auto it2 = it.second->m_ctorCachePerEnv.find(env);
-            if (it2 != it.second->m_ctorCachePerEnv.end()) {
-                napi_reference_ref(env, it2->second, nullptr);
-                it.second->m_ctorCachePerEnv.erase(it2);
-            }
         }
     }
 }

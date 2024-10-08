@@ -79,11 +79,8 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
     auto retType = MethodReturnType::Unknown;
     MethodCache::CacheMethodInfo mi;
 
-    auto &entrySignature = entry->getSig();
-
-
-
     if ((entry != nullptr) && entry->getIsResolved()) {
+        auto &entrySignature = entry->getSig();
         isStatic = entry->isStatic;
 
         if (entry->memberId == nullptr) {
@@ -242,6 +239,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
             } else {
                 jEnv.CallVoidMethodA(callerJavaObject, mid, javaArgs);
             }
+            returnValue = nullptr;
             break;
         }
         case MethodReturnType::Boolean: {
@@ -1096,6 +1094,8 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
         val->second.markScheduled();
         PostCallback(env, info, &val->second);
     }
+
+    return nullptr;
 }
 
 napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_info info) {
@@ -1135,6 +1135,7 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
             }
         }
     }
+    return nullptr;
 }
 
 void CallbackHandlers::InitChoreographer() {

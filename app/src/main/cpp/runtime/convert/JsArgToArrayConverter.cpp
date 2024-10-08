@@ -319,7 +319,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
                     jclass nullClazz = jenv.FindClass(nullObjName);
                     jmethodID ctor = jenv.GetMethodID(nullClazz, "<init>", nullObjCtorSig);
-                    jclass clazzToNull = jenv.FindClass(type.c_str());
+                    jclass clazzToNull = jenv.FindClass(type);
                     jobject nullObjType = jenv.NewObject(nullClazz, ctor, clazzToNull);
 
                     if (nullObjType != nullptr) {
