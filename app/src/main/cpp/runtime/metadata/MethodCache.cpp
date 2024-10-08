@@ -158,39 +158,29 @@ string MethodCache::GetType(napi_env env, napi_value value)
         }
     }
 
-    
 
-    // Helper function to check if a value is of a specific type
-    static auto is_type = [&](const std::function<napi_status(napi_env, napi_value, bool *)>& check_func) -> bool
-    {
-        bool result;
-        check_func(env, value, &result);
-        return result;
-    };
-
-    // Map of type checks to type strings
-    static std::unordered_map<std::string, std::function<bool()>> type_map = {
-        {"array", [&]() { return is_type(napi_is_array); }},
-        {"typedarray", [&]() { return is_type(napi_is_typedarray); }},
-        {"bool", [&]() { return napi_util::is_of_type(env, value, napi_boolean); }},
-        {"view", [&]() { return is_type(napi_is_dataview); }},
-        {"date", [&]() { return is_type(napi_is_date); }},
-        {"function", [&]() { return napi_util::is_of_type(env, value, napi_function); }},
-        {"null", [&]() { return napi_util::is_of_type(env, value, napi_null); }},
-        {"undefined", [&]() { return napi_util::is_of_type(env, value, napi_undefined); }},
-        {"string", [&]() { return napi_util::is_of_type(env, value, napi_string); }},
-        {"number", [&]() { return napi_util::is_of_type(env, value, napi_number); }},
-        {"object", [&]() { return napi_util::is_of_type(env, value, napi_object); }}
-    };
-
-    // Iterate through the map to determine the type
-    for (const auto &entry : type_map)
-    {
-        if (entry.second())
-        {
-            type = entry.first;
-            break;
-        }
+    if (napi_util::is_of_type(env, value, napi_string)) {
+        type = "string";
+    } else if (napi_util::is_of_type(env, value, napi_null)) {
+        type = "null";
+    } else if (napi_util::is_of_type(env, value, napi_undefined)) {
+        type = "undefined";
+    } else if (napi_util::is_of_type(env, value, napi_number)) {
+        type = "number";
+    } else if (napi_util::is_of_type(env, value, napi_object)) {
+        type = "object";
+    } else if (napi_util::is_array(env, value)) {
+        type = "array";
+    } else if (napi_util::is_of_type(env, value, napi_function)) {
+        type = "function";
+    } else if (napi_util::is_typedarray(env, value)) {
+        type = "typedarray";
+    } else if (napi_util::is_of_type(env, value, napi_boolean)) {
+        type = "bool";
+    } else if (napi_util::is_dataview(env, value)) {
+        type = "view";
+    } else if (napi_util::is_date(env, value)) {
+        type = "date";
     }
 
     // Handle special cases for typed arrays

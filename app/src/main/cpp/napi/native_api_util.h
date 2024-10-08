@@ -183,6 +183,37 @@ namespace napi_util {
         return type == expected_type;
     }
 
+    inline bool is_array(napi_env env, napi_value value) {
+        bool result;
+        napi_is_array(env, value, &result);
+        return result;
+    }
+
+    inline bool is_arraybuffer(napi_env env, napi_value value) {
+        bool result;
+        napi_is_arraybuffer(env, value, &result);
+        return result;
+    }
+
+    inline bool is_dataview(napi_env env, napi_value value) {
+        bool result;
+        napi_is_dataview(env, value, &result);
+        return result;
+    }
+
+    inline bool is_typedarray(napi_env env, napi_value value) {
+        bool result;
+        napi_is_typedarray(env, value, &result);
+        return result;
+    }
+
+    inline bool is_date(napi_env env, napi_value value) {
+        bool result;
+        napi_is_date(env, value, &result);
+        return result;
+    }
+
+
     inline bool is_undefined(napi_env env, napi_value value) {
         if (value == nullptr) return true;
         napi_valuetype type;

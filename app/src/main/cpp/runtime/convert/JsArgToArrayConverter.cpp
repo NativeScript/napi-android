@@ -57,7 +57,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
     bool success = false;
     stringstream s;
 
-    JEnv jenv;
+    JEnv jEnv;
 
     Type returnType = JType::getClassType(m_return_type);
 
@@ -65,7 +65,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
     napi_typeof(env, arg, &argType);
 
     if (argType == napi_undefined || argType == napi_null) {
-        SetConvertedObject(jenv, index, nullptr);
+        SetConvertedObject(jEnv, index, nullptr);
         success = true;
     } else if (argType == napi_number) {
         double d;
@@ -79,35 +79,35 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
             if ((INT_MIN <= i) && (i <= INT_MAX) &&
                 (returnType == Type::Int || returnType == Type::Null)) {
-                obj = JType::NewInt(jenv, (jint) d);
+                obj = JType::NewInt(jEnv, (jint) i);
             } else {
-                obj = JType::NewLong(jenv, (jlong) d);
+                obj = JType::NewLong(jEnv, (jlong) d);
             }
 
-            SetConvertedObject(jenv, index, obj);
+            SetConvertedObject(jEnv, index, obj);
             success = true;
         } else {
             jobject obj;
 
             if ((FLT_MIN <= d) && (d <= FLT_MAX) &&
                 (returnType == Type::Float || returnType == Type::Null)) {
-                obj = JType::NewFloat(jenv, (jfloat) d);
+                obj = JType::NewFloat(jEnv, (jfloat) d);
             } else {
-                obj = JType::NewDouble(jenv, (jdouble) d);
+                obj = JType::NewDouble(jEnv, (jdouble) d);
             }
 
-            SetConvertedObject(jenv, index, obj);
+            SetConvertedObject(jEnv, index, obj);
             success = true;
         }
     } else if (argType == napi_boolean) {
         bool value;
         napi_get_value_bool(env, arg, &value);
-        auto javaObject = JType::NewBoolean(jenv, value);
-        SetConvertedObject(jenv, index, javaObject);
+        auto javaObject = JType::NewBoolean(jEnv, value);
+        SetConvertedObject(jEnv, index, javaObject);
         success = true;
     } else if (argType == napi_string) {
         auto stringObject = ArgConverter::ConvertToJavaString(env, arg);
-        SetConvertedObject(jenv, index, stringObject);
+        SetConvertedObject(jEnv, index, stringObject);
         success = true;
     } else if (argType == napi_object) {
         napi_value jsObj = arg;
@@ -135,8 +135,8 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     string str = ArgConverter::ConvertToString(env, castValue);
                     charValue = (jchar) str[0];
                 }
-                javaObject = JType::NewChar(jenv, charValue);
-                SetConvertedObject(jenv, index, javaObject);
+                javaObject = JType::NewChar(jEnv, charValue);
+                SetConvertedObject(jEnv, index, javaObject);
                 success = true;
                 break;
 
@@ -148,8 +148,8 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     int byteArg = atoi(value.c_str());
                     byteValue = (jbyte) byteArg;
                 }
-                javaObject = JType::NewByte(jenv, byteValue);
-                SetConvertedObject(jenv, index, javaObject);
+                javaObject = JType::NewByte(jEnv, byteValue);
+                SetConvertedObject(jEnv, index, javaObject);
                 success = true;
                 break;
 
@@ -161,8 +161,8 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     int shortArg = atoi(value.c_str());
                     shortValue = (jshort) shortArg;
                 }
-                javaObject = JType::NewShort(jenv, shortValue);
-                SetConvertedObject(jenv, index, javaObject);
+                javaObject = JType::NewShort(jEnv, shortValue);
+                SetConvertedObject(jEnv, index, javaObject);
                 success = true;
                 break;
 
@@ -173,8 +173,8 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     auto strValue = ArgConverter::ConvertToString(env, castValue);
                     longValue = atoll(strValue.c_str());
                 }
-                javaObject = JType::NewLong(jenv, longValue);
-                SetConvertedObject(jenv, index, javaObject);
+                javaObject = JType::NewLong(jEnv, longValue);
+                SetConvertedObject(jEnv, index, javaObject);
                 success = true;
                 break;
 
@@ -186,8 +186,8 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     napi_get_value_double(env, castValue, &floatArg);
                     floatValue = (jfloat) floatArg;
                 }
-                javaObject = JType::NewFloat(jenv, floatValue);
-                SetConvertedObject(jenv, index, javaObject);
+                javaObject = JType::NewFloat(jEnv, floatValue);
+                SetConvertedObject(jEnv, index, javaObject);
                 success = true;
                 break;
 
@@ -199,8 +199,8 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     napi_get_value_double(env, castValue, &doubleArg);
                     doubleValue = (jdouble) doubleArg;
                 }
-                javaObject = JType::NewDouble(jenv, doubleValue);
-                SetConvertedObject(jenv, index, javaObject);
+                javaObject = JType::NewDouble(jEnv, doubleValue);
+                SetConvertedObject(jEnv, index, javaObject);
                 success = true;
                 break;
 
@@ -248,54 +248,54 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                         }
                     }
 
-                    auto directBuffer = jenv.NewDirectByteBuffer(data + offset, length);
+                    auto directBuffer = jEnv.NewDirectByteBuffer(data + offset, length);
 
-                    auto directBufferClazz = jenv.GetObjectClass(directBuffer);
+                    auto directBufferClazz = jEnv.GetObjectClass(directBuffer);
 
-                    auto byteOrderId = jenv.GetMethodID(directBufferClazz, "order",
+                    auto byteOrderId = jEnv.GetMethodID(directBufferClazz, "order",
                                                         "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
 
-                    auto byteOrderClazz = jenv.FindClass("java/nio/ByteOrder");
+                    auto byteOrderClazz = jEnv.FindClass("java/nio/ByteOrder");
 
-                    auto byteOrderEnumId = jenv.GetStaticMethodID(byteOrderClazz, "nativeOrder",
+                    auto byteOrderEnumId = jEnv.GetStaticMethodID(byteOrderClazz, "nativeOrder",
                                                                   "()Ljava/nio/ByteOrder;");
 
-                    auto nativeByteOrder = jenv.CallStaticObjectMethodA(byteOrderClazz,
+                    auto nativeByteOrder = jEnv.CallStaticObjectMethodA(byteOrderClazz,
                                                                         byteOrderEnumId, nullptr);
 
-                    directBuffer = jenv.CallObjectMethod(directBuffer, byteOrderId,
+                    directBuffer = jEnv.CallObjectMethod(directBuffer, byteOrderId,
                                                          nativeByteOrder);
 
                     jobject buffer;
 
                     if (bufferCastType == BufferCastType::Short) {
-                        auto id = jenv.GetMethodID(directBufferClazz, "asShortBuffer",
+                        auto id = jEnv.GetMethodID(directBufferClazz, "asShortBuffer",
                                                    "()Ljava/nio/ShortBuffer;");
-                        buffer = jenv.CallObjectMethodA(directBuffer, id, nullptr);
+                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
                     } else if (bufferCastType == BufferCastType::Int) {
-                        auto id = jenv.GetMethodID(directBufferClazz, "asIntBuffer",
+                        auto id = jEnv.GetMethodID(directBufferClazz, "asIntBuffer",
                                                    "()Ljava/nio/IntBuffer;");
-                        buffer = jenv.CallObjectMethodA(directBuffer, id, nullptr);
+                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
                     } else if (bufferCastType == BufferCastType::Long) {
-                        auto id = jenv.GetMethodID(directBufferClazz, "asLongBuffer",
+                        auto id = jEnv.GetMethodID(directBufferClazz, "asLongBuffer",
                                                    "()Ljava/nio/LongBuffer;");
-                        buffer = jenv.CallObjectMethodA(directBuffer, id, nullptr);
+                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
                     } else if (bufferCastType == BufferCastType::Float) {
-                        auto id = jenv.GetMethodID(directBufferClazz, "asFloatBuffer",
+                        auto id = jEnv.GetMethodID(directBufferClazz, "asFloatBuffer",
                                                    "()Ljava/nio/FloatBuffer;");
-                        buffer = jenv.CallObjectMethodA(directBuffer, id, nullptr);
+                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
                     } else if (bufferCastType == BufferCastType::Double) {
-                        auto id = jenv.GetMethodID(directBufferClazz, "asDoubleBuffer",
+                        auto id = jEnv.GetMethodID(directBufferClazz, "asDoubleBuffer",
                                                    "()Ljava/nio/DoubleBuffer;");
-                        buffer = jenv.CallObjectMethodA(directBuffer, id, nullptr);
+                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
                     } else {
                         buffer = directBuffer;
                     }
 
-                    buffer = jenv.NewGlobalRef(buffer);
+                    buffer = jEnv.NewGlobalRef(buffer);
 
                     int id = objectManager->GetOrCreateObjectId(buffer);
-                    auto clazz = jenv.GetObjectClass(buffer);
+                    auto clazz = jEnv.GetObjectClass(buffer);
                     objectManager->Link(jsObj, id, clazz);
 
                     obj = objectManager->GetJavaObjectByJsObject(env, jsObj);
@@ -317,15 +317,15 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     auto nullObjName = "org/nativescript/runtime/napi/NullObject";
                     auto nullObjCtorSig = "(Ljava/lang/Class;)V";
 
-                    jclass nullClazz = jenv.FindClass(nullObjName);
-                    jmethodID ctor = jenv.GetMethodID(nullClazz, "<init>", nullObjCtorSig);
-                    jclass clazzToNull = jenv.FindClass(type);
-                    jobject nullObjType = jenv.NewObject(nullClazz, ctor, clazzToNull);
+                    jclass nullClazz = jEnv.FindClass(nullObjName);
+                    jmethodID ctor = jEnv.GetMethodID(nullClazz, "<init>", nullObjCtorSig);
+                    jclass clazzToNull = jEnv.FindClass(type);
+                    jobject nullObjType = jEnv.NewObject(nullClazz, ctor, clazzToNull);
 
                     if (nullObjType != nullptr) {
-                        SetConvertedObject(jenv, index, nullObjType, false);
+                        SetConvertedObject(jEnv, index, nullObjType, false);
                     } else {
-                        SetConvertedObject(jenv, index, nullptr);
+                        SetConvertedObject(jEnv, index, nullptr);
                     }
 
                     success = true;
@@ -334,7 +334,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
                 success = !obj.IsNull();
                 if (success) {
-                    SetConvertedObject(jenv, index, obj.Move(), obj.IsGlobal());
+                    SetConvertedObject(jEnv, index, obj.Move(), obj.IsGlobal());
                 } else {
                     size_t str_len;
                     napi_get_value_string_utf8(env, jsObj, nullptr, 0, &str_len);
