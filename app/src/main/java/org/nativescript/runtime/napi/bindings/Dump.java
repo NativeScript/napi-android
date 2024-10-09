@@ -16,8 +16,8 @@ public class Dump {
 
     private static final String callJsMethodSignatureCtor = "Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Z[Ljava/lang/Object;";
     private static final String callJsMethodSignatureMethod = "Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Class;[Ljava/lang/Object;";
-    private static final String LCOM_TNS = "Lcom/tns/gen/";
-    private static final String LCOM_TNS_RUNTIME = "Lcom/tns/Runtime;";
+    private static final String LCOM_TNS = "Lorg/nativescript/runtime/napi/gen/";
+    private static final String LCOM_TNS_RUNTIME = "Lorg/nativescript/runtime/napi/Runtime;";
     static final String objectClass = "Ljava/lang/Object;";
 
     static final String runtimeClass = LCOM_TNS_RUNTIME;
@@ -567,7 +567,7 @@ public class Dump {
         String name = "L" + superClassname.replace('.', '/') + ";";
 
         mv.visitMethodInsn(Opcodes.INSN_INVOKE_SUPER, name, "onCreate", "V", new int[] { thisRegister });
-        mv.visitMethodInsn(Opcodes.INSN_INVOKE_STATIC, "Lcom/tns/RuntimeHelper;", "initRuntime", "Lcom/tns/Runtime;Landroid/app/Application;", new int[] { thisRegister });
+        mv.visitMethodInsn(Opcodes.INSN_INVOKE_STATIC, "Lorg/nativescript/runtime/napi/RuntimeHelper;", "initRuntime", "Lorg/nativescript/runtime/napi/Runtime;Landroid/app/Application;", new int[] { thisRegister });
         mv.visitIntInsn(org.ow2.asmdex.Opcodes.INSN_MOVE_RESULT_OBJECT, 0);
         Label label = new Label();
         mv.visitJumpInsn(Opcodes.INSN_IF_EQZ, label, 0, 0);
@@ -806,8 +806,8 @@ public class Dump {
         fv.visitEnd();
     }
 
-    static final String[] classImplentedInterfaces = new String[] { "Lcom/tns/NativeScriptHashCodeProvider;" };
-    static final String[] interfaceImplementedInterfaces = new String[] { "Lcom/tns/NativeScriptHashCodeProvider;", "" };
+    static final String[] classImplentedInterfaces = new String[] { "Lorg/nativescript/runtime/napi/NativeScriptHashCodeProvider;" };
+    static final String[] interfaceImplementedInterfaces = new String[] { "Lorg/nativescript/runtime/napi/NativeScriptHashCodeProvider;", "" };
 
     private ClassVisitor generateClass(ApplicationWriter aw, ClassDescriptor classTo, String classSignature, String tnsClassSignature, HashSet<ClassDescriptor> implementedInterfaces, AnnotationDescriptor[] annotations) {
         ClassVisitor cv;
@@ -817,7 +817,7 @@ public class Dump {
         ArrayList<String> interfacesToImplement = new ArrayList(Arrays.asList(classImplentedInterfaces));
 
         if (classTo.isInterface()) {
-            interfaceImplementedInterfaces[1] = classSignature; //new String[] { "Lcom/tns/NativeScriptHashCodeProvider;", classSignature };
+            interfaceImplementedInterfaces[1] = classSignature; //new String[] { "Lorg/nativescript/runtime/napi/NativeScriptHashCodeProvider;", classSignature };
             for (String interfaceToImpl : interfaceImplementedInterfaces) {
                 if (!interfacesToImplement.contains(interfaceToImpl)) {
                     interfacesToImplement.add(interfaceToImpl);

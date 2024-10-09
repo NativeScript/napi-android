@@ -1,6 +1,7 @@
 #include <string>
 #include <sstream>
 #include <cctype>
+#include <regex>
 #include <dirent.h>
 #include <set>
 #include <cerrno>
@@ -475,24 +476,84 @@ bool MetadataNode::IsValidExtendName(napi_env env, napi_value name) {
     return true;
 }
 
-bool MetadataNode::GetExtendLocation(napi_env env, std::string &extendLocation,
-                                     bool isTypeScriptExtend) {
+bool MetadataNode::GetExtendLocation(napi_env env, string& extendLocation, bool isTypeScriptExtend) {
     stringstream extendLocationStream;
 
-    napi_value error;
-    napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, "Error"), &error);
+    // Create an error object and get its stack trace
+    napi_value error,msg, stack;
+    napi_create_string_utf8(env, "", 0, &msg);
+    napi_create_error(env, nullptr, msg, &error);
+    napi_get_named_property(env, error, "stack", &stack);
 
-    napi_value error_stack;
-    napi_get_named_property(env, error, "stack", &error_stack);
+    string stackTrace = ArgConverter::ConvertToString(env, stack);
+    vector<string> stackLines;
+    Util::SplitString(stackTrace, "\n", stackLines);
 
-    std::string stackTrace = ArgConverter::ConvertToString(env, error_stack);
+    string frame;
+    if (stackLines.size() == 2) {
+        frame = stackLines[0];
+    } else if (isTypeScriptExtend) {
+        frame = stackLines[3]; // the _super.apply call to ts_helpers will always be the third call frame
+    } else {
+        frame = stackLines[2];
+    }
 
-    extendLocationStream << "unknown_location";
-    extendLocation = extendLocationStream.str();
-    return true;
+    regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
+    smatch match;
+    if (!regex_search(frame, match, frameRegex)) {
+        extendLocationStream << "unknown_location";
+        extendLocation = extendLocationStream.str();
+        return true;
+    }
+
+    string srcFileName = match[1].str();
+    int lineNumber = stoi(match[2].str());
+    int column = stoi(match[3].str());
+
+    srcFileName = Util::ReplaceAll(srcFileName, "file://", "");
+
+    string fullPathToFile;
+    if (srcFileName == "<embedded>") {
+        fullPathToFile = "script";
+    } else {
+//        string hardcodedPathToSkip = Constants::APP_ROOT_FOLDER_PATH;
+//        int startIndex = hardcodedPathToSkip.length();
+//        int strToTakeLen = srcFileName.length() - startIndex - 3;
+//        fullPathToFile = srcFileName .substr(startIndex, strToTakeLen);
+        fullPathToFile = srcFileName;
+
+        replace(fullPathToFile.begin(), fullPathToFile.end(), '/', '_');
+        replace(fullPathToFile.begin(), fullPathToFile.end(), '.', '_');
+        replace(fullPathToFile.begin(), fullPathToFile.end(), '-', '_');
+        replace(fullPathToFile.begin(), fullPathToFile.end(), ' ', '_');
+
+        vector<string> pathParts;
+        Util::SplitString(fullPathToFile, "_", pathParts);
+        fullPathToFile = pathParts.back();
+    }
+
+    if (lineNumber < 0) {
+        extendLocationStream << fullPathToFile << " unknown line number";
+        extendLocation = extendLocationStream.str();
+        return false;
+    }
+
+    if (column < 0) {
+        extendLocationStream << fullPathToFile << " line:" << lineNumber << " unknown column number";
+        extendLocation = extendLocationStream.str();
+        return false;
+    }
+
+//    if (lineNumber == 1) {
+//        column -= ModuleInternal::MODULE_PROLOGUE_LENGTH;
+//    }
+
+    extendLocationStream << fullPathToFile << "_" << lineNumber << "_" << column << "_";
     extendLocation = extendLocationStream.str();
     return true;
 }
+
+
 
 bool MetadataNode::ValidateExtendArguments(napi_env env, size_t argc, napi_value *argv,
                                            bool extendLocationFound, string &extendLocation,
@@ -1477,6 +1538,7 @@ napi_value MetadataNode::PropertyAccessorSetterCallback(napi_env env, napi_callb
 
 napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN_VARGS()
+    static int extended_count = 0;
 
     napi_value extendName;
     napi_value implementationObject;
@@ -1513,22 +1575,29 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
     }
 
 
+
+    auto node = reinterpret_cast<MetadataNode *>(data);
+
+
     if (hasDot) {
         extendName = argv[0];
         implementationObject = argv[1];
     } else {
-        auto isValidExtendLocation = GetExtendLocation(env, extendLocation, isTypeScriptExtend);
-        auto validArgs = ValidateExtendArguments(env, argc, argv.data(), isValidExtendLocation,
+        ++extended_count;
+
+        bool validExtend = GetExtendLocation(env, extendLocation, isTypeScriptExtend);
+
+        napi_create_string_utf8(env, "",0, &extendName);
+
+        auto validArgs = ValidateExtendArguments(env, argc, argv.data(), validExtend,
                                                  extendLocation,
                                                  &extendName, &implementationObject,
                                                  isTypeScriptExtend);
-
         if (!validArgs) {
             return nullptr;
         }
     }
 
-    auto node = reinterpret_cast<MetadataNode *>(data);
 
     string extendNameAndLocation = extendLocation + ArgConverter::ConvertToString(env, extendName);
     string fullClassName;
@@ -1554,7 +1623,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
     napi_get_named_property(env, implementationObject, CLASS_IMPLEMENTATION_OBJECT,
                             &implementationObjectName);
 
-    if (implementationObjectName == nullptr) {
+    if (napi_util::is_null_or_undefined(env, implementationObjectName)) {
         napi_set_named_property(env, implementationObject, CLASS_IMPLEMENTATION_OBJECT,
                                 ArgConverter::convertToJsString(env, fullExtendedName));
     } else {
@@ -1796,7 +1865,7 @@ void MetadataNode::onDisposeEnv(napi_env env) {
 }
 
 
-string MetadataNode::TNS_PREFIX = "com/tns/gen/";
+string MetadataNode::TNS_PREFIX = "org/nativescript/runtime/napi/gen/";
 MetadataReader MetadataNode::s_metadataReader;
 robin_hood::unordered_map<std::string, MetadataNode *> MetadataNode::s_name2NodeCache;
 robin_hood::unordered_map<std::string, MetadataTreeNode *> MetadataNode::s_name2TreeNodeCache;

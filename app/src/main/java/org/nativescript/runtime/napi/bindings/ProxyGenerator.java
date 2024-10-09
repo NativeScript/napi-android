@@ -37,7 +37,7 @@ public class ProxyGenerator {
         String proxyFileName;
 
         if (proxyName.contains(".")) {
-            proxyFileName = proxyName;
+            proxyFileName = proxyName += "-" + proxyThumb;
         } else {
             proxyFileName = classToProxy.getName().replace('$', '_');
             if (!isInterface) {

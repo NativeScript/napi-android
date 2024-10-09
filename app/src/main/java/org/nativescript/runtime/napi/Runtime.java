@@ -1,9 +1,13 @@
 package org.nativescript.runtime.napi;
 
+import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 
 import androidx.annotation.Keep;
+import androidx.core.content.pm.PackageInfoCompat;
 
 import org.nativescript.runtime.napi.system.classes.caching.impl.ClassCacheImpl;
 import org.nativescript.runtime.napi.system.classes.loading.ClassStorageService;
@@ -89,6 +93,7 @@ public class Runtime {
     private final GcListener gcListener;
 
     private final int runtimeId;
+    private Context context;
 
     private static AtomicInteger nextRuntimeId = new AtomicInteger(0);
     private final static ThreadLocal<Runtime> currentRuntime = new ThreadLocal<Runtime>();
@@ -110,7 +115,16 @@ public class Runtime {
         this.weakJavaObjectToID = weakJavaObjectToId;
     }
 
-    public Runtime() {
+    public String getDexThumb(Context context) throws PackageManager.NameNotFoundException {
+        PackageInfo packageInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+        long code = PackageInfoCompat.getLongVersionCode(packageInfo);
+        long updateTime = packageInfo.lastUpdateTime;
+        return updateTime + "-" + code;
+    }
+
+    public Runtime(Context context, Logger logger) {
+        this.context = context;
+        this.logger = logger;
         synchronized (Runtime.currentRuntime) {
             try {
                 Runtime existingRuntime = currentRuntime.get();
@@ -123,6 +137,15 @@ public class Runtime {
                 classResolver = new ClassResolver(classStorageService);
                 currentRuntime.set(this);
                 this.threadScheduler = new WorkThreadScheduler(new Handler(Looper.myLooper()));
+                String thumb = null;
+                try {
+                    thumb = getDexThumb(context);
+                } catch (Exception e) {
+
+                }
+
+                File dexDir = new File(new File(context.getApplicationInfo().dataDir), "code_cache/secondary-dexes");
+                this.dexFactory = new DexFactory(this.logger, context.getClassLoader(), dexDir, thumb, classStorageService);
 
                 runtimeCache.put(this.runtimeId, this);
                 gcListener = null;

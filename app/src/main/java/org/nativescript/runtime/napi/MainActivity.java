@@ -40,14 +40,12 @@ public class MainActivity extends AppCompatActivity {
             String outputDir = ctx.getFilesDir().getPath() + File.separator;
             aE.extractAssets(ctx, "metadata", outputDir, extractPolicy, false);
             aE.extractAssets(ctx, "app", outputDir, extractPolicy, true);
-
         } catch (Exception e) {
 
         }
 
         if (appDir != null) {
-            m_runtime = new Runtime();
-            m_runtime.logger = new LogcatLogger(this.getApplicationContext());
+            m_runtime = new Runtime(this.getApplication(), new LogcatLogger(this.getApplicationContext()));
             m_runtime.startRuntimeBridge(appDir);
         }
 

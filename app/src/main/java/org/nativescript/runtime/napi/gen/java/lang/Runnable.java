@@ -1,4 +1,4 @@
-package com.tns.gen.java.lang;
+package org.nativescript.runtime.napi.gen.java.lang;
 
 public class Runnable extends java.lang.Object
     implements org.nativescript.runtime.napi.NativeScriptHashCodeProvider, java.lang.Runnable {

@@ -54281,6 +54281,10 @@ JSValue JS_GetPropertyInt64_2(JSContext *ctx, JSValueConst obj, int64_t idx) {
     return JS_GetPropertyInt64(ctx, obj, idx);
 }
 
+void JS_SetStacktrace(JSContext *ctx, JSValueConst obj) {
+    build_backtrace(ctx, obj, NULL, 0, 0, 0);
+}
+
 
 #undef malloc
 #undef free

@@ -205,7 +205,7 @@ public class DexFactory {
         String classToProxy = className;
 
         if (className.startsWith(COM_TNS_GEN_PREFIX)) {
-            classToProxy = className.substring(12);
+            classToProxy = className.substring(COM_TNS_GEN_PREFIX.length());
         }
 
         if (classToProxy.startsWith(COM_TNS_GEN_PREFIX)) {

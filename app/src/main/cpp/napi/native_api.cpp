@@ -1110,8 +1110,8 @@ napi_status napi_create_error(napi_env env, napi_value code, napi_value msg, nap
     CHECK_ARG(result)
 
     JSValue error = JS_NewError(env->context);
-
     JSValue msgValue = *((JSValue *) msg);
+
     JS_DefinePropertyValueStr(env->context, error, "message", JS_DupValue(env->context, msgValue),
                               JS_PROP_C_W_E);
 
@@ -1120,6 +1120,8 @@ napi_status napi_create_error(napi_env env, napi_value code, napi_value msg, nap
         JS_DefinePropertyValueStr(env->context, error, "code", JS_DupValue(env->context, codeValue),
                                   JS_PROP_C_W_E);
     }
+
+    JS_SetStacktrace(env->context, error);
 
     return CreateScopedResult(env, error, result);
 }
@@ -4218,7 +4220,7 @@ napi_status napi_run_script(napi_env env,
     // 1. Get the script as char *
     const char *cScript = JS_ToCString(env->context, *((JSValue *) script));
     // 2. Evaulate it
-    eval_result = JS_Eval(env->context, cScript, strlen(cScript), "<input>", JS_EVAL_TYPE_GLOBAL);
+    eval_result = JS_Eval(env->context, cScript, strlen(cScript), "input", JS_EVAL_TYPE_GLOBAL);
 
     napi_run_microtasks(env);
 
