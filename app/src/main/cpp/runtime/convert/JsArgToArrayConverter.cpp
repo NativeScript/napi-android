@@ -304,8 +304,11 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 napi_value privateValue;
                 napi_get_named_property(env, jsObj, "nullNode", &privateValue);
 
-                if (privateValue != nullptr) {
-                    auto node = reinterpret_cast<MetadataNode *>(privateValue);
+                if (!napi_util::is_null_or_undefined(env, privateValue)) {
+                    void* data;
+                    napi_get_value_external(env, privateValue, &data);
+
+                    auto node = reinterpret_cast<MetadataNode *>(data);
 
                     if (node == nullptr) {
                         s << "Cannot get type of the null argument at index " << index;

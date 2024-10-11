@@ -18,6 +18,8 @@ void ArgConverter::Init(napi_env env) {
     napi_value valueOfFunc;
     napi_value toStringFunc;
 
+
+
     napi_create_function(env, "NativeScriptLongFunctionCallback", NAPI_AUTO_LENGTH,
                          ArgConverter::NativeScriptLongFunctionCallback, nullptr,
                          &longNumberCtorFunc);

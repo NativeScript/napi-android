@@ -250,9 +250,23 @@ void Runtime::DestroyRuntime()
     env_to_runtime_cache.erase(env);
     napi_close_handle_scope(env, this->global_scope);
     NAPIFreeEnv(env);
+}
 
+bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
+    m_objectManager->OnGarbageCollected(jEnv, object_ids);
+    this->TryCallGC();
+    return true;
+}
 
-
+bool Runtime::TryCallGC() {
+// TODO
+//    napi_value global;
+//    napi_get_global(env, &global);
+//    napi_value gc;
+//    napi_get_named_property(env, global, "gc", &gc);
+//    napi_value result;
+//    napi_call_function(env, global, gc, 0, nullptr, &result);
+    return true;
 }
 
 jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile)
@@ -357,15 +371,14 @@ void Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObj
 
     jsInstance = MetadataNode::CreateExtendedJSWrapper(env, m_objectManager, proxyClassName);
 
-    if (jsInstance == nullptr || napi_util::is_undefined(env, jsInstance))
+    if (napi_util::is_null_or_undefined(env, jsInstance))
     {
-
         throw NativeScriptException(string("Failed to create JavaScript extend wrapper for class '" + proxyClassName + "'"));
     }
 
     implementationObject = MetadataNode::GetImplementationObject(env, jsInstance);
 
-    if (implementationObject == nullptr || napi_util::is_undefined(env, implementationObject))
+    if (napi_util::is_null_or_undefined(env, implementationObject))
     {
         string msg("createJSInstanceNative: implementationObject is empty");
         throw NativeScriptException(msg);

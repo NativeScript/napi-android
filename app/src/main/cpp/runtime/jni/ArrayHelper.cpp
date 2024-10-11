@@ -31,7 +31,8 @@ void ArrayHelper::Init(napi_env env) {
 
 napi_value ArrayHelper::CreateJavaArrayCallback(napi_env env, napi_callback_info info) {
     try {
-        CreateJavaArray(env, info);
+       napi_value array = CreateJavaArray(env, info);
+       return array;
     } catch (NativeScriptException& e) {
         e.ReThrowToNapi(env);
     } catch (std::exception& e) {
@@ -43,6 +44,7 @@ napi_value ArrayHelper::CreateJavaArrayCallback(napi_env env, napi_callback_info
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToNapi(env);
     }
+    return nullptr;
 }
 
 napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
@@ -118,7 +120,8 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
     }
 
     jint javaObjectID = objectManager->GetOrCreateObjectId(array);
-    auto jsWrapper = objectManager->CreateJSWrapper(javaObjectID, "" /* ignored */, array);
+    auto jsWrapper = objectManager->CreateJSWrapper(javaObjectID, "" /* ignored */, array, true);
+
     return jsWrapper;
 }
 

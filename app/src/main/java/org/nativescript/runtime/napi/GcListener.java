@@ -2,53 +2,84 @@ package org.nativescript.runtime.napi;
 
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.WeakHashMap;
 
+
+
+class GCSubscriber {
+    HashMap<PhantomReference<Object>, Integer> referencesMap = new HashMap<>();
+    public final ReferenceQueue<Object> referenceQueue = new ReferenceQueue<>();
+}
+
 public class GcListener {
-    private final ReferenceQueue<Object> q;
     private final Thread gcThread;
-
     private final Thread monitorThread;
-
-    private final int throttleTime;
     private final int monitorInterval;
     private final double freeMemoryRatio;
-    private final WeakHashMap<Runtime, Object> subscribers;
+    private final WeakHashMap<Runtime, GCSubscriber> subscribers;
     private boolean firstStart = true;
-
     private static volatile GcListener instance;
 
-    private class GcMonitor implements Runnable {
-        private long lastUpdateTime = 0;
-        private final long throttleTime;
+    public void createPhantomReference(Runtime runtime, Object object, Integer objectId) {
+        GCSubscriber subscriber =  subscribers.get(runtime);
+        if (subscriber != null) {
+            HashMap<PhantomReference<Object>, Integer> refMap = subscriber.referencesMap;
+            if (!refMap.containsValue(objectId)) {
+                PhantomReference<Object> ref = new PhantomReference<>(object, subscriber.referenceQueue);
+                refMap.put(ref, objectId);
+            }
 
-        public GcMonitor(int throttleTime) {
-            this.throttleTime = throttleTime * 1000000L;
+            if (runtime.logger.isEnabled()) {
+                runtime.logger.write("GC", "Added object to watch list with id: " + String.valueOf(objectId));
+            }
+        }
+    }
+
+    private class GcMonitor implements Runnable {
+        public GcMonitor() {
         }
 
         public void run() {
             while (true) {
                 try {
-                    PhantomReference<Object> ref = createRef();
-                    @SuppressWarnings("unchecked")
-                    PhantomReference<Objects> o = (PhantomReference<Objects>)GcListener.this.q.remove();
+                    for (Runtime runtime : subscribers.keySet()) {
+                        GCSubscriber subscriber = subscribers.get(runtime);
+                        if (subscriber != null) {
+                            PhantomReference<?> ref;
+                            ArrayList<Integer> collectedObjectIds = new ArrayList<>();
+                            while ((ref = (PhantomReference<?>) subscriber.referenceQueue.poll()) != null) {
+                                Integer id = subscriber.referencesMap.get(ref);
+                                subscriber.referencesMap.remove(ref);
+                                collectedObjectIds.add(id);
+                                if (runtime.logger.isEnabled()) {
+                                    runtime.logger.write("GC", "Collected object for gc: " + String.valueOf(id));
+                                }
+                            }
 
-                    long currentUpdateTime = System.nanoTime();
-                    if ((currentUpdateTime - lastUpdateTime) > throttleTime) {
-                        GcListener.this.notifyGc();
-                        lastUpdateTime = currentUpdateTime;
+                            if (!collectedObjectIds.isEmpty()) {
+                                int[] objIds = new int[collectedObjectIds.size()];
+                                for (int i =0; i < objIds.length; i++) {
+                                    objIds[i] = collectedObjectIds.get(i);
+                                }
+                                runtime.notifyGc(objIds);
+                                if (runtime.logger.isEnabled()) {
+                                    runtime.logger.write("GC", "GC triggered for " + String.valueOf(objIds.length) + "objects");
+                                    runtime.logger.write("NS.GCListener","Objects referenced after GC: " + subscriber.referencesMap.size());
+                                }
+                            }
+                        }
                     }
+                    Thread.sleep(3000);
                 } catch (InterruptedException e) {
                     if (org.nativescript.runtime.napi.Runtime.isDebuggable()) {
                         e.printStackTrace();
                     }
                 }
-            }
-        }
 
-        private PhantomReference<Object> createRef() {
-            PhantomReference<Object> ref = new PhantomReference<Object>(new Object(), GcListener.this.q);
-            return ref;
+            }
         }
     }
 
@@ -83,21 +114,15 @@ public class GcListener {
         }
     }
 
-    private GcListener(int throttleTime, int monitorInterval, double freeMemoryRatio) {
-        this.throttleTime = throttleTime;
+    private GcListener(int monitorInterval, double freeMemoryRatio) {
         this.monitorInterval = monitorInterval;
         this.freeMemoryRatio = freeMemoryRatio;
-        this.subscribers = new WeakHashMap<Runtime, Object>();
+        this.subscribers = new WeakHashMap<>();
 
-        if (throttleTime > 0) {
-            q = new ReferenceQueue<Object>();
-            gcThread = new Thread(new GcMonitor(throttleTime));
-            gcThread.setName("NativeScript GC thread");
-            gcThread.setDaemon(true);
-        } else {
-            q = null;
-            gcThread = null;
-        }
+        gcThread = new Thread(new GcMonitor());
+        gcThread.setName("NativeScript GC thread");
+        gcThread.setDaemon(true);
+
         if (monitorInterval > 0) {
             monitorThread = new Thread(new MemoryMonitor(monitorInterval, freeMemoryRatio));
             monitorThread.setName("NativeScript monitor thread");
@@ -108,14 +133,13 @@ public class GcListener {
     }
 
     /**
-     * @param throttleTime throttle time in milliseconds
      * @param monitorInterval time in milliseconds
      */
-    public static GcListener getInstance(int throttleTime, int monitorInterval, double freeMemoryRatio) {
+    public static GcListener getInstance(int monitorInterval, double freeMemoryRatio) {
         if (instance == null) {
             synchronized (GcListener.class) {
                 if (instance == null) {
-                    instance = new GcListener(throttleTime, monitorInterval, freeMemoryRatio);
+                    instance = new GcListener(monitorInterval, freeMemoryRatio);
                 }
             }
         }
@@ -128,7 +152,7 @@ public class GcListener {
                 instance.start();
                 instance.firstStart = false;
             }
-            instance.subscribers.put(runtime, null);
+            instance.subscribers.put(runtime, new GCSubscriber());
         }
     }
 

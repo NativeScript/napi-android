@@ -17,8 +17,8 @@ const char *js_info_property = "__jsInfo__";
 ObjectManager::ObjectManager(jobject javaRuntimeObject) :
         m_javaRuntimeObject(javaRuntimeObject),
         m_numberOfGC(0),
-        m_currentObjectId(0),
-        m_cache(NewWeakGlobalRefCallback, DeleteWeakGlobalRefCallback, 1000, this) {
+        m_cache(NewWeakGlobalRefCallback, DeleteWeakGlobalRefCallback, 1000, this),
+        m_currentObjectId(0) {
 
     JEnv env;
     auto runtimeClass = env.FindClass("org/nativescript/runtime/napi/Runtime");
@@ -33,23 +33,18 @@ ObjectManager::ObjectManager(jobject javaRuntimeObject) :
                                                              "(Ljava/lang/Object;)I");
     assert(GET_OR_CREATE_JAVA_OBJECT_ID_METHOD_ID != nullptr);
 
+    MAKE_INSTANCE_WEAK_METHOD_ID = env.GetMethodID(runtimeClass, "makeInstanceWeak",
+                                                   "(I)V");
+    assert(MAKE_INSTANCE_WEAK_METHOD_ID != nullptr);
+
     MAKE_INSTANCE_WEAK_BATCH_METHOD_ID = env.GetMethodID(runtimeClass, "makeInstanceWeak",
                                                          "(Ljava/nio/ByteBuffer;IZ)V");
     assert(MAKE_INSTANCE_WEAK_BATCH_METHOD_ID != nullptr);
 
-    MAKE_INSTANCE_WEAK_AND_CHECK_IF_ALIVE_METHOD_ID = env.GetMethodID(runtimeClass,
-                                                                      "makeInstanceWeakAndCheckIfAlive",
-                                                                      "(I)Z");
-    assert(MAKE_INSTANCE_WEAK_AND_CHECK_IF_ALIVE_METHOD_ID != nullptr);
+    MAKE_INSTANCE_STRONG_METHOD_ID = env.GetMethodID(runtimeClass, "makeInstanceStrong",
+                                                     "(I)V");
+    assert(MAKE_INSTANCE_STRONG_METHOD_ID != nullptr);
 
-    RELEASE_NATIVE_INSTANCE_METHOD_ID = env.GetMethodID(runtimeClass, "releaseNativeCounterpart",
-                                                        "(I)V");
-    assert(RELEASE_NATIVE_INSTANCE_METHOD_ID != nullptr);
-
-    CHECK_WEAK_OBJECTS_ARE_ALIVE_METHOD_ID = env.GetMethodID(runtimeClass,
-                                                             "checkWeakObjectAreAlive",
-                                                             "(Ljava/nio/ByteBuffer;Ljava/nio/ByteBuffer;I)V");
-    assert(CHECK_WEAK_OBJECTS_ARE_ALIVE_METHOD_ID != nullptr);
 
     JAVA_LANG_CLASS = env.FindClass("java/lang/Class");
     assert(JAVA_LANG_CLASS != nullptr);
@@ -64,10 +59,9 @@ ObjectManager::ObjectManager(jobject javaRuntimeObject) :
     m_useGlobalRefs = useGlobalRefs == JNI_TRUE;
 
     // auto getMarkingModeOrdinalMethodID = env.GetMethodID(runtimeClass, "getMarkingModeOrdinal",
-                                                        //  "()I");
+    //  "()I");
     // jint markingMode = env.CallIntMethod(m_javaRuntimeObject, getMarkingModeOrdinalMethodID);
     // m_markingMode = static_cast<JavaScriptMarkingMode>(markingMode);
-
 }
 
 void ObjectManager::SetInstanceEnv(napi_env env) {
@@ -87,21 +81,167 @@ void ObjectManager::Init(napi_env env) {
     napi_get_prototype(env, jsWrapper, &proto);
     napi_set_named_property(env, proto, PRIVATE_IS_NAPI, hint);
     m_poJsWrapperFunc = napi_util::make_ref(env, jsWrapper, 1);
+
+    static const char *proxyFunctionScript = R"((function () {
+  return function (object, objectId, isArray) {
+    const arrayHandler = (target, prop) => {
+      if (typeof prop === "string" && !isNaN(prop)) {
+        return target.getValueAtIndex(Number(prop));
+      }
+
+      if (prop === Symbol.iterator) {
+        let index = 0;
+        const l = target.length;
+        return function () {
+          return {
+            next: function () {
+              if (index < l) {
+                return {
+                  value: target.getValueAtIndex(index++),
+                  done: false,
+                };
+              } else {
+                return { done: true };
+              }
+            },
+          };
+        };
+      }
+      if (prop === "map") {
+        return function (callback) {
+          const values = target.getAllValues();
+          const result = [];
+          const l = target.length;
+          for (let i = 0; i < l; i++) {
+            result.push(callback(values[i], i, target));
+          }
+          return result;
+        };
+      }
+
+      if (prop === "toString") {
+        return function () {
+          const result = target.getAllValues();
+          return result.join(",");
+        };
+      }
+
+      if (prop === "forEach") {
+        return function (callback) {
+          const values = target.getAllValues();
+          const l = values.length;
+          for (let i = 0; i < l; i++) {
+            callback(values[i], i, target);
+          }
+        };
+      }
+      return target[prop];
+    };
+    let javaObjectId = objectId;
+    const proxy = new Proxy(object, {
+      get: (target, prop, receiver) => {
+        if (prop === "javaObjectId") return javaObjectId;
+        if (isArray) {
+          return arrayHandler(target, prop);
+        }
+        return target[prop];
+      },
+      set: (target, prop, value) => {
+        if (isArray && typeof prop === "string" && !isNaN(prop)) {
+          return target.setValueAtIndex(Number(prop), value);
+        }
+
+        target[prop] = value;
+        return value;
+      },
+    });
+    object["__proxy__"] = new WeakRef(proxy);
+    return proxy;
+  };
+})();)";
+    napi_value proxyFunction;
+    napi_value scriptValue;
+    napi_create_string_utf8(env, proxyFunctionScript, strlen(proxyFunctionScript), &scriptValue);
+    napi_run_script(env, scriptValue, &proxyFunction);
+    napi_ref ref = napi_util::make_ref(env, proxyFunction);
+    this->m_poJsProxyFunction = ref;
+}
+
+napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instance, bool isArray) {
+    auto itFoundProxy = m_idToProxy.find(javaObjectID);
+    if (itFoundProxy != m_idToProxy.end()) {
+        napi_value proxy = napi_util::get_ref_value(m_env, itFoundProxy->second);
+        if (!napi_util::is_null_or_undefined(m_env, proxy)) {
+            DEBUG_WRITE("Returned existing proxy for object: %d", javaObjectID);
+            return proxy;
+        }
+    }
+
+    auto itFound = m_idToObject.find(javaObjectID);
+    if (itFound != m_idToObject.end()) {
+        napi_value object = napi_util::get_ref_value(m_env, itFound->second);
+        napi_value weak_ref;
+        napi_get_named_property(m_env, object, "__proxy__", &weak_ref);
+        if (!napi_util::is_null_or_undefined(m_env, weak_ref)) {
+            napi_value deref;
+            napi_get_named_property(m_env, weak_ref, "deref", &deref);
+            napi_value proxy;
+            napi_call_function(m_env, weak_ref, deref, 0, nullptr, &proxy);
+            if (!napi_util::is_null_or_undefined(m_env, proxy)) {
+                DEBUG_WRITE("Returned existing proxy for object: %d", javaObjectID);
+                return proxy;
+            }
+        }
+    }
+
+    napi_value proxy;
+    napi_value argv[3];
+    argv[0] = instance;
+    napi_create_int32(m_env, javaObjectID, &argv[1]);
+    napi_get_boolean(m_env, isArray, &argv[2]);
+    napi_call_function(m_env, nullptr, napi_util::get_ref_value(m_env, this->m_poJsProxyFunction),
+                       3, argv, &proxy);
+    napi_ref proxy_ref = napi_util::make_ref(m_env, proxy, 0);
+    m_idToProxy.emplace(javaObjectID, proxy_ref);
+
+    auto javaObjectIdFound = m_weakObjectIds.find(javaObjectID);
+    if (javaObjectIdFound != m_weakObjectIds.end()) {
+        m_weakObjectIds.erase(javaObjectID);
+        JEnv jenv;
+        jenv.CallVoidMethod(m_javaRuntimeObject,
+                            MAKE_INSTANCE_STRONG_METHOD_ID,
+                            javaObjectID);
+        DEBUG_WRITE("Making instance strong: %d", javaObjectID);
+    }
+
+    auto hint = new ProxyFinalizerHint(this, javaObjectID);
+
+    napi_add_finalizer(m_env, proxy, hint, JSProxyWrapperFinalizer, nullptr, nullptr);
+
+    return proxy;
 }
 
 JniLocalRef ObjectManager::GetJavaObjectByJsObject(napi_env env, napi_value object) {
-    JSInstanceInfo *jsInstanceInfo = GetJSInstanceInfo(object);
+    int32_t javaObjectId;
+    napi_value javaObjectIdValue;
+    napi_get_named_property(m_env, object, "javaObjectid", &javaObjectIdValue);
 
-    if (jsInstanceInfo == nullptr) return JniLocalRef();
+    if (!napi_util::is_null_or_undefined(m_env, javaObjectIdValue)) {
+        napi_get_value_int32(m_env, javaObjectIdValue, &javaObjectId);
+    } else {
+        JSInstanceInfo *jsInstanceInfo = GetJSInstanceInfo(object);
+        if (jsInstanceInfo == nullptr)  return JniLocalRef();
+        javaObjectId = jsInstanceInfo->JavaObjectID;
+    }
 
     if (m_useGlobalRefs) {
-        JniLocalRef javaObject(GetJavaObjectByID(jsInstanceInfo->JavaObjectID), true);
+        JniLocalRef javaObject(GetJavaObjectByID(javaObjectId), true);
         return javaObject;
     }
 
     JEnv jEnv;
     JniLocalRef javaObject(
-            jEnv.NewLocalRef(GetJavaObjectByID(jsInstanceInfo->JavaObjectID)));
+            jEnv.NewLocalRef(GetJavaObjectByID(javaObjectId)));
     return javaObject;
 
 }
@@ -111,6 +251,7 @@ ObjectManager::JSInstanceInfo *ObjectManager::GetJSInstanceInfo(napi_value objec
     if (IsJsRuntimeObject(m_env, object)) {
         return GetJSInstanceInfoFromRuntimeObject(object);
     }
+
     return nullptr;
 }
 
@@ -190,43 +331,55 @@ int ObjectManager::GetOrCreateObjectId(jobject object) {
 }
 
 napi_value ObjectManager::GetJsObjectByJavaObject(int javaObjectID) {
-    napi_escapable_handle_scope escapableScope;
-    napi_open_escapable_handle_scope(m_env, &escapableScope);
+    auto itProxyFound = m_idToProxy.find(javaObjectID);
+    if (itProxyFound != m_idToProxy.end()) {
+        napi_value proxy = napi_util::get_ref_value(m_env, itProxyFound->second);
+        if (napi_util::is_null_or_undefined(m_env, proxy)) {
+            return proxy;
+        }
+    }
 
     auto it = m_idToObject.find(javaObjectID);
     if (it == m_idToObject.end()) {
         return nullptr;
     }
 
-    return napi_util::get_ref_value(m_env, it->second);
-}
-
-napi_value ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName) {
-    return CreateJSWrapperHelper(javaObjectID, typeName, nullptr);
+    napi_value instance = napi_util::get_ref_value(m_env, it->second);
+    bool isArray;
+    napi_has_named_property(m_env, instance, "getAllValues", &isArray);
+    return GetOrCreateProxy(javaObjectID, instance, isArray);
 }
 
 napi_value
-ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance) {
+ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName, bool isArray) {
+    return CreateJSWrapperHelper(javaObjectID, typeName, nullptr, isArray);
+}
+
+napi_value
+ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance,
+                               bool isArray) {
     JEnv jenv;
     JniLocalRef clazz(jenv.GetObjectClass(instance));
 
-    return CreateJSWrapperHelper(javaObjectID, typeName, clazz);
+    return CreateJSWrapperHelper(javaObjectID, typeName, clazz, isArray);
 }
 
 napi_value
-ObjectManager::CreateJSWrapperHelper(jint javaObjectID, const std::string &typeName, jclass clazz) {
+ObjectManager::CreateJSWrapperHelper(jint javaObjectID, const std::string &typeName, jclass clazz,
+                                     bool isArray) {
     auto className = (clazz != nullptr) ? GetClassName(clazz) : typeName;
 
     auto node = MetadataNode::GetOrCreate(className);
-
+    napi_value proxy = nullptr;
     napi_value jsWrapper = node->CreateJSWrapper(m_env, this);
-
     if (jsWrapper != nullptr) {
         JEnv jenv;
         auto claz = jenv.FindClass(className);
         Link(jsWrapper, javaObjectID, claz);
+        proxy = GetOrCreateProxy(javaObjectID, jsWrapper, isArray);
     }
-    return jsWrapper;
+
+    return proxy;
 }
 
 void ObjectManager::Link(napi_value object, uint32_t javaObjectID, jclass clazz) {
@@ -237,20 +390,14 @@ void ObjectManager::Link(napi_value object, uint32_t javaObjectID, jclass clazz)
 
     DEBUG_WRITE("Linking js object and java instance id: %d", javaObjectID);
 
-    auto jsInstanceInfo = new JSInstanceInfo(false /*isJavaObjWeak*/, javaObjectID, clazz);
+    auto jsInstanceInfo = new JSInstanceInfo( javaObjectID, clazz);
 
     napi_ref objectHandle = napi_util::make_ref(m_env, object, 1);
 
-    auto state = new ObjectWeakCallbackState(this, jsInstanceInfo, objectHandle);
-    // subscribe for JS GC event
+    auto state = new JSObjectFinalizerHint(this, jsInstanceInfo, objectHandle);
 
     napi_value jsInfo;
-    if (m_markingMode == JavaScriptMarkingMode::None) {
-        napi_create_external(m_env, jsInstanceInfo, JSObjectFinalizerStatic, state, &jsInfo);
-    } else {
-        napi_create_external(m_env, jsInstanceInfo, JSObjectWeakCallbackStatic, state, &jsInfo);
-    }
-
+    napi_create_external(m_env, jsInstanceInfo, JSObjectFinalizer, state, &jsInfo);
     napi_set_named_property(m_env, object, PRIVATE_JSINFO, jsInfo);
     m_idToObject.emplace(javaObjectID, objectHandle);
 }
@@ -261,14 +408,9 @@ bool ObjectManager::CloneLink(napi_value src, napi_value dest) {
     auto success = jsInfo != nullptr;
 
     if (success) {
-        void * _jsInfo;
         napi_value external;
         napi_get_named_property(m_env, src, PRIVATE_JSINFO, &external);
-        napi_get_value_external(m_env, external, &_jsInfo);
-
-        napi_value jsInfoClone;
-        napi_create_external(m_env, jsInfo, nullptr, nullptr, &jsInfoClone);
-        napi_set_named_property(m_env, dest, PRIVATE_JSINFO, jsInfoClone);
+        napi_set_named_property(m_env, dest, PRIVATE_JSINFO, external);
     }
 
     return success;
@@ -292,73 +434,47 @@ string ObjectManager::GetClassName(jclass clazz) {
     return className;
 }
 
-void
-ObjectManager::JSObjectWeakCallbackStatic(napi_env env, void *finalizeData, void *finalizeHint) {
-    ObjectWeakCallbackState * state = reinterpret_cast<ObjectWeakCallbackState *>(finalizeHint);
-    // TODO
+void ObjectManager::JSObjectFinalizer(napi_env env, void *finalizeData, void *finalizeHint) {
+    auto state = reinterpret_cast<JSObjectFinalizerHint *>(finalizeHint);
+    DEBUG_WRITE("JS Object finalizer called for object id: %d",state->jsInfo->JavaObjectID);
+    delete state->jsInfo;
+    delete state;
+
 }
 
-void ObjectManager::JSObjectFinalizerStatic(napi_env env, void *finalizeData, void *finalizeHint) {
-    ObjectWeakCallbackState * state = reinterpret_cast<ObjectWeakCallbackState *>(finalizeHint);
-    // TODO
+void ObjectManager::JSProxyWrapperFinalizer(napi_env env, void *finalizeData, void *finalizeHint) {
+    auto state = reinterpret_cast<ProxyFinalizerHint *>(finalizeData);
+    DEBUG_WRITE("JS Proxy finalizer called for object id: %d", state->javaObjectId);
+    JEnv jEnv;
+    ObjectManager *objectManager = state->thisPtr;
+//    objectManager->m_buff.Write(state->javaObjectId);
+// TODO find a way to do this in a batch, maybe some GC callback but NAPI doesn't have it although an extension can be added to support this so we have to go to JNI only once after a single gc pass
+    jEnv.CallVoidMethod(objectManager->m_javaRuntimeObject,
+                        objectManager->MAKE_INSTANCE_WEAK_METHOD_ID, state->javaObjectId);
+    objectManager->m_weakObjectIds.emplace(state->javaObjectId);
+
+    delete state;
 }
 
 int ObjectManager::GenerateNewObjectID() {
     const int one = 1;
     int oldValue = __sync_fetch_and_add(&m_currentObjectId, one);
-
     return oldValue;
-}
-
-void ObjectManager::ReleaseJSInstance(napi_ref object, JSInstanceInfo *jsInstanceInfo) {
-    int javaObjectID = jsInstanceInfo->JavaObjectID;
-
-    auto it = m_idToObject.find(javaObjectID);
-
-    if (it == m_idToObject.end()) {
-        stringstream ss;
-        ss << "(InternalError): Js object with id: " << javaObjectID << " not found";
-        throw NativeScriptException(ss.str());
-    }
-
-    assert(object == it->second);
-
-    m_idToObject.erase(it);
-    m_released.insert(object, javaObjectID);
-    napi_delete_reference(m_env, object);
-
-    delete jsInstanceInfo;
-
-    DEBUG_WRITE("ReleaseJSObject instance disposed. id:%d", javaObjectID);
-}
-
-void ObjectManager::ReleaseRegularObjects() {
-    // TODO
-}
-
-bool ObjectManager::HasImplObject(napi_env env, napi_value obj) {
-    // TODO   auto implObject = MetadataNode::GetImplementationObject(env, obj);
-    //
-    //    bool hasImplObj = implObject != nullptr;
-
-    return false;
 }
 
 jweak ObjectManager::NewWeakGlobalRefCallback(const int &javaObjectID, void *state) {
     auto objManager = reinterpret_cast<ObjectManager *>(state);
-
     JniLocalRef obj(objManager->GetJavaObjectByIDImpl(javaObjectID));
-
-    JEnv env;
-    jweak weakRef = env.NewWeakGlobalRef(obj);
+    JEnv jEnv;
+    jweak weakRef = jEnv.NewWeakGlobalRef(obj);
 
     return weakRef;
 }
 
 void ObjectManager::DeleteWeakGlobalRefCallback(const jweak &object, void *state) {
     auto objManager = reinterpret_cast<ObjectManager *>(state);
-    JEnv env;
-    env.DeleteWeakGlobalRef(object);
+    JEnv jEnv;
+    jEnv.DeleteWeakGlobalRef(object);
 }
 
 napi_value ObjectManager::GetEmptyObject(napi_env env) {
@@ -383,31 +499,27 @@ napi_value ObjectManager::JSWrapperConstructorCallback(napi_env env, napi_callba
 }
 
 void ObjectManager::ReleaseNativeCounterpart(napi_value object) {
-    napi_valuetype type;
-    napi_typeof(m_env, object, &type);
-
-    if (type != napi_object) {
-        throw NativeScriptException("Argument is not an object!");
-    }
-
-    JSInstanceInfo *jsInstanceInfo = GetJSInstanceInfo(object);
-
-    if (jsInstanceInfo == nullptr) {
-        throw NativeScriptException("Trying to release a non-native object!");
-    }
-
-    JEnv jenv;
-    jenv.CallVoidMethod(m_javaRuntimeObject, RELEASE_NATIVE_INSTANCE_METHOD_ID, jsInstanceInfo->JavaObjectID);
-
-    delete jsInstanceInfo;
-
-    napi_value undefined;
-    napi_get_undefined(m_env, &undefined);
-    napi_set_named_property(m_env, object, PRIVATE_JSINFO, undefined);
 }
 
 ObjectManager::JavaScriptMarkingMode ObjectManager::GetMarkingMode() {
     return this->m_markingMode;
+}
+
+void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {
+    JEnv jenv(jEnv);
+    jsize length = jenv.GetArrayLength(object_ids);
+    int *cppArray = jenv.GetIntArrayElements(object_ids, nullptr);
+    for (jsize i = 0; i < length; i++) {
+        int objectId = cppArray[i];
+        auto itFound = this->m_idToObject.find(objectId);
+        if (itFound != this->m_idToObject.end()) {
+            napi_delete_reference(m_env, itFound->second);
+            this->m_idToObject.erase(objectId);
+            this->m_weakObjectIds.erase(objectId);
+            DEBUG_WRITE("JS Object released for object id: %d", objectId);
+
+        }
+    }
 }
 
 

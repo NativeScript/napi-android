@@ -306,7 +306,7 @@ namespace napi_util {
     napi_set_function(napi_env env, napi_value object, const char *name, napi_callback callback,
                       void *data = nullptr) {
         napi_value fn;
-        napi_create_function(env, nullptr, 0, callback, data, &fn);
+        napi_create_function(env, name, 0, callback, data, &fn);
         napi_set_named_property(env, object, name, fn);
         return fn;
     }

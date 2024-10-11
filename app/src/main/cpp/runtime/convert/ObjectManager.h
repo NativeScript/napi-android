@@ -34,9 +34,11 @@ class ObjectManager {
 
         napi_value GetJsObjectByJavaObject(int javaObjectID);
 
-        napi_value CreateJSWrapper(jint javaObjectID, const std::string& typeName);
+        napi_value CreateJSWrapper(jint javaObjectID, const std::string& typeName,  bool isArray = false);
 
-        napi_value CreateJSWrapper(jint javaObjectID, const std::string& typeName, jobject instance);
+        napi_value CreateJSWrapper(jint javaObjectID, const std::string& typeName, jobject instance,  bool isArray = false);
+
+        napi_value GetOrCreateProxy(jint javaObjectID, napi_value instance, bool isArray = false);
 
         void Link(napi_value object, uint32_t javaObjectID, jclass clazz);
 
@@ -81,21 +83,22 @@ class ObjectManager {
             napi_set_named_property(env, object, PRIVATE_CALLSUPER, marker);
         }
 
+        void OnGarbageCollected(JNIEnv* jEnv, jintArray object_ids);
+
     private:
 
         struct JSInstanceInfo {
             public:
-                JSInstanceInfo(bool isJavaObjectWeak, uint32_t javaObjectID, jclass claz)
-                    :IsJavaObjectWeak(isJavaObjectWeak), JavaObjectID(javaObjectID), ObjectClazz(claz) {
+                JSInstanceInfo(uint32_t javaObjectID, jclass claz)
+                    : JavaObjectID(javaObjectID), ObjectClazz(claz) {
                 }
 
-                bool IsJavaObjectWeak;
                 uint32_t JavaObjectID;
                 jclass ObjectClazz;
         };
 
-        struct ObjectWeakCallbackState {
-            ObjectWeakCallbackState(ObjectManager* _thisPtr, JSInstanceInfo* _jsInfo, napi_ref _target)
+        struct JSObjectFinalizerHint {
+            JSObjectFinalizerHint(ObjectManager* _thisPtr, JSInstanceInfo* _jsInfo, napi_ref _target)
                 :
                 thisPtr(_thisPtr), jsInfo(_jsInfo), target(_target) {
             }
@@ -105,73 +108,25 @@ class ObjectManager {
             napi_ref target;
         };
 
-        struct GarbageCollectionInfo {
-            GarbageCollectionInfo(int _numberOfGC)
-                :
-                numberOfGC(_numberOfGC) {
+        struct ProxyFinalizerHint {
+            ProxyFinalizerHint(ObjectManager* _thisPtr, uint32_t _javaObjectId)
+                    :
+                    thisPtr(_thisPtr), javaObjectId(_javaObjectId) {
             }
-            std::vector<napi_ref> markedForGC;
-            int numberOfGC;
+            ObjectManager* thisPtr;
+            uint32_t javaObjectId;
         };
 
-        class PersistentObjectIdSet {
-            public:
-                PersistentObjectIdSet() {
-                    /* TODO: use functors */
-                }
-
-                void clear() {
-                    m_POs.clear();
-                    m_IDs.clear();
-                }
-
-                void insert(napi_ref po, int javaObjectId) {
-                    m_POs.insert(po);
-                    m_IDs.insert(javaObjectId);
-                }
-
-                bool contains(napi_ref po) {
-                    return m_POs.find(po) != m_POs.end();
-                }
-
-                std::set<napi_ref> m_POs;
-                std::set<int> m_IDs;
-        };
-
-        struct PersistentObjectIdPair {
-            PersistentObjectIdPair(napi_ref _po, int _javaObjectId)
-                :
-                po(_po), javaObjectId(_javaObjectId) {
-            }
-            napi_ref po;
-            int javaObjectId;
-        };
 
         JSInstanceInfo* GetJSInstanceInfo(napi_value object);
 
         JSInstanceInfo* GetJSInstanceInfoFromRuntimeObject(napi_value object);
 
-        void ReleaseJSInstance(napi_ref po, JSInstanceInfo* jsInstanceInfo);
+        napi_value CreateJSWrapperHelper(jint javaObjectID, const std::string& typeName, jclass clazz, bool isArray = false);
 
-        void ReleaseRegularObjects();
+        static void JSObjectFinalizer(napi_env env, void *finalizeData, void *finalizeHint);
+        static void JSProxyWrapperFinalizer(napi_env env, void *finalizeData, void *finalizeHint);
 
-        void MakeRegularObjectsWeak(const std::set<int>& instances, DirectBuffer& inputBuff);
-
-        void MakeImplObjectsWeak(const std::unordered_map<int, napi_ref>& instances, DirectBuffer& inputBuff);
-
-        void CheckWeakObjectsAreAlive(const std::vector<PersistentObjectIdPair>& instances, DirectBuffer& inputBuff, DirectBuffer& outputBuff);
-
-        napi_value CreateJSWrapperHelper(jint javaObjectID, const std::string& typeName, jclass clazz);
-
-        static void JSObjectWeakCallbackStatic(napi_env env, void *finalizeData, void *finalizeHint);
-
-        static void JSObjectFinalizerStatic(napi_env env, void *finalizeData, void *finalizeHint);
-
-        void JSObjectWeakCallback(napi_env env, ObjectWeakCallbackState* callbackState);
-
-        void JSObjectFinalizer(napi_env env, ObjectWeakCallbackState* callbackState);
-
-        bool HasImplObject(napi_env env, napi_value obj);
 
         jweak GetJavaObjectByID(uint32_t javaObjectID);
 
@@ -189,19 +144,11 @@ class ObjectManager {
 
         napi_env m_env;
 
-        std::stack<GarbageCollectionInfo> m_markedForGC;
-
-        std::unordered_map<int, napi_ref> m_idToObject;
-
-        PersistentObjectIdSet m_released;
-
-        std::set<unsigned long> m_visited;
+        robin_hood::unordered_map<int, napi_ref> m_idToObject;
+        robin_hood::unordered_map<int, napi_ref> m_idToProxy;
+        robin_hood::unordered_set<int> m_weakObjectIds;
 
         LRUCache<int, jweak> m_cache;
-
-        std::set<napi_value> m_visitedPOs;
-        std::vector<PersistentObjectIdPair> m_implObjWeak;
-        std::unordered_map<int, napi_value> m_implObjStrong;
 
         volatile int m_currentObjectId;
 
@@ -220,16 +167,14 @@ class ObjectManager {
         jmethodID GET_JAVAOBJECT_BY_ID_METHOD_ID;
 
         jmethodID GET_OR_CREATE_JAVA_OBJECT_ID_METHOD_ID;
+    jmethodID MAKE_INSTANCE_WEAK_BATCH_METHOD_ID;
 
-        jmethodID MAKE_INSTANCE_WEAK_BATCH_METHOD_ID;
+        jmethodID  MAKE_INSTANCE_WEAK_METHOD_ID;
 
-        jmethodID MAKE_INSTANCE_WEAK_AND_CHECK_IF_ALIVE_METHOD_ID;
-
-        jmethodID RELEASE_NATIVE_INSTANCE_METHOD_ID;
-
-        jmethodID CHECK_WEAK_OBJECTS_ARE_ALIVE_METHOD_ID;
+        jmethodID MAKE_INSTANCE_STRONG_METHOD_ID;
 
         napi_ref m_poJsWrapperFunc;
+        napi_ref m_poJsProxyFunction;
 
 };
 }

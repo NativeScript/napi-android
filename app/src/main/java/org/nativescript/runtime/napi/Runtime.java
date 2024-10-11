@@ -3,8 +3,10 @@ package org.nativescript.runtime.napi;
 import android.content.Context;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import androidx.annotation.Keep;
 import androidx.core.content.pm.PackageInfoCompat;
@@ -12,9 +14,15 @@ import androidx.core.content.pm.PackageInfoCompat;
 import org.nativescript.runtime.napi.system.classes.caching.impl.ClassCacheImpl;
 import org.nativescript.runtime.napi.system.classes.loading.ClassStorageService;
 import org.nativescript.runtime.napi.system.classes.loading.impl.ClassStorageServiceImpl;
+import org.nativescript.runtime.napi.system.classloaders.impl.ClassLoadersCollectionImpl;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.lang.ref.PhantomReference;
+import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
@@ -45,7 +53,7 @@ public class Runtime {
 
     private native int generateNewObjectId(int runtimeId);
 
-    private native boolean notifyGc(int runtimeId);
+    private native boolean notifyGc(int runtimeId, int[] javaObjectIds);
 
     private native void lock(int runtimeId);
 
@@ -58,7 +66,9 @@ public class Runtime {
     public static native int getPointerSize();
 
     private final Object keyNotFoundObject = new Object();
+
     private int currentObjectId = -1;
+
 
     private HashMap<Integer, Object> strongInstances = new HashMap<>();
 
@@ -68,6 +78,8 @@ public class Runtime {
 
     private NativeScriptWeakHashMap<Object, Integer> weakJavaObjectToID = new NativeScriptWeakHashMap<Object, Integer>();
 
+
+
     private final Map<Class<?>, JavaScriptImplementation> loadedJavaScriptExtends = new HashMap<Class<?>, JavaScriptImplementation>();
 
     public native void startNAPIRuntime(String filesPath, int runtimeId);
@@ -76,7 +88,7 @@ public class Runtime {
 
     private ArrayList<Constructor<?>> ctorCache = new ArrayList<Constructor<?>>();
 
-    private static final ClassStorageService classStorageService = new ClassStorageServiceImpl(ClassCacheImpl.INSTANCE, org.nativescript.runtime.napi.system.classloaders.impl.ClassLoadersCollectionImpl.INSTANCE);
+    private static final ClassStorageService classStorageService = new ClassStorageServiceImpl(ClassCacheImpl.INSTANCE, ClassLoadersCollectionImpl.INSTANCE);
 
     public Logger logger;
 
@@ -148,9 +160,8 @@ public class Runtime {
                 this.dexFactory = new DexFactory(this.logger, context.getClassLoader(), dexDir, thumb, classStorageService);
 
                 runtimeCache.put(this.runtimeId, this);
-                gcListener = null;
-
-//                gcListener = GcListener.getInstance(config.appConfig.getGcThrottleTime(), config.appConfig.getMemoryCheckInterval(), config.appConfig.getFreeMemoryRatio());
+                gcListener = GcListener.getInstance(5000, 0.5);
+                GcListener.subscribe(this);
             } finally {
 //                frame.close();
             }
@@ -229,11 +240,11 @@ public class Runtime {
 
     public static String getStackTraceErrorMessage(Throwable ex) {
         String content;
-        java.io.PrintStream ps = null;
+        PrintStream ps = null;
 
         try {
-            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-            ps = new java.io.PrintStream(baos);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ps = new PrintStream(baos);
             ex.printStackTrace(ps);
 
             try {
@@ -243,7 +254,7 @@ public class Runtime {
                     content = getStackTraceOnly(content);
                     content = jsStackTrace + content;
                 }
-            } catch (java.io.UnsupportedEncodingException e) {
+            } catch (UnsupportedEncodingException e) {
                 content = e.getMessage();
             }
         } finally {
@@ -339,7 +350,12 @@ public class Runtime {
     }
 
     public void notifyGc() {
-        notifyGc(runtimeId);
+        int[] objectIds = new int[0];
+        notifyGc(runtimeId, objectIds);
+    }
+
+    public void notifyGc(int[] objectIds) {
+        notifyGc(runtimeId, objectIds);
     }
 
     public void lock() {
@@ -503,16 +519,36 @@ public class Runtime {
             throw new IllegalArgumentException("instance cannot be null");
         }
 
-        int key = objectId;
-        strongInstances.put(key, instance);
-        strongJavaObjectToID.put(instance, key);
+        strongInstances.put(objectId, instance);
+        strongJavaObjectToID.put(instance, objectId);
 
         Class<?> clazz = instance.getClass();
         classStorageService.storeClass(clazz.getName(), clazz);
+        this.gcListener.createPhantomReference(this, instance, objectId);
 
         if (logger != null && logger.isEnabled()) {
-            logger.write("MakeInstanceStrong (" + key + ", " + instance.getClass().toString() + ")");
+            logger.write("MakeInstanceStrong (" + objectId + ", " + instance.getClass().toString() + ")");
         }
+    }
+
+    @RuntimeCallable
+    private void makeInstanceStrong(int objectId) {
+        try {
+            Object instance = getJavaObjectByID(objectId);
+            if (instance == null) return;
+           makeInstanceStrong(instance, objectId);
+
+           weakJavaObjectToID.remove(instance);
+           weakInstances.remove(objectId);
+
+        } catch (Exception e) {
+
+        }
+    }
+
+    @RuntimeCallable
+    private void makeInstanceWeak(int javaObjectID) {
+        this.makeInstanceWeak(javaObjectID, true);
     }
 
     private void makeInstanceWeak(int javaObjectID, boolean keepAsWeak) {
@@ -522,10 +558,9 @@ public class Runtime {
         Object instance = strongInstances.get(javaObjectID);
 
         if (keepAsWeak) {
-            weakJavaObjectToID.put(instance, Integer.valueOf(javaObjectID));
+            weakJavaObjectToID.put(instance, javaObjectID);
             weakInstances.put(javaObjectID, new WeakReference<Object>(instance));
         }
-
         strongInstances.remove(javaObjectID);
         strongJavaObjectToID.remove(instance);
     }
@@ -536,66 +571,6 @@ public class Runtime {
         for (int i = 0; i < length; i++) {
             int javaObjectId = buff.getInt();
             makeInstanceWeak(javaObjectId, keepAsWeak);
-        }
-    }
-
-    @RuntimeCallable
-    private boolean makeInstanceWeakAndCheckIfAlive(int javaObjectID) {
-        if (logger.isEnabled()) {
-            logger.write("makeInstanceWeakAndCheckIfAlive instance " + javaObjectID);
-        }
-        Object instance = strongInstances.get(javaObjectID);
-        if (instance == null) {
-            WeakReference<Object> ref = weakInstances.get(javaObjectID);
-            if (ref == null) {
-                return false;
-            } else {
-                instance = ref.get();
-                if (instance == null) {
-                    // The Java was moved from strong to weak, and then the Java instance was collected.
-                    weakInstances.remove(javaObjectID);
-                    weakJavaObjectToID.remove(ref);
-                    return false;
-                } else {
-                    return true;
-                }
-            }
-        } else {
-            strongInstances.remove(javaObjectID);
-            strongJavaObjectToID.remove(instance);
-
-            weakJavaObjectToID.put(instance, javaObjectID);
-            weakInstances.put(javaObjectID, new WeakReference<Object>(instance));
-
-            return true;
-        }
-    }
-
-    @RuntimeCallable
-    private void checkWeakObjectAreAlive(ByteBuffer input, ByteBuffer output, int length) {
-        input.position(0);
-        output.position(0);
-        for (int i = 0; i < length; i++) {
-            int javaObjectId = input.getInt();
-
-            WeakReference<Object> weakRef = weakInstances.get(javaObjectId);
-
-            int isReleased;
-
-            if (weakRef != null) {
-                Object instance = weakRef.get();
-
-                if (instance == null) {
-                    isReleased = 1;
-                    weakInstances.remove(javaObjectId);
-                } else {
-                    isReleased = 0;
-                }
-            } else {
-                isReleased = (strongInstances.get(javaObjectId) == null) ? 1 : 0;
-            }
-
-            output.putInt(isReleased);
         }
     }
 
@@ -841,7 +816,7 @@ public class Runtime {
             } catch (NativeScriptException e) {
                 if (discardUncaughtJsExceptions) {
                     String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";
-                    android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
+                    Log.w("Warning", "NativeScript discarding uncaught JS exception!");
 //                    passDiscardedExceptionToJs(e, errorMessage);
                 } else {
                     throw e;
@@ -863,7 +838,7 @@ public class Runtime {
                             if (discardUncaughtJsExceptions) {
                                 String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";
 //                                passDiscardedExceptionToJs(e, errorMessage);
-                                android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
+                                Log.w("Warning", "NativeScript discarding uncaught JS exception!");
                             } else {
                                 throw e;
                             }
@@ -961,7 +936,7 @@ public class Runtime {
     @RuntimeCallable
     private static boolean useGlobalRefs() {
         int JELLY_BEAN = 16;
-        boolean useGlobalRefs = android.os.Build.VERSION.SDK_INT >= JELLY_BEAN;
+        boolean useGlobalRefs = Build.VERSION.SDK_INT >= JELLY_BEAN;
         return useGlobalRefs;
     }
 

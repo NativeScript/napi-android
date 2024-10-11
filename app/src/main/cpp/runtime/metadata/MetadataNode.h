@@ -75,7 +75,6 @@ private:
             napi_value ctor);
 
 
-    static napi_value WrapArrayObject(napi_env env, napi_value object);
 
 
     napi_value GetConstructorFunction(napi_env env);
@@ -134,6 +133,8 @@ private:
 
     static napi_value ArrayGetterCallback(napi_env env, napi_callback_info info);
 
+    static napi_value ArrayGetAllValuesCallback(napi_env env, napi_callback_info info);
+
     static napi_value ArrayLengthCallback(napi_env env, napi_callback_info info);
 
     static napi_value PropertyAccessorGetterCallback(napi_env env, napi_callback_info info);
@@ -184,9 +185,7 @@ private:
     static robin_hood::unordered_map<std::string, MetadataTreeNode *> s_name2TreeNodeCache;
     static robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> s_treeNode2NodeCache;
     static robin_hood::unordered_map<napi_env, MetadataNodeCache *> s_metadata_node_cache;
-    static robin_hood::unordered_map<napi_env, napi_value> s_arrayObjects;
-    static robin_hood::unordered_map<napi_env, napi_ref> s_envToArrayProxyFunction;
-
+    static robin_hood::unordered_map<napi_env, napi_ref> s_arrayObjects;
 
     struct CtorCacheData {
         CtorCacheData(napi_ref _constructorFunction,

@@ -11,12 +11,8 @@ using namespace ns;
 napi_value ArrayElementAccessor::GetArrayElement(napi_env env, napi_value array, uint32_t index, const string& arraySignature) {
     JEnv jenv;
 
-    napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
-
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
-
     auto arr = objectManager->GetJavaObjectByJsObject(env, array);
 
     assertNonNullNativeArray(arr);
@@ -77,15 +73,12 @@ napi_value ArrayElementAccessor::GetArrayElement(napi_env env, napi_value array,
         jenv.DeleteLocalRef(result);
     }
 
-    napi_close_handle_scope(env, handleScope);
     return value;
 }
 
 void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint32_t index, const string& arraySignature, napi_value value) {
     JEnv jenv;
 
-    napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
 
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
@@ -172,11 +165,12 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
         }
     }
 
-    napi_close_handle_scope(env, handleScope);
 }
 
 napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* objectManager, JEnv& jenv, const string& elementSignature, const void* value) {
     napi_value jsValue;
+
+    jint val = *(jint*) value;
 
     if (elementSignature == "Z") {
         napi_get_boolean(env, *(jboolean*) value, &jsValue);

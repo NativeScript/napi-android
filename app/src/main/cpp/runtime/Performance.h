@@ -21,10 +21,15 @@ namespace ns {
     class Performance {
     public:
         static void createPerformance(napi_env env, napi_value global) {
-            napi_value performance;
-            napi_create_object(env, &performance);
-            napi_util::napi_set_function(env, performance, "now", Now);
-            napi_set_named_property(env, global, "performance", performance);
+            bool isInstalled = false;
+            napi_has_named_property(env, global, "performance", &isInstalled);
+            if (!isInstalled) {
+                napi_value performance;
+                napi_create_object(env, &performance);
+                napi_util::napi_set_function(env, performance, "now", Now);
+                napi_set_named_property(env, global, "performance", performance);
+            }
+
         }
     };
 

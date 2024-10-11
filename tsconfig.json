@@ -1,10 +1,10 @@
 {
     "compilerOptions": {
       "strict": true,
-      "target": "es2017",
-      "module": "esnext",
+      "target": "ES2023",
+      "module": "ES2022",
       "moduleResolution": "node",
-      "lib": ["es2017", "DOM"],
+      "lib": ["ES2023","ESNext.WeakRef", "DOM"],
       "sourceMap": true,
       "noEmitHelpers": true,
       "importHelpers": true,

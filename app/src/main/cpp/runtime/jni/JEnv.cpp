@@ -663,6 +663,12 @@ void JEnv::GetIntArrayRegion(jintArray array, jsize start, jsize len, jint *buf)
     CheckForJavaException();
 }
 
+jint *JEnv::GetIntArrayElements(jintArray array, jboolean *isCopy) {
+    jint *jin = m_env->GetIntArrayElements(array, isCopy);
+    CheckForJavaException();
+    return jin;
+}
+
 void JEnv::GetLongArrayRegion(jlongArray array, jsize start, jsize len, jlong *buf) {
     m_env->GetLongArrayRegion(array, start, len, buf);
     CheckForJavaException();

@@ -426,6 +426,7 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
                                         const ArgsWrapper &argWrapper,
                                         napi_value implementationObject,
                                         bool isInterface,
+                                        napi_value* jsThisProxy,
                                         const std::string &baseClassName) {
     bool success;
 
@@ -486,10 +487,13 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
     if (success) {
         jclass instanceClass = jEnv.FindClass(fullClassName);
         objectManager->SetJavaClass(jsObject, instanceClass);
+        *jsThisProxy = objectManager->GetOrCreateProxy(javaObjectID, jsObject, false);
     } else {
         DEBUG_WRITE_FORCE("RegisterInstance failed with null new instance class: %s",
                           fullClassName.c_str());
     }
+
+
 
     return success;
 }

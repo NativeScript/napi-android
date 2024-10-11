@@ -42,6 +42,7 @@ namespace ns
                                      const ArgsWrapper &argWrapper,
                                      napi_value implementationObject,
                                      bool isInterface,
+                                     napi_value* jsThisProxy,
                                      const std::string &baseClassName = std::string());
 
         static jclass ResolveClass(napi_env env, const std::string &baseClassName,

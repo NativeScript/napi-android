@@ -29,8 +29,11 @@ void MetadataNode::Init(napi_env env) {
 napi_value MetadataNode::CreateArrayObjectConstructor(napi_env env) {
     auto it = s_arrayObjects.find(env);
     if (it != s_arrayObjects.end()) {
-        return it->second;
+        return napi_util::get_ref_value(env, it->second);
     }
+
+    auto node = GetOrCreate("java/lang/Object");
+    auto objectConstructor = node->GetConstructorFunction(env);
 
     napi_value arrayConstructor;
     const char *name = "ArrayObjectWrapper";
@@ -42,109 +45,16 @@ napi_value MetadataNode::CreateArrayObjectConstructor(napi_env env) {
     napi_value proto = napi_util::get_proto(env, arrayConstructor);
     ObjectManager::MarkObject(env, proto);
 
-    napi_value setter;
-    const char *setter_name = "setValueAtIndex";
-    napi_value getter;
-    const char *getter_name = "getValueAtIndex";
+    napi_util::napi_set_function(env, proto, "setValueAtIndex", ArraySetterCallback, nullptr);
+    napi_util::napi_set_function(env, proto, "getValueAtIndex", ArrayGetterCallback, nullptr);
+    napi_util::napi_set_function(env, proto, "getAllValues", ArrayGetAllValuesCallback, nullptr);
+    napi_util::define_property(env, proto, "length", nullptr, ArrayLengthCallback);
 
-    napi_value length;
-    const char *length_name = "length";
+    napi_util::napi_inherits(env, arrayConstructor, objectConstructor);
 
-    napi_create_function(env, setter_name, strlen(setter_name), ArraySetterCallback, nullptr,
-                         &setter);
-    napi_create_function(env, getter_name, strlen(getter_name), ArrayGetterCallback, nullptr,
-                         &getter);
-    napi_create_function(env, length_name, strlen(length_name), ArrayLengthCallback, nullptr,
-                         &length);
-
-    napi_set_named_property(env, proto, setter_name, setter);
-    napi_set_named_property(env, proto, getter_name, getter);
-    napi_set_named_property(env, proto, length_name, length);
-
-    napi_value global;
-    napi_get_global(env, &global);
-    napi_set_named_property(env, global, "ArrayObjectWrapper", arrayConstructor);
-    s_arrayObjects.emplace(env, arrayConstructor);
+    s_arrayObjects.emplace(env, napi_util::make_ref(env, arrayConstructor));
 
     return arrayConstructor;
-}
-
-napi_value MetadataNode::WrapArrayObject(napi_env env, napi_value value) {
-    static const char *script = R"((function(target) {
-    return new Proxy(target, {
-        get(target, prop) {
-            console.log("Getting array value",prop);
-            if (prop === Symbol.iterator) {
-                let index = 0;
-                return function() {
-                    return {
-                        next: function() {
-                            if (index < target.length) {
-                                return { value: target.getValueByIndex(index++), done: false };
-                            } else {
-                                return { done: true };
-                            }
-                        }
-                    };
-                };
-            }
-            if (typeof prop === 'string' && !isNaN(prop)) {
-
-                return target.getValueByIndex(Number(prop));
-            }
-            if (prop === 'map') {
-                return function(callback) {
-                    const result = [];
-                    for (let i = 0; i < target.length; i++) {
-                        result.push(callback(target.getValueByIndex(i), i, target));
-                    }
-                    return result;
-                };
-            }
-            if (prop === 'forEach') {
-                return function(callback) {
-                    for (let i = 0; i < target.length; i++) {
-                        callback(target.getValueByIndex(i), i, target);
-                    }
-                };
-            }
-            // Add other methods as needed
-            return target[prop];
-        },
-        set(target, prop, value) {
-            if (typeof prop === 'string' && !isNaN(prop)) {
-                target.setValueByIndex(Number(prop), value);
-                return true;
-            }
-            target[prop] = value;
-            return true;
-        }
-    });
-})();
-)";
-
-    napi_value proxyFunction;
-
-    auto it = s_envToArrayProxyFunction.find(env);
-    if (it == s_envToArrayProxyFunction.end()) {
-        napi_value scriptValue;
-        napi_create_string_utf8(env, script, strlen(script), &scriptValue);
-        napi_run_script(env, scriptValue, &proxyFunction);
-        napi_ref ref = napi_util::make_ref(env, proxyFunction);
-        s_envToArrayProxyFunction.emplace(env, ref);
-    } else {
-        proxyFunction = napi_util::get_ref_value(env, it->second);
-    }
-
-    napi_value array;
-    napi_value global;
-    napi_get_global(env, &global);
-    napi_value argv[1];
-    argv[0] = value;
-    DEBUG_WRITE("%s", "CREATING ARRAY PROXY");
-    napi_call_function(env, global, proxyFunction, 1, argv, &array);
-
-    return array;
 }
 
 napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
@@ -209,6 +119,21 @@ napi_value MetadataNode::ArrayGetterCallback(napi_env env, napi_callback_info in
     return CallbackHandlers::GetArrayElement(env, jsThis, indexValue, node->m_name);
 }
 
+napi_value MetadataNode::ArrayGetAllValuesCallback(napi_env env, napi_callback_info info) {
+    NAPI_CALLBACK_BEGIN(0);
+    auto node = GetInstanceMetadata(env, jsThis);
+    auto length = CallbackHandlers::GetArrayLength(env, jsThis);
+    napi_value arr;
+    napi_create_array(env, &arr);
+
+    for (int i=0;i< length;i++) {
+        napi_value element = CallbackHandlers::GetArrayElement(env, jsThis, i, node->m_name);
+        napi_set_element(env, arr, i, element);
+    }
+
+    return arr;
+}
+
 napi_value MetadataNode::ArraySetterCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(2);
 
@@ -235,16 +160,12 @@ napi_value MetadataNode::ArrayLengthCallback(napi_env env, napi_callback_info in
 napi_value MetadataNode::CreateArrayWrapper(napi_env env) {
     auto node = GetOrCreate("java/lang/Object");
     auto ctorFunc = node->GetConstructorFunction(env);
-
     napi_value constructor = CreateArrayObjectConstructor(env);
     napi_value instance;
     napi_new_instance(env, constructor, 0, nullptr, &instance);
-    napi_util::set_prototype(env, instance, napi_util::get_proto(env, constructor));
-    napi_value arrayProxy = WrapArrayObject(env, instance);
-
     SetInstanceMetadata(env, instance, this);
 
-    return arrayProxy;
+    return instance;
 }
 
 napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object) {
@@ -355,12 +276,12 @@ napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_cal
     string fullClassName = extData->fullClassName;
 
     ArgsWrapper argWrapper(info, ArgType::Class);
-
+    napi_value jsThisProxy;
     bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argWrapper,
                                                       implementationObject, false,
-                                                      extData->node->m_name);
+                                                      &jsThisProxy, extData->node->m_name);
 
-    return jsThis;
+    return jsThisProxy;
 }
 
 napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callback_info info) {
@@ -423,9 +344,10 @@ napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callbac
 
     ArgsWrapper argsWrapper(info, ArgType::Interface);
 
+    napi_value jsThisProxy;
     auto success = CallbackHandlers::RegisterInstance(env, jsThis, className, argsWrapper,
-                                                      implementationObject, true);
-    return jsThis;
+                                                      implementationObject, true, &jsThisProxy);
+    return jsThisProxy;
 }
 
 napi_value MetadataNode::ConstructorFunctionCallback(napi_env env, napi_callback_info info) {
@@ -441,10 +363,9 @@ napi_value MetadataNode::ConstructorFunctionCallback(napi_env env, napi_callback
     string fullClassName = CreateFullClassName(className, extendName);
 
     ArgsWrapper argsWrapper(info, ArgType::Class);
-
-    bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argsWrapper,
-                                                      nullptr, false, className);
-    return jsThis;
+    napi_value jsThisProxy;
+    bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argsWrapper, nullptr, false, &jsThisProxy, className);
+    return jsThisProxy;
 }
 
 string MetadataNode::CreateFullClassName(const std::string &className,
@@ -1574,10 +1495,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
         };
     }
 
-
-
     auto node = reinterpret_cast<MetadataNode *>(data);
-
 
     if (hasDot) {
         extendName = argv[0];
@@ -1692,9 +1610,8 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
                                                                                        env,
                                                                                        jsThis)));
         napi_util::set_prototype(env, superValue, superProto);
-
         napi_set_named_property(env, jsThis, PROP_KEY_SUPERVALUE, superValue);
-        objectManager->CloneLink(superValue, jsThis);
+        objectManager->CloneLink(jsThis, superValue);
         auto node = GetInstanceMetadata(env, jsThis);
         SetInstanceMetadata(env, superValue, node);
     }
@@ -1871,8 +1788,7 @@ robin_hood::unordered_map<std::string, MetadataNode *> MetadataNode::s_name2Node
 robin_hood::unordered_map<std::string, MetadataTreeNode *> MetadataNode::s_name2TreeNodeCache;
 robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> MetadataNode::s_treeNode2NodeCache;
 robin_hood::unordered_map<napi_env, MetadataNode::MetadataNodeCache *> MetadataNode::s_metadata_node_cache;
-robin_hood::unordered_map<napi_env, napi_value> MetadataNode::s_arrayObjects;
-robin_hood::unordered_map<napi_env, napi_ref> MetadataNode::s_envToArrayProxyFunction;
+robin_hood::unordered_map<napi_env, napi_ref> MetadataNode::s_arrayObjects;
 
 // TODO
 bool MetadataNode::s_profilerEnabled = false;

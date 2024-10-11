@@ -37,9 +37,9 @@ namespace ns {
 
         std::string ReadFileText(const std::string &filePath);
 
-//        bool NotifyGC(JNIEnv *env, jobject obj);
-//
-//        bool TryCallGC();
+        bool NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids);
+
+        bool TryCallGC();
 
         static int GetWriter();
 

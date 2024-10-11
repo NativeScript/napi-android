@@ -242,6 +242,7 @@ namespace ns {
 
         jbyte *GetByteArrayElements(jbyteArray array, jboolean *isCopy);
 
+
         void ReleaseByteArrayElements(jbyteArray array, jbyte *elems, jint mode);
 
         void GetBooleanArrayRegion(jbooleanArray array, jsize start, jsize len, jboolean *buf);
@@ -253,6 +254,8 @@ namespace ns {
         void GetShortArrayRegion(jshortArray array, jsize start, jsize len, jshort *buf);
 
         void GetIntArrayRegion(jintArray array, jsize start, jsize len, jint *buf);
+
+        jint *GetIntArrayElements(jintArray array, jboolean *isCopy);
 
         void GetLongArrayRegion(jlongArray array, jsize start, jsize len, jlong *buf);
 

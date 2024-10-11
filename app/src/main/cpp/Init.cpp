@@ -106,13 +106,13 @@ extern "C" JNIEXPORT jint Java_org_nativescript_runtime_napi_Runtime_generateNew
     return 0;
 }
 
-extern "C" JNIEXPORT jboolean Java_org_nativescript_runtime_napi_Runtime_notifyGc(JNIEnv* env, jobject obj, jint runtimeId) {
+extern "C" JNIEXPORT jboolean Java_org_nativescript_runtime_napi_Runtime_notifyGc(JNIEnv* env, jobject obj, jint runtimeId, jintArray object_ids) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime == nullptr) {
         return JNI_FALSE;
     }
 
-//    jboolean success = runtime->NotifyGC(env, obj) ? JNI_TRUE : JNI_FALSE;
+    jboolean success = runtime->NotifyGC(env, obj, object_ids) ? JNI_TRUE : JNI_FALSE;
     return true;
 }
 
