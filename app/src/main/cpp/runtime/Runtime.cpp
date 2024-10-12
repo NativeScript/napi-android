@@ -283,10 +283,8 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile)
 
     if (status != napi_ok)
     {
-        DEBUG_WRITE("%s", "Script has thrown an exception");
         const napi_extended_error_info *info;
         napi_get_last_error_info(env, &info);
-        DEBUG_WRITE("%s", info->error_message);
     }
 
     return nullptr;
