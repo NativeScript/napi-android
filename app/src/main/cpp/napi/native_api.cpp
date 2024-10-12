@@ -878,6 +878,7 @@ static napi_status setWeak(napi_env env, napi_value value, napi_ref ref) {
                     napi_create_external(env, referenceInfo, reference_finalize, nullptr,
                                          &referenceValue);
             if (TRUTHY(status != napi_ok)) {
+                napi_close_handle_scope(env, handleScope);
                 free(referenceInfo);
 
                 return napi_set_last_error(env, status);
@@ -889,6 +890,7 @@ static napi_status setWeak(napi_env env, napi_value value, napi_ref ref) {
     } else {
         CHECK_NAPI(napi_get_value_external(env, referenceValue, (void **) &referenceInfo))
         if (TRUTHY(!referenceInfo)) {
+            napi_close_handle_scope(env, handleScope);
             assert(false);
 
             return napi_set_last_error(env, napi_generic_failure);
@@ -3433,6 +3435,7 @@ napi_status napi_call_function(napi_env env, napi_value thisValue, napi_value fu
     }
 
     if (JS_IsException(returnValue)) {
+        napi_close_handle_scope(env, handleScope);
         return napi_set_last_error(env, napi_pending_exception);
     }
 
@@ -3724,8 +3727,6 @@ CallConstructor(JSContext *ctx, JSValueConst newTarget, int argc, JSValueConst *
             constructorInfo->functionInfo.callback(env, &callbackInfo);
 
     JSValue returnValue = *((JSValue *) result);
-    // Free thisValue, if the function returns thisValue, it will get duped in the next statements again.
-    // buf if the value from the callback is different that thisValue, we want to reduce ref count by 1.
 
     if (result && JS_IsObject(returnValue)) {
         JS_DupValue(ctx, returnValue);
@@ -4243,13 +4244,7 @@ napi_status napi_run_script(napi_env env,
     if (JS_IsException(eval_result)) {
         JSValue exception = JS_GetException(env->context);
         const char *exceptionMessage = JS_ToCString(env->context, exception);
-        const char *stack = JS_ToCString(env->context,
-                                         JS_GetPropertyStr(env->context, exception, "stack"));
-
-        printf("JavaScript Exception: %s \nStack: %s", exceptionMessage, stack);
-
-        JS_FreeCString(env->context, stack);
-        JS_FreeCString(env->context, exceptionMessage);
+        print_exception(env, exception);
         JS_FreeValue(env->context, exception);
 
         return napi_set_last_error(env, napi_cannot_run_js, exceptionMessage);
