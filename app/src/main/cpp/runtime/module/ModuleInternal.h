@@ -1,10 +1,3 @@
-/*
- * Module.h
- *
- *  Created on: Jun 24, 2015
- *      Author: gatanasov
- */
-
 #ifndef JNI_MODULE_H_
 #define JNI_MODULE_H_
 
@@ -12,17 +5,18 @@
 #include "js_native_api.h"
 #include <string>
 #include <map>
+#include "robin_hood.h"
 
 namespace ns {
 class ModuleInternal {
     public:
         ModuleInternal();
-Ø
+
         ~ModuleInternal();
 
         void Init(napi_env env, const std::string& baseDir = "");
 
-        napi_value Load(napi_env env, const std::string& path);
+        napi_status Load(napi_env env, const std::string& path);
 
         /*
          * Reuses `Load` logic and adds TryCatch exception handling to push any unhandled exceptions
@@ -120,4 +114,4 @@ class ModuleInternal {
 };
 }
 
-#endif /* JNI_MODULE_H_ */Ø
+#endif /* JNI_MODULE_H_ */

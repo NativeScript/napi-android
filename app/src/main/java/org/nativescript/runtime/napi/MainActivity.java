@@ -31,6 +31,7 @@ public class MainActivity extends AppCompatActivity {
         DefaultExtractPolicy extractPolicy = new DefaultExtractPolicy(logger);
 
         Context ctx = getApplicationContext();
+        File rootDir = new File(this.getApplicationInfo().dataDir);
         String appDir = null;
         try {
             appDir = getApplicationContext().getFilesDir().getCanonicalPath();
@@ -44,10 +45,13 @@ public class MainActivity extends AppCompatActivity {
 
         }
 
-        if (appDir != null) {
-            m_runtime = new Runtime(this.getApplication(), new LogcatLogger(this.getApplicationContext()));
-            m_runtime.startRuntimeBridge(appDir);
-        }
+        try {
+            if (appDir != null) {
+                Module.init(logger, rootDir, getApplicationContext().getFilesDir());
+                m_runtime = new Runtime(this.getApplication(), logger);
+                m_runtime.startRuntimeBridge(appDir);
+            }
+        } catch (Exception e) { }
 
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());

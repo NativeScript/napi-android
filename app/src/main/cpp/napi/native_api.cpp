@@ -1,19 +1,17 @@
-#include <assert.h>
+#include <cassert>
 #include <js_native_api.h>
 #include <quickjs.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/queue.h>
-#ifdef ANDROID
-#include <android/log.h>
-#endif
+#include <climits>
 
-#include <limits.h>
+#ifdef ANDROID
+
+#include <android/log.h>
+
+#endif
 
 extern "C"
 {
-
 #include "libbf.h"
 }
 
@@ -151,6 +149,8 @@ struct NAPIEnvironment {
     JSValue finalizationRegistry;
     napi_extended_error_info last_error;
     NAPIAtoms atoms;
+    ExternalInfo* gcBefore;
+    ExternalInfo* gcAfter;
 };
 
 struct NAPIJSRuntime {
@@ -191,7 +191,8 @@ void print_exception(napi_env env, JSValue exception) {
                                      JS_GetPropertyStr(env->context, exception, "stack"));
 
 #ifdef ANDROID
-    __android_log_print(ANDROID_LOG_ERROR, "NS.Native", "Napi Exception: %s \nStacktrace: %s", exceptionMessage, stack);
+    __android_log_print(ANDROID_LOG_ERROR, "NS.Native", "Napi Exception: %s \nStacktrace: %s",
+                        exceptionMessage, stack);
 #else
     printf("Napi Exception: %s \nStacktrace: %s", exceptionMessage, stack);
 #endif
@@ -337,9 +338,6 @@ napi_status NAPICreateJSRuntime(napi_runtime *runtime) {
     return napi_ok;
 }
 
-#define C_FUNC [](JSContext * ctx, JSValueConst thisVal, int argc, JSValueConst *argv, int magic, \
-                  JSValue *funcData) -> JSValue
-
 // NAPIGenericFailure/NAPIMemoryError
 napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
     assert(env && runtime);
@@ -379,6 +377,8 @@ napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
 
     (*env)->context = context;
     (*env)->isThrowNull = false;
+    (*env)->gcBefore = nullptr;
+    (*env)->gcAfter = nullptr;
 
     //    js_std_add_helpers(context, 0, NULL);
     if (TRUTHY(!context)) {
@@ -416,8 +416,16 @@ napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
         return napi_set_last_error((*env), napi_generic_failure);
     }
 
+    JSValue gc = JS_NewCFunction(context, [](JSContext *ctx, JSValue this_val, int argc, JSValue *argv) -> JSValue {
+        JS_RunGC(JS_GetRuntime(ctx));
+        return JS_TRUE;
+    }, "gc", 0);
+
     JSValue globalValue = JS_GetGlobalObject(context);
+    JS_SetPropertyStr(context, globalValue, "gc", gc);
+
     JSValue jsNativeEngine = (JSValue) JS_MKPTR(JS_TAG_INT, (*env));
+
 
     JSValue FinalizationRegistry = JS_GetPropertyStr(context, globalValue, "FinalizationRegistry");
     JSValue FinalizeCallback = JS_NewCFunction(context,
@@ -436,7 +444,8 @@ napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
                                                        }
                                                    }
                                                    return JS_UNDEFINED;
-                                               }, "FinalizationRegistryCallback", strlen("FinalizationRegistryCallback"));
+                                               }, "FinalizationRegistryCallback",
+                                               strlen("FinalizationRegistryCallback"));
 
     (*env)->finalizationRegistry = JS_CallConstructor(context, FinalizationRegistry, 1,
                                                       &FinalizeCallback);
@@ -950,6 +959,13 @@ napi_create_reference(napi_env env, napi_value value, uint32_t initialRefCount, 
     *result = (NAPIReference *) malloc(sizeof(NAPIReference));
     RETURN_STATUS_IF_FALSE(*result, napi_memory_error)
 
+    if (JS_IsUndefined(*((JSValue *) value))) {
+        (*result)->value = JS_UNDEFINED;
+        (*result)->referenceCount = 0;
+        return napi_ok;
+    }
+
+
     // scalar && weak reference
     if (!JS_IsObject(*((JSValue *) value)) && !initialRefCount) {
         (*result)->referenceCount = 0;
@@ -1073,7 +1089,7 @@ napi_status napi_get_reference_value(napi_env env, napi_ref ref, napi_value *res
     CHECK_ARG(result)
 
     if (!ref->referenceCount && JS_IsUndefined(ref->value)) {
-        *result = NULL;
+        *result = (napi_value) &undefined;
     } else {
         JSValue strongValue = ref->value;
         struct Handle *handle;
@@ -1871,8 +1887,10 @@ napi_status napi_create_string_utf8(napi_env env,
 
     JSValue value = JS_NewStringLen(env->context, str,
                                     (length == NAPI_AUTO_LENGTH) ? strlen(str) : length);
+
     return CreateScopedResult(env, value, result);
 }
+
 
 /**
  * Functions to convert from Node-API to C types
@@ -4056,7 +4074,7 @@ napi_status napi_create_promise(napi_env env, napi_deferred *deferred, napi_valu
     JSValue promise = JS_NewPromiseCapability(env->context, resolving_funcs);
 
     *deferred = (NAPIDeferred *) malloc(sizeof(NAPIDeferred));
-    
+
     (*deferred)->resolve = (napi_value) &resolving_funcs[0];
     (*deferred)->reject = (napi_value) &resolving_funcs[1];
 
@@ -4151,7 +4169,7 @@ napi_status napi_type_tag_object(napi_env env, napi_value object, napi_type_tag 
     if (!isTypeTagged) {
         JSValue value = JS_CreateBigIntWords(env->context, 0, size, words);
         JS_SetProperty(env->context, jsValue, env->atoms.napi_typetag,
-                                JS_DupValue(env->context, value));
+                       JS_DupValue(env->context, value));
     }
 
     return napi_clear_last_error(env);
@@ -4221,20 +4239,16 @@ napi_status napi_free_cstring(napi_env env, const char *cString) {
     return napi_clear_last_error(env);
 }
 
-
-
-
 napi_status napi_run_script(napi_env env,
                             napi_value script,
+                            const char * file,
                             napi_value *result) {
     CHECK_ARG(env)
     CHECK_ARG(script)
 
     JSValue eval_result;
-    // 1. Get the script as char *
     const char *cScript = JS_ToCString(env->context, *((JSValue *) script));
-    // 2. Evaulate it
-    eval_result = JS_Eval(env->context, cScript, strlen(cScript), "input", JS_EVAL_TYPE_GLOBAL);
+    eval_result = JS_Eval(env->context, cScript, strlen(cScript), file, JS_EVAL_TYPE_GLOBAL);
 
     napi_run_microtasks(env);
 
@@ -4381,3 +4395,17 @@ napi_status NAPIFreeEnv(napi_env env) {
     return napi_clear_last_error(env);
 }
 
+
+napi_status napi_set_gc_being_callback(napi_env env, napi_callback cb, void *data) {
+    CHECK_ARG(env)
+    CHECK_ARG(cb)
+
+    return napi_clear_last_error(env);
+}
+
+napi_status napi_set_gc_end_callback(napi_env env, napi_callback cb, void *data) {
+    CHECK_ARG(env)
+    CHECK_ARG(cb)
+
+    return napi_clear_last_error(env);
+}

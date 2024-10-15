@@ -13,14 +13,14 @@
 #include <libgen.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
-#include <time.h>
+#include <ctime>
 #include <utime.h>
 
 using namespace ns;
 using namespace std;
 
 ModuleInternal::ModuleInternal()
-    : m_isolate(nullptr), m_requireFunction(nullptr), m_requireFactoryFunction(nullptr) {
+    : m_env(nullptr), m_requireFunction(nullptr), m_requireFactoryFunction(nullptr) {
 }
 
 ModuleInternal::~ModuleInternal() {
@@ -69,12 +69,12 @@ void ModuleInternal::Init(napi_env env, const std::string& baseDir) {
     napi_get_global(env, &global);
 
     napi_value result;
-    status = napi_run_script(env, source, &script);
+    status = napi_run_script(env, source, &result);
     assert(status == napi_ok);
 
     m_requireFactoryFunction = napi_util::make_ref(m_env, result);
 
-    napi_value requireFunction = napi_util::napi_set_function(env, global, "__nativeRequire", RequireNativeCallback, this);
+    napi_value requireFunction = napi_util::napi_set_function(env, global, "__nativeRequire", RequireCallback, this);
     m_requireFunction = napi_util::make_ref(m_env, requireFunction);
 
     napi_value globalRequire = GetRequireFunction(env, baseDir.empty() ? Constants::APP_ROOT_FOLDER_PATH : baseDir);
@@ -123,16 +123,18 @@ napi_value ModuleInternal::RequireCallback(napi_env env, napi_callback_info info
         auto thiz = static_cast<ModuleInternal*>(data);
         return thiz->RequireCallbackImpl(env, info);
     } catch (NativeScriptException& e) {
-        e.ReThrowToNapi();
-    } catch (std::exception e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception& e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToNapi();
+        nsEx.ReThrowToNapi(env);
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToNapi();
+        nsEx.ReThrowToNapi(env);
     }
+
+    return nullptr;
 }
 
 napi_value ModuleInternal::RequireCallbackImpl(napi_env env, napi_callback_info info) {
@@ -179,7 +181,7 @@ napi_status ModuleInternal::Load(napi_env env, const std::string& path) {
     napi_get_global(env, &global);
 
     napi_value require;
-    napi_get_named_property(env, globalObject, "require", &require);
+    napi_get_named_property(env, global, "require", &require);
 
     napi_value args[1];
     napi_create_string_utf8(env, path.c_str(), path.size(), &args[0]);
@@ -198,7 +200,7 @@ void ModuleInternal::CheckFileExists(napi_env env, const std::string& path, cons
     JEnv jEnv;
     JniLocalRef jsModulename(jEnv.NewStringUTF(path.c_str()));
     JniLocalRef jsBaseDir(jEnv.NewStringUTF(baseDir.c_str()));
-    env.CallStaticObjectMethod(MODULE_CLASS, RESOLVE_PATH_METHOD_ID, (jstring) jsModulename, (jstring) jsBaseDir);
+    jEnv.CallStaticObjectMethod(MODULE_CLASS, RESOLVE_PATH_METHOD_ID, (jstring) jsModulename, (jstring) jsBaseDir);
 }
 
 napi_value ModuleInternal::LoadImpl(napi_env env, const std::string& moduleName, const std::string& baseDir, bool& isData) {
@@ -329,7 +331,7 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
 
     napi_value moduleIdProp;
     napi_create_string_utf8(env, "id", strlen("id"), &moduleIdProp);
-    napi_property_attributes readOnlyFlags = napi_enumerable | napi_configurable;
+//    napi_property_attributes readOnlyFlags = napi_enumerable | napi_configurable;
     napi_util::define_property(env, moduleObj, "id", fileName);
 
     napi_value thiz;
@@ -417,68 +419,6 @@ napi_value ModuleInternal::WrapModuleContent(napi_env env, const std::string& pa
 
     return wrappedContent;
 }
-
-// napi_value ModuleInternal::TryLoadScriptCache(const std::string& path) {
-//     TNSPERF();
-//     if (!Constants::V8_CACHE_COMPILED_CODE) {
-//         return nullptr;
-//     }
-
-//     auto cachePath = path + ".cache";
-
-//     struct stat result;
-//     if (stat(cachePath.c_str(), &result) == 0) {
-//         auto cacheLastModifiedTime = result.st_mtime;
-//         if (stat(path.c_str(), &result) == 0) {
-//             auto jsLastModifiedTime = result.st_mtime;
-//             if (jsLastModifiedTime != cacheLastModifiedTime) {
-//                 // files have different dates, ignore the cache file (this is enforced by the
-//                 // SaveScriptCache function)
-//                 return nullptr;
-//             }
-//         }
-//     }
-
-//     int length = 0;
-//     auto data = File::ReadBinary(cachePath, length);
-//     if (!data) {
-//         return nullptr;
-//     }
-
-//     napi_value cachedData;
-//     napi_create_external_buffer(env, length, data, nullptr, nullptr, &cachedData);
-
-//     return cachedData;
-// }
-
-// void ModuleInternal::SaveScriptCache(napi_env env, napi_value script, const std::string& path) {
-//     if (!Constants::V8_CACHE_COMPILED_CODE) {
-//         return;
-//     }
-
-//     tns::instrumentation::Frame frame("SaveScriptCache");
-
-//     napi_value unboundScript;
-//     napi_get_named_property(env, script, "unboundScript", &unboundScript);
-
-//     napi_value cachedData;
-//     napi_create_external_buffer(env, length, data, nullptr, nullptr, &cachedData);
-
-//     int length = cachedData->length;
-//     auto cachePath = path + ".cache";
-//     File::WriteBinary(cachePath, cachedData->data, length);
-//     delete cachedData;
-//     // make sure cache and js file have the same modification date
-//     struct stat result;
-//     struct utimbuf new_times;
-//     new_times.actime = time(nullptr);
-//     new_times.modtime = time(nullptr);
-//     if (stat(path.c_str(), &result) == 0) {
-//         auto jsLastModifiedTime = result.st_mtime;
-//         new_times.modtime = jsLastModifiedTime;
-//     }
-//     utime(cachePath.c_str(), &new_times);
-// }
 
 ModuleInternal::ModulePathKind ModuleInternal::GetModulePathKind(const std::string& path) {
     ModulePathKind kind;

@@ -27,23 +27,42 @@ project("napi-runtime")
 # used in the AndroidManifest.xml file.
 
 include_directories(
+        # node api
         ${CMAKE_SOURCE_DIR}/napi
+        # quickjs engine
         ${CMAKE_SOURCE_DIR}/quickjs
-        ${CMAKE_SOURCE_DIR}/runtime
+        # zip
         ${CMAKE_SOURCE_DIR}/zip/include
-        ${CMAKE_SOURCE_DIR}/runtime/jni/robinhood
+        # runtime
+        ${CMAKE_SOURCE_DIR}/runtime
+        ${CMAKE_SOURCE_DIR}/runtime/assetextractor
+        ${CMAKE_SOURCE_DIR}/runtime/callbackhandlers
+        ${CMAKE_SOURCE_DIR}/runtime/console
+        ${CMAKE_SOURCE_DIR}/runtime/constants
+        ${CMAKE_SOURCE_DIR}/runtime/conversion
+        ${CMAKE_SOURCE_DIR}/runtime/exceptions
+        ${CMAKE_SOURCE_DIR}/runtime/global
+        ${CMAKE_SOURCE_DIR}/runtime/instrumentation
+        ${CMAKE_SOURCE_DIR}/runtime/inspector
         ${CMAKE_SOURCE_DIR}/runtime/jni
+        ${CMAKE_SOURCE_DIR}/runtime/messageloop
         ${CMAKE_SOURCE_DIR}/runtime/metadata
-        ${CMAKE_SOURCE_DIR}/runtime/convert
+        ${CMAKE_SOURCE_DIR}/runtime/module
+        ${CMAKE_SOURCE_DIR}/runtime/objectmanager
+        ${CMAKE_SOURCE_DIR}/runtime/performance
+        ${CMAKE_SOURCE_DIR}/runtime/profiler
+        ${CMAKE_SOURCE_DIR}/runtime/robinhood
+        ${CMAKE_SOURCE_DIR}/runtime/sighandler
+        ${CMAKE_SOURCE_DIR}/runtime/timers
+        ${CMAKE_SOURCE_DIR}/runtime/version
 )
 
 # Search for all CPP files in runtime/ directory and add them to our sourcess
 file(GLOB_RECURSE RUNTIME_FILES
         "${CMAKE_SOURCE_DIR}/runtime/*.cpp"
-        "${CMAKE_SOURCE_DIR}/runtime/jni/*.cpp"
-        "${CMAKE_SOURCE_DIR}/runtime/metadata/*.cpp"
-        "${CMAKE_SOURCE_DIR}/runtime/convert/*.cpp"
+        "${CMAKE_SOURCE_DIR}/runtime/**/*.cpp"
 )
+
 
 # Creates and names a library, sets it as either STATIC or SHARED, and provides the relative paths to its source code.
 add_library(${CMAKE_PROJECT_NAME} SHARED
@@ -55,9 +74,7 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         quickjs/quickjs.c
         # napi
         napi/native_api.cpp
-        # test
-        Init.cpp
-        # napi-runtime
+        # runtime
         ${RUNTIME_FILES}
 )
 

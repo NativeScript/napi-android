@@ -162,6 +162,7 @@ public class Runtime {
                 runtimeCache.put(this.runtimeId, this);
                 gcListener = GcListener.getInstance(5000, 0.5);
                 GcListener.subscribe(this);
+               
             } finally {
 //                frame.close();
             }

@@ -17,6 +17,7 @@
 #include "MetadataBuilder.h"
 #include "ArgsWrapper.h"
 #include "Util.h"
+#include "GlobalHelpers.h"
 
 using namespace std;
 
@@ -400,49 +401,27 @@ bool MetadataNode::IsValidExtendName(napi_env env, napi_value name) {
 bool MetadataNode::GetExtendLocation(napi_env env, string& extendLocation, bool isTypeScriptExtend) {
     stringstream extendLocationStream;
 
-    // Create an error object and get its stack trace
-    napi_value error,msg, stack;
-    napi_create_string_utf8(env, "", 0, &msg);
-    napi_create_error(env, nullptr, msg, &error);
-    napi_get_named_property(env, error, "stack", &stack);
-
-    string stackTrace = ArgConverter::ConvertToString(env, stack);
-    vector<string> stackLines;
-    Util::SplitString(stackTrace, "\n", stackLines);
-
-    string frame;
-    if (stackLines.size() == 2) {
-        frame = stackLines[0];
+    auto frames = ns::BuildStacktraceFrames(env, nullptr, 3);
+    ns::JsStacktraceFrame* frame;
+    if (frames.size() == 2 || frames.size() == 1) {
+        frame = &frames[0];
     } else if (isTypeScriptExtend) {
-        frame = stackLines[3]; // the _super.apply call to ts_helpers will always be the third call frame
+        frame = &frames[3]; // the _super.apply call to ts_helpers will always be the third call frame
     } else {
-        frame = stackLines[2];
+        frame = &frames[2];
     }
 
-    regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
-    smatch match;
-    if (!regex_search(frame, match, frameRegex)) {
-        extendLocationStream << "unknown_location";
-        extendLocation = extendLocationStream.str();
-        return true;
-    }
-
-    string srcFileName = match[1].str();
-    int lineNumber = stoi(match[2].str());
-    int column = stoi(match[3].str());
-
-    srcFileName = Util::ReplaceAll(srcFileName, "file://", "");
+    string srcFileName = Util::ReplaceAll(frame->filename, "file://", "");
 
     string fullPathToFile;
     if (srcFileName == "<embedded>") {
         fullPathToFile = "script";
     } else {
-//        string hardcodedPathToSkip = Constants::APP_ROOT_FOLDER_PATH;
-//        int startIndex = hardcodedPathToSkip.length();
-//        int strToTakeLen = srcFileName.length() - startIndex - 3;
-//        fullPathToFile = srcFileName .substr(startIndex, strToTakeLen);
+        string hardcodedPathToSkip = Constants::APP_ROOT_FOLDER_PATH;
+        int startIndex = hardcodedPathToSkip.length();
+        int strToTakeLen = srcFileName.length() - startIndex - 3;
+        fullPathToFile = srcFileName .substr(startIndex, strToTakeLen);
         fullPathToFile = srcFileName;
-
         replace(fullPathToFile.begin(), fullPathToFile.end(), '/', '_');
         replace(fullPathToFile.begin(), fullPathToFile.end(), '.', '_');
         replace(fullPathToFile.begin(), fullPathToFile.end(), '-', '_');
@@ -453,23 +432,23 @@ bool MetadataNode::GetExtendLocation(napi_env env, string& extendLocation, bool 
         fullPathToFile = pathParts.back();
     }
 
-    if (lineNumber < 0) {
+    if (frame->line < 0) {
         extendLocationStream << fullPathToFile << " unknown line number";
         extendLocation = extendLocationStream.str();
         return false;
     }
 
-    if (column < 0) {
-        extendLocationStream << fullPathToFile << " line:" << lineNumber << " unknown column number";
+    if (frame->col < 0) {
+        extendLocationStream << fullPathToFile << " line:" << frame->line << " unknown column number";
         extendLocation = extendLocationStream.str();
         return false;
     }
+    int column = frame->col;
+    if (frame->line == 1) {
+        column -= ModuleInternal::MODULE_PROLOGUE_LENGTH;
+    }
 
-//    if (lineNumber == 1) {
-//        column -= ModuleInternal::MODULE_PROLOGUE_LENGTH;
-//    }
-
-    extendLocationStream << fullPathToFile << "_" << lineNumber << "_" << column << "_";
+    extendLocationStream << fullPathToFile << "_" << frame->line << "_" << column << "_";
     extendLocation = extendLocationStream.str();
     return true;
 }
