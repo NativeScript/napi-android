@@ -1,0 +1,183 @@
+import java.nio.file.Paths
+import java.util.jar.JarEntry
+import java.util.jar.JarFile
+
+apply plugin: 'java-library'
+
+java {
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+def version = "4.0.0"
+
+def hasProject = file("$project.rootDir/gradle.properties").exists();
+
+repositories {
+    google()
+    mavenCentral()
+    maven {
+        url 'https://maven.google.com/'
+        name 'Google'
+    }
+    maven { url "https://repo1.maven.org/maven2/" }
+    maven { url "https://repo.maven.apache.org/maven2/" }
+}
+
+if (!project.hasProperty("loadedProjectDeps")  && hasProject) {
+    Properties projectDeps = new Properties()
+    projectDeps.load(new FileInputStream("$project.rootDir/gradle.properties"))
+    projectDeps.each { prop ->
+        project.ext.set(prop.key, prop.value)
+    }
+    project.ext.loadedProjectDeps = true
+}
+
+if(!hasProject){
+    project.ext.set("ns_default_bcel_version", " 6.8.2");
+    project.ext.set("ns_default_commons_io_version", "2.6");
+    project.ext.set("ns_default_spotbugs_version", "3.1.12");
+}
+
+
+
+// todo: check if still needed
+// if(!project.hasProperty("loadedProjectDeps")){
+//     Properties projectDeps = new Properties()
+//     projectDeps.load(new FileInputStream("$project.rootDir/gradle.properties"))
+//     projectDeps.each { prop ->
+//         project.ext.set(prop.key, prop.value)
+//     }
+//     project.ext.loadedProjectDeps = true
+// }
+
+project.ext.extractedDependenciesDir = "jar-files"
+if (project.hasProperty("jarsOutput")) {
+    project.ext.extractedDependenciesDir = project.ext.jarsOutput
+}
+
+
+allprojects {
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile).tap {
+            configureEach {
+                options.compilerArgs << "-Xlint:all" << "-Werror"
+            }
+        }
+    }
+}
+
+dependencies {
+    // println "\t ~ [DEBUG][dts-generator] build.gradle - ns_default_bcel_version = ${ns_default_bcel_version}..."
+
+    implementation "org.apache.bcel:bcel:${ns_default_bcel_version}"
+    implementation "commons-io:commons-io:${ns_default_commons_io_version}"
+    implementation "com.github.spotbugs:spotbugs:${ns_default_spotbugs_version}"
+
+    // add your dependency here as the example bellow, make sure you are using testCompileOnly
+    // testCompileOnly  "com.android.support:support-v4:27.0.1"
+
+    //AndroidX
+    // testCompileOnly  "androidx.legacy:legacy-support-v4:1.0.0"
+    // testCompileOnly  "androidx.appcompat:appcompat:1.0.0"
+    // testCompileOnly   "com.google.android.material:material:1.0.0"
+
+//    def androidXLegacyVersion = "1.0.0"
+//    def androidXAppCompatVersion = "1.6.1"
+//    def androidXMaterialVersion = "1.8.0"
+//    def androidXExifInterfaceVersion = "1.3.7"
+//    def androidXViewPagerVersion = "1.0.0"
+//    def androidXFragmentVersion = "1.4.1"
+//    def androidXTransitionVersion = "1.4.1"
+//
+//    testCompileOnly "androidx.legacy:legacy-support-v4:$androidXLegacyVersion"
+//    testCompileOnly "androidx.appcompat:appcompat:$androidXAppCompatVersion"
+//    testCompileOnly "com.google.android.material:material:$androidXMaterialVersion"
+//    testCompileOnly "androidx.exifinterface:exifinterface:$androidXExifInterfaceVersion"
+//    testCompileOnly "androidx.viewpager2:viewpager2:$androidXViewPagerVersion"
+//    testCompileOnly "androidx.fragment:fragment:$androidXFragmentVersion"
+//    testCompileOnly "androidx.transition:transition:$androidXTransitionVersion"
+}
+
+configurations.create("dtsGeneratorImplementation") {
+    extendsFrom configurations.implementation
+    setCanBeResolved(true)
+}
+
+configurations.create("dtsGeneratorTestCompileOnly") {
+    extendsFrom configurations.testCompileOnly
+    setCanBeResolved(true)
+}
+
+jar {
+    //pack jar dependencies into the final jar
+    from {
+        configurations.dtsGeneratorImplementation.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    from('src/main/resources') {
+        include 'generics.txt'
+    }
+    //set main class for the jar
+    manifest {
+        attributes 'Main-Class': 'com.telerik.Main'
+        attributes 'Specification-Version': version
+        attributes 'Manifest-Version': version
+    }
+
+    duplicatesStrategy = 'include'
+}
+
+task extractAllJars {
+
+    outputs.dir extractedDependenciesDir
+
+    doLast {
+        def iter = configurations.dtsGeneratorTestCompileOnly.resolvedConfiguration.resolvedArtifacts.iterator()
+        def dependencyCounter = 0
+        while (iter.hasNext()) {
+            //declaring variable as specific class for getting code completion in Android Studio
+            def nextDependency = iter.next()
+
+            def outputDir = Paths.get(extractedDependenciesDir, nextDependency.toString()).normalize().toString().replace(':', '_')
+            explodeAar(nextDependency.file, outputDir)
+            dependencyCounter++
+        }
+    }
+}
+
+def explodeAar(File compileDependency, String outputDir) {
+    if (compileDependency.name.endsWith(".aar")) {
+        JarFile jar = new JarFile(compileDependency)
+        Enumeration enumEntries = jar.entries()
+        while (enumEntries.hasMoreElements()) {
+            JarEntry file = (JarEntry) enumEntries.nextElement()
+            if (file.name.endsWith(".jar")) {
+                def f = new File(outputDir, file.name)
+                new File(f.parent).mkdirs()
+                InputStream is = jar.getInputStream(file)
+                FileOutputStream fos = new FileOutputStream(f)
+                while (is.available() > 0) {
+                    fos.write(is.read())
+                }
+                fos.close()
+                is.close()
+            }
+            if (file.isDirectory()) {
+                continue
+            }
+        }
+        jar.close()
+    } else if (compileDependency.name.endsWith(".jar")) {
+        copy {
+            from compileDependency.absolutePath
+            into outputDir
+        }
+    }
+}
+
+// def buildMetadata = tasks.findByPath(":app:buildMetadata")
+
+// if (buildMetadata != null) {
+//     processResources.dependsOn(buildMetadata)
+//     compileJava.dependsOn(buildMetadata)
+// }

@@ -1,0 +1,48 @@
+import static org.gradle.internal.logging.text.StyledTextOutput.Style
+
+def GRADLE_PROPERTIES_FILENAME = "gradle.properties"
+
+def getFile = { dir, filename ->
+    File file = new File("$dir$File.separator$filename")
+    file?.exists() ? file : null
+}
+
+def getPropertyFile = { dir ->
+    return getFile(dir, GRADLE_PROPERTIES_FILENAME)
+}
+
+def loadPropertyFile = { path ->
+    try {
+        if(project.hasProperty("loadedProperties_${path}")) {
+            logger.info "\t + gradle properties already loaded. SKIPPING"
+        } else {
+            logger.info "\t + trying to load gradle properties from \"$path\""
+
+            Properties properties = new Properties()
+            properties.load(new FileInputStream("$path"))
+            properties.each { prop ->
+                logger.info "\t + [$path] setting ${prop.key} = ${prop.value}"
+                project.ext.set(prop.key, prop.value)
+            }
+            project.ext.set("loadedProperties_${path}", true)
+            
+            outLogger.withStyle(Style.SuccessHeader).println "\t + loaded gradle properties from \"$path\""
+        }
+    } catch(Exception ex) {
+        logger.warn "\t + failed to load gradle properties from \"$path\". Error is: ${ex.getMessage()}"
+    }
+}
+
+ext.getUserProperties = { dir ->
+    def file = getPropertyFile(dir)
+    if (!file) {
+        return null
+    }
+
+    Properties properties = new Properties()
+    properties.load(file.newInputStream())
+
+    return properties
+}
+
+ext.loadPropertyFile = loadPropertyFile

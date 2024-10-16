@@ -1,0 +1,16 @@
+apply plugin: 'java-library'
+
+dependencies {
+    // println "\t ~ [DEBUG][runtime-binding-generator] build.gradle - ns_default_junit_version = ${ns_default_junit_version}..."
+
+    testImplementation "junit:junit:${ns_default_junit_version}"
+}
+
+java {
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+// Disable compilation tasks as these are compiled *with* the runtime and not separately
+compileJava.enabled = false
+compileTestJava.enabled = false

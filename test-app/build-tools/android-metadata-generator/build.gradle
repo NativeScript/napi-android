@@ -1,0 +1,129 @@
+apply plugin: 'java'
+apply plugin: 'kotlin'
+
+java {
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+}
+
+// todo: check if still needed
+// if(!project.hasProperty("loadedProjectDeps")){
+//     Properties projectDeps = new Properties()
+//     projectDeps.load(new FileInputStream("$project.rootDir/gradle.properties"))
+//     projectDeps.each { prop ->
+//         project.ext.set(prop.key, prop.value)
+//     }
+//     project.ext.loadedProjectDeps = true
+// }
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath "com.android.tools.build:gradle:$NS_DEFAULT_ANDROID_BUILD_TOOLS_VERSION"
+    }
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/src'
+        }
+        kotlin {
+            srcDirs += 'src/src'
+        }
+    }
+}
+
+compileJava {
+    options.compilerArgs << "-Xlint:all" << "-Xlint:-options" << "-Werror"
+}
+
+compileJava.outputs.dir("$rootDir/dist/classes")
+
+compileKotlin {
+    kotlinOptions {
+        jvmTarget = '17'
+        allWarningsAsErrors = true
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    // println "\t ~ [DEBUG][android-metadata-generator] build.gradle - ns_default_bcel_version = ${ns_default_bcel_version}..."
+
+    api "org.apache.bcel:bcel:${ns_default_bcel_version}"
+    api "com.google.code.gson:gson:${ns_default_gson_version}"
+    api group: 'org.jetbrains.kotlin', name: 'kotlin-metadata-jvm', version: "${ns_default_kotlinx_metadata_jvm_version}"
+    implementation files("./src/libs/dx.jar")
+
+    testImplementation "junit:junit:${ns_default_junit_version}"
+    testImplementation "org.mockito:mockito-core:${ns_default_mockito_core_version}"
+}
+
+task copyNecessaryFiles {
+    doLast {
+        copy {
+            from "$rootDir/helpers"
+            into "$rootDir/dist/bin"
+        }
+
+        copy {
+            from "$rootDir/package.json"
+            into "$rootDir/dist"
+        }
+    }
+}
+
+configurations.create("metadataGeneratorImplementation") {
+    extendsFrom configurations.implementation
+    setCanBeResolved(true)
+}
+
+configurations.create("metadataGeneratorApi") {
+    extendsFrom configurations.api
+    setCanBeResolved(true)
+}
+
+configurations.create("metadataGeneratorRuntimeOnly") {
+    extendsFrom configurations.runtimeOnly
+    setCanBeResolved(true)
+}
+
+jar {
+    manifest {
+        attributes("Manifest-Version": "3.0",
+                "Main-Class": "com.telerik.metadata.Generator")
+    }
+
+    from {
+        configurations.metadataGeneratorImplementation.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+
+        configurations.metadataGeneratorApi.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+
+        configurations.metadataGeneratorRuntimeOnly.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+
+        configurations.compileClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
+    duplicatesStrategy = 'include'
+}
+
+def copyMetadataFilters = tasks.findByPath(":app:copyMetadataFilters")
+if (copyMetadataFilters != null) {
+    compileJava.dependsOn(copyMetadataFilters)
+    compileKotlin.dependsOn(copyMetadataFilters)
+}

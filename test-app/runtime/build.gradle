@@ -1,0 +1,335 @@
+apply plugin: 'com.android.library'
+
+def optimized = project.hasProperty("optimized")
+if (optimized) {
+    println "Optimized build triggered."
+}
+
+def optimizedWithInspector = project.hasProperty("optimizedWithInspector")
+if (optimizedWithInspector) {
+    println "Optimized build with inspector triggered."
+}
+
+def onlyX86 = project.hasProperty("onlyX86")
+if (onlyX86) {
+    println "OnlyX86 build triggered."
+}
+
+def useCCache = project.hasProperty("useCCache")
+if (useCCache) {
+    println "Use CCache build triggered."
+}
+
+
+def defaultNdkVersion = "23.2.8568313"
+
+def hasNdkVersion = project.hasProperty("ndkVersion")
+if (hasNdkVersion) {
+    println "Runtime using NDK version " + ndkVersion
+}
+
+
+def NDK_PATH = ""
+def hasNdkDirectory = project.hasProperty("ndkDirectory")
+if (!hasNdkDirectory) {
+    println "No ndkDirectory set, checking environment \$ANDROID_NDK..."
+
+    NDK_PATH = "$System.env.ANDROID_NDK"
+    if (NDK_PATH == null || NDK_PATH == "null") {
+        println "No ndkDirectory set, checking environment \$ANDROID_NDK_ROOT..."
+        NDK_PATH = "$System.env.ANDROID_NDK_ROOT"
+    }
+
+    if (NDK_PATH == null || NDK_PATH == "null") {
+        println "No ndkDirectory set, checking environment \$ANDROID_NDK_HOME..."
+        NDK_PATH = "$System.env.ANDROID_NDK_HOME"
+    }
+} else {
+    NDK_PATH = ndkDirectory
+}
+
+if (NDK_PATH == null || NDK_PATH == "null" || NDK_PATH == "") {
+    if (!hasNdkVersion) {
+        NDK_PATH = "$System.env.ANDROID_HOME/ndk/${defaultNdkVersion}"
+    } else {
+        NDK_PATH = "$System.env.ANDROID_HOME/ndk/${ndkVersion}"
+    }
+}
+
+println "Runtime using NDK_PATH: " + NDK_PATH
+
+base {
+    if (!optimized && !optimizedWithInspector) {
+        archivesName = "${base.archivesName.get()}-regular"
+    } else {
+        if (optimized) {
+            archivesName = "${base.archivesName.get()}-optimized"
+        } else if (optimizedWithInspector) {
+            archivesName = "${base.archivesName.get()}-optimized-with-inspector"
+        }
+    }
+}
+
+android {
+    namespace "com.tns.android_runtime"
+
+    compileSdk NS_DEFAULT_COMPILE_SDK_VERSION as int
+    buildToolsVersion = NS_DEFAULT_BUILD_TOOLS_VERSION as String
+
+    sourceSets {
+        main {
+            def defaultSrcPath = "src/main/java"
+            def bindingGeneratorSourcePath = new File(project(":runtime-binding-generator").projectDir, defaultSrcPath)
+
+            // embed runtime binding generator in runtime, while keeping it in a separate project
+            java.srcDirs = [bindingGeneratorSourcePath, defaultSrcPath]
+        }
+    }
+
+    if (hasNdkVersion) {
+        ndkVersion ndkVersion
+    } else {
+        ndkVersion defaultNdkVersion
+    }
+
+    defaultConfig {
+        minSdkVersion NS_DEFAULT_MIN_SDK_VERSION as int
+        targetSdkVersion NS_DEFAULT_COMPILE_SDK_VERSION as int
+
+        externalNativeBuild {
+            cmake {
+
+                if (optimized) {
+                    arguments.add("-DOPTIMIZED_BUILD=true")
+                }
+//
+//                if (optimizedWithInspector) {
+//                    arguments.add("-DOPTIMIZED_WITH_INSPECTOR_BUILD=true")
+//                }
+//
+//                if (useCCache) {
+//                    arguments.add("-DUSE_CCACHE=true")
+//                }
+//
+//                arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DANDROID_NDK_ROOT=${NDK_PATH}"
+
+                cppFlags "-std=c++14"
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}"
+            }
+        }
+
+        ndk {
+            minSdkVersion NS_DEFAULT_MIN_SDK_VERSION as int
+            if (onlyX86) {
+                abiFilters 'x86'
+            } else {
+                abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            // version "3.18.1"
+            path "CMakeLists.txt"
+        }
+    }
+
+}
+
+allprojects {
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile).tap {
+            configureEach {
+                options.compilerArgs << "-Xlint:all" << "-Werror"
+            }
+        }
+    }
+}
+
+dependencies {
+    // println "\t ~ [DEBUG][runtime] build.gradle - ns_default_junit_version = ${ns_default_junit_version}..."
+
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    testImplementation "junit:junit:${ns_default_junit_version}"
+    testImplementation "org.mockito:mockito-core:${ns_default_mockito_core_version}"
+}
+
+
+tasks.configureEach { task ->
+    def taskName = task.getName()
+    //   println "\t ~ [DEBUG][runtime] build.gradle whenTaskAdded taskName = ${taskName}"
+    if (taskName.contains("preReleaseBuild")) {
+        setRuntimeCommit.dependsOn(setPackageVersion)
+        task.dependsOn(setRuntimeCommit)
+    }
+
+    if (taskName.contains("bundleReleaseAar")) {
+        task.dependsOn("testDebugUnitTest")
+    }
+
+    if (taskName.contains("Strip")) {
+        task.finalizedBy(revertVersionFile)
+    }
+    if ((taskName == "bundleDebug") || (taskName == "bundleRelease")) {
+        task.finalizedBy createPackageConfigFileTask(taskName)
+    }
+
+    if (task =~ /configureCMake.*/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /buildCMake.*/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("syncReleaseLibJars") || taskName.contains("syncDebugLibJars")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("mergeReleaseJniLibFolders") || taskName.contains("mergeDebugJniLibFolders")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("mergeReleaseShaders") || taskName.contains("mergeDebugShaders")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("packageReleaseAssets") || taskName.contains("packageDebugAssets")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("copyReleaseJniLibsProjectOnly") || taskName.contains("copyDebugJniLibsProjectOnly")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("copyReleaseJniLibsProjectAndLocalJars") || taskName.contains("copyDebugJniLibsProjectAndLocalJars")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("generateReleaseLintVitalModel") || taskName.contains("generateDebugLintVitalModel")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (taskName.contains("lintVitalAnalyzeRelease") || taskName.contains("lintVitalAnalyzeDebug")) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /lintAnalyze.+AndroidTest/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /compile.+UnitTestJavaWithJavac/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /generate.+LintModel/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /process.+Manifest/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /merge.+Resources/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /verify.+Resources/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+
+    if (task =~ /test.+UnitTest/) {
+        task.finalizedBy(":app:buildMetadata")
+    }
+}
+
+task 'setPackageVersion' {
+    onlyIf {
+        project.hasProperty('packageVersion')
+    }
+
+    doFirst {
+        println "Setting runtime version: '${packageVersion}'"
+
+        def versionFile = "$projectDir/src/main/cpp/Version.h"
+        String contents = new File(versionFile).getText("UTF-8")
+        contents = contents.replaceAll(/0.0.0.0/, packageVersion)
+        new File(versionFile).write(contents, "UTF-8")
+    }
+}
+
+task 'setRuntimeCommit' {
+    onlyIf {
+        project.hasProperty('gitCommitVersion')
+    }
+
+    doFirst {
+        println "Setting runtime commit: '${gitCommitVersion}'"
+
+        def versionFile = "$projectDir/src/main/cpp/Version.h"
+        String contents = new File(versionFile).getText("UTF-8")
+        contents = contents.replaceAll(/RUNTIME_COMMIT_SHA_PLACEHOLDER/, gitCommitVersion)
+        new File(versionFile).write(contents, "UTF-8")
+    }
+}
+
+task revertVersionFile(type: Exec) {
+    onlyIf {
+        project.hasProperty('packageVersion') || project.hasProperty('gitCommitVersion')
+    }
+
+    doFirst {
+        def isWinOs = System.properties['os.name'].toLowerCase().contains('windows')
+        def versionFileName = "$projectDir/src/main/cpp/Version.h"
+        def versionFilePath = new File(versionFileName).getAbsolutePath()
+        println "Reverting Version.h file: ${versionFilePath}"
+
+        if (isWinOs) {
+            commandLine "cmd", "/c", "git", "checkout", "--", versionFilePath
+        } else {
+            commandLine "git", "checkout", "--", versionFilePath
+        }
+    }
+}
+repositories {
+    mavenCentral()
+}
+
+def createPackageConfigFileTask(taskName) {
+    def mode = (taskName == "bundleDebug") ? "debug" : "release"
+
+    return tasks.create(name: "packageConfigFileTaskFor${mode}",) {
+        def sdkDir = android.getSdkDirectory().getAbsolutePath()
+        doFirst {
+            def pathToAAR = "${buildDir}/outputs/aar/${project.archivesBaseName}-${mode}.aar"
+
+            if (new File(pathToAAR).exists()) {
+                def isWinOs = System.properties['os.name'].toLowerCase().contains('windows')
+
+                def aaptCommand = new File(sdkDir, "/build-tools/$project.ext._buildToolsVersion/aapt").getAbsolutePath()
+                if (isWinOs) {
+                    aaptCommand += ".exe"
+                }
+
+                def removeCmdParams = new ArrayList<String>([aaptCommand, "remove", pathToAAR, "config.json"])
+                exec {
+                    ignoreExitValue true
+                    workingDir "$projectDir/src/main"
+                    commandLine removeCmdParams.toArray()
+                }
+                def addCmdParams = new ArrayList<String>([aaptCommand, "add", pathToAAR, "config.json"])
+                exec {
+                    workingDir "$projectDir/src/main"
+                    commandLine addCmdParams.toArray()
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,8 @@
+/build
+local.properties
+.idea/gradle.xml
+.idea/modules.xml
+/out
+*.jar
+/**/*.d.ts
+/jars/**/*.jar
