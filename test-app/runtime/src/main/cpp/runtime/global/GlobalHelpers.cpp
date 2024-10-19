@@ -126,7 +126,7 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
         napi_create_error(env, nullptr, msg, &err);
     }
 
-    napi_get_named_property(env, error, "stack", &stack);
+    napi_get_named_property(env, err, "stack", &stack);
 
     if (napi_util::is_null_or_undefined(env, stack)) return frames;
 

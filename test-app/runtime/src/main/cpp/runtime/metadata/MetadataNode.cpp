@@ -428,7 +428,7 @@ bool MetadataNode::GetExtendLocation(napi_env env, string& extendLocation, bool 
 
         vector<string> pathParts;
         Util::SplitString(fullPathToFile, "_", pathParts);
-        fullPathToFile = pathParts.back();
+        fullPathToFile = pathParts.back() == "js" ? pathParts[pathParts.size() - 2] : pathParts.back();
     }
 
     if (frame->line < 0) {
@@ -1060,7 +1060,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     }
 
     napi_value extendMethod;
-    napi_create_function(env, PROP_KEY_EXTEND, NAPI_AUTO_LENGTH, ExtendMethodCallback, this,
+    napi_create_function(env, PROP_KEY_EXTEND, sizeof(PROP_KEY_EXTEND), ExtendMethodCallback, this,
                          &extendMethod);
     napi_set_named_property(env, constructor, PROP_KEY_EXTEND, extendMethod);
 

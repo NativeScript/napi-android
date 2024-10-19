@@ -39,8 +39,8 @@ void Runtime::Init(JavaVM *vm) {
 
     if (Runtime::java_vm == nullptr) {
         java_vm = vm;
-
         JEnv::Init(java_vm);
+        NativeScriptException::Init();
     }
 
     // handle SIGABRT/SIGSEGV only on API level > 20 as the handling is not so efficient in older versions
@@ -147,11 +147,11 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     NAPICreateEnv(&env, rt);
     napi_open_handle_scope(env, &global_scope);
 
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
     env_to_runtime_cache.emplace(env, this);
 
-
     m_objectManager->SetInstanceEnv(env);
-
     napi_set_instance_data(env, this, nullptr, nullptr);
 
     napi_value global;
@@ -274,6 +274,7 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     Performance::createPerformance(env, global);
 
     s_mainThreadInitialized = true;
+    napi_close_handle_scope(env, handleScope);
 }
 
 int Runtime::GetAndroidVersion() {
@@ -353,11 +354,17 @@ bool Runtime::TryCallGC() {
 void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
     JEnv jEnv(_jEnv);
     string filePath = ArgConverter::jstringToString(scriptFile);
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
     m_module.Load(env, filePath);
+    napi_close_handle_scope(env, handleScope);
 }
 
 void Runtime::RunModule(const char *moduleName) {
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
     m_module.Load(env, moduleName);
+    napi_close_handle_scope(env, handleScope);
 }
 
 void Runtime::RunWorker(jstring scriptFile) {
@@ -371,6 +378,9 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     auto filename = ArgConverter::jstringToString(scriptFile);
     auto src = ReadFileText(filename);
 
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
+
     napi_value soureCode;
     napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode);
 
@@ -381,6 +391,8 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
         const napi_extended_error_info *info;
         napi_get_last_error_info(env, &info);
     }
+
+    napi_close_handle_scope(env, handleScope);
 
     return nullptr;
 }
@@ -408,6 +420,9 @@ int Runtime::GetReader() {
 jobject
 Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstring methodName,
                             jint retType, jboolean isConstructor, jobjectArray packagedArgs) {
+
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
     JEnv jEnv(_jEnv);
 
     DEBUG_WRITE("CallJSMethodNative called javaObjectID=%d", javaObjectID);
@@ -435,13 +450,15 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
 
     int classReturnType = retType;
     jobject javaObject = ConvertJsValueToJavaObject(jEnv, jsResult, classReturnType);
+    napi_close_handle_scope(env, handleScope);
     return javaObject;
 }
 
 void
 Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, jint javaObjectID,
                                 jstring className) {
-
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
     DEBUG_WRITE("createJSInstanceNative called");
 
     JEnv jEnv(_jEnv);
@@ -476,6 +493,7 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     jclass clazz = jEnv.FindClass(jniName);
     m_objectManager->Link(jsInstance, javaObjectID, clazz);
+    napi_close_handle_scope(env, handleScope);
 }
 
 jint Runtime::GenerateNewObjectId(JNIEnv *jEnv, jobject obj) {

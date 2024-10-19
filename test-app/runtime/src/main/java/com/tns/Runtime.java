@@ -1002,6 +1002,9 @@ public class Runtime {
         }
         Object instance = strongInstances.get(javaObjectID);
 
+        // object is marked as weak already,
+        if (instance == null) return;
+
         if (keepAsWeak) {
             weakJavaObjectToID.put(instance, Integer.valueOf(javaObjectID));
             weakInstances.put(javaObjectID, new WeakReference<Object>(instance));

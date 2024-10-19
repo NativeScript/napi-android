@@ -246,6 +246,8 @@ struct JSRuntime {
     struct list_head tmp_obj_list; /* used during GC */
     JSGCPhaseEnum gc_phase : 8;
     size_t malloc_gc_threshold;
+    BOOL (*gc_before_callback)(JSRuntime*); /* Callback before the gc event takes place */
+    void (*gc_after_callback)(JSRuntime*); /* Callback after the gc event takes place */
 #ifdef DUMP_LEAKS
     struct list_head string_list; /* list of JSString.link */
 #endif
@@ -1374,7 +1376,12 @@ static void js_trigger_gc(JSRuntime *rt, size_t size)
                    (uint64_t)rt->malloc_state.malloc_size);
         }
 #endif
-        JS_RunGC(rt);
+
+        if((rt->gc_before_callback == NULL) || rt->gc_before_callback(rt)){
+            JS_RunGC(rt);
+            if(rt->gc_after_callback != NULL)rt->gc_after_callback(rt);
+        }
+
         rt->malloc_gc_threshold = rt->malloc_state.malloc_size +
             (rt->malloc_state.malloc_size >> 1);
     }
@@ -54203,6 +54210,16 @@ static void _JS_AddIntrinsicCallSite(JSContext *ctx)
     JS_SetPropertyFunctionList(ctx, ctx->class_proto[JS_CLASS_CALL_SITE],
                                js_callsite_proto_funcs,
                                countof(js_callsite_proto_funcs));
+}
+
+void JS_SetGCBeforeCallback(JSRuntime *rt, BOOL(*fn)(JSRuntime*))
+{
+    rt->gc_before_callback = fn;
+}
+
+void JS_SetGCAfterCallback(JSRuntime *rt, void(*fn)(JSRuntime*))
+{
+    rt->gc_after_callback = fn;
 }
 
 

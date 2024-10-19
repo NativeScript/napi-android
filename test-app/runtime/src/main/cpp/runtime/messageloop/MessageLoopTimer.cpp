@@ -22,7 +22,7 @@ void MessageLoopTimer::RegisterStartStopFunctions(napi_env env) {
     napi_value timer_stop;
 
     const char * timer_start_name = "__messageLoopTimerStart";
-    const char * timer_stop_name = "__messageLoopTimerStart";
+    const char * timer_stop_name = "__messageLoopTimerStop";
 
     napi_create_function(env, timer_start_name, strlen(timer_start_name), MessageLoopTimer::StartCallback,
                          this, &timer_start);

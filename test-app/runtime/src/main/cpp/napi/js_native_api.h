@@ -545,9 +545,9 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_free_cstring(napi_env env, const char *c
 
 NAPI_EXTERN napi_status NAPI_CDECL napi_run_microtasks(napi_env env);
 
-NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_being_callback(napi_env env, napi_callback cb, void *data);
+NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_being_callback(napi_env env, napi_finalize cb, void *data);
 
-NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_end_callback(napi_env env, napi_callback cb, void *data);
+NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_finish_callback(napi_env env, napi_finalize cb, void *data);
 
 EXTERN_C_END
 

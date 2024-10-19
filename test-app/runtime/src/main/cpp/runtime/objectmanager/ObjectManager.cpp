@@ -69,83 +69,115 @@ void ObjectManager::Init(napi_env env) {
     napi_set_named_property(env, napi_util::get_proto(env, jsWrapper), PRIVATE_IS_NAPI, napi_util::get_true(env));
     m_poJsWrapperFunc = napi_util::make_ref(env, jsWrapper, 1);
 
+    napi_set_gc_finish_callback(env, [](napi_env env, void *data, void* hint) {
+        auto* objectManager = reinterpret_cast<ObjectManager*>(data);
+        if (!objectManager->m_weakObjectIds.empty()) {
+            JEnv jEnv;
+            std::for_each(objectManager->m_weakObjectIds.begin(),
+                          objectManager->m_weakObjectIds.end(), [&](int id) {
+                    auto itFound = objectManager->m_markedAsWeakIds.find(id);
+                    if (itFound == objectManager->m_markedAsWeakIds.end()) {
+                        objectManager->m_buff.Write(id);
+                        objectManager->m_markedAsWeakIds.emplace(id);
+                    }
+            });
+            if (objectManager->m_buff.Size()) {
+                int length = objectManager->m_buff.Size();
+                jboolean keepAsWeak = JNI_TRUE;
+                jEnv.CallVoidMethod(objectManager->m_javaRuntimeObject, objectManager->MAKE_INSTANCE_WEAK_BATCH_METHOD_ID,
+                                    (jobject) objectManager->m_buff, length, keepAsWeak);
+                objectManager->m_buff.Reset();
+            }
+        }
+        DEBUG_WRITE("%s", "GC completed");
+        }, this);
+
     static const char *proxyFunctionScript = R"((function () {
-  return function (object, objectId, isArray) {
-    const arrayHandler = (target, prop) => {
-      if (typeof prop === "string" && !isNaN(prop)) {
-        return target.getValueAtIndex(Number(prop));
-      }
 
-      if (prop === Symbol.iterator) {
-        let index = 0;
-        const l = target.length;
-        return function () {
-          return {
-            next: function () {
-              if (index < l) {
-                return {
-                  value: target.getValueAtIndex(index++),
-                  done: false,
-                };
-              } else {
-                return { done: true };
-              }
-            },
-          };
-        };
-      }
-      if (prop === "map") {
-        return function (callback) {
-          const values = target.getAllValues();
-          const result = [];
-          const l = target.length;
-          for (let i = 0; i < l; i++) {
-            result.push(callback(values[i], i, target));
-          }
-          return result;
-        };
-      }
+	const arrayHandler = (target, prop) => {
+		  if (typeof prop === "string" && !isNaN(prop)) {
+			return target.getValueAtIndex(Number(prop));
+		  }
 
-      if (prop === "toString") {
-        return function () {
-          const result = target.getAllValues();
-          return result.join(",");
-        };
-      }
+		  if (prop === Symbol.iterator) {
+			let index = 0;
+			const l = target.length;
+			return function () {
+			  return {
+				next: function () {
+				  if (index < l) {
+					return {
+					  value: target.getValueAtIndex(index++),
+					  done: false,
+					};
+				  } else {
+					return { done: true };
+				  }
+				},
+			  };
+			};
+		  }
+		  if (prop === "map") {
+			return function (callback) {
+			  const values = target.getAllValues();
+			  const result = [];
+			  const l = target.length;
+			  for (let i = 0; i < l; i++) {
+				result.push(callback(values[i], i, target));
+			  }
+			  return result;
+			};
+		  }
 
-      if (prop === "forEach") {
-        return function (callback) {
-          const values = target.getAllValues();
-          const l = values.length;
-          for (let i = 0; i < l; i++) {
-            callback(values[i], i, target);
-          }
-        };
-      }
-      return target[prop];
-    };
-    let javaObjectId = objectId;
-    const proxy = new Proxy(object, {
-      get: (target, prop, receiver) => {
-        if (prop === "javaObjectId") return javaObjectId;
-        if (isArray) {
-          return arrayHandler(target, prop);
-        }
-        return target[prop];
-      },
-      set: (target, prop, value) => {
-        if (isArray && typeof prop === "string" && !isNaN(prop)) {
-          return target.setValueAtIndex(Number(prop), value);
-        }
+		  if (prop === "toString") {
+			return function () {
+			  const result = target.getAllValues();
+			  return result.join(",");
+			};
+		  }
 
-        target[prop] = value;
-        return value;
-      },
-    });
-    object["__proxy__"] = new WeakRef(proxy);
-    return proxy;
-  };
-})();)";
+		  if (prop === "forEach") {
+			return function (callback) {
+			  const values = target.getAllValues();
+			  const l = values.length;
+			  for (let i = 0; i < l; i++) {
+				callback(values[i], i, target);
+			  }
+			};
+		  }
+		  return target[prop];
+		};
+	  const EXTERNAL_PROP = "[[external]]";
+	  return function (object, objectId, isArray) {
+		const proxy = new Proxy(object, {
+		  get: function(target, prop) {
+			if (prop === EXTERNAL_PROP) return this[EXTERNAL_PROP];
+			if (prop === "javaObjectId") return objectId;
+			if (isArray) {
+			  return arrayHandler(target, prop);
+			}
+			return target[prop];
+		  },
+		  set: function(target, prop, value) {
+			if (prop === EXTERNAL_PROP) {
+			  this[EXTERNAL_PROP] = value;
+			  return true;
+			};
+			if (prop === "javaObjectId") return true;
+			if (isArray && typeof prop === "string" && !isNaN(prop)) {
+			  target.setValueAtIndex(Number(prop), value);
+			  return true;
+			}
+
+			target[prop] = value;
+			return true;
+		  },
+		});
+		object["__proxy__"] = new WeakRef(proxy);
+		return proxy;
+	  };
+	})();)";
+
     napi_value proxyFunction;
     napi_value scriptValue;
     napi_create_string_utf8(env, proxyFunctionScript, strlen(proxyFunctionScript), &scriptValue);
@@ -163,23 +195,28 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
             return proxy;
         }
     }
+//    auto itFound = m_idToObject.find(javaObjectID);
+//    if (itFound != m_idToObject.end()) {
+//        napi_value object = napi_util::get_ref_value(m_env, itFound->second);
+//        napi_value weak_ref;
+//        napi_get_named_property(m_env, object, "__proxy__", &weak_ref);
+//        if (!napi_util::is_null_or_undefined(m_env, weak_ref)) {
+//            napi_value deref;
+//            napi_get_named_property(m_env, weak_ref, "deref", &deref);
+//            napi_value proxy;
+//            auto isFunc = napi_util::is_of_type(m_env, deref, napi_function);
+//            napi_call_function(m_env, weak_ref, deref, 0, nullptr, &proxy);
+//            if (!napi_util::is_null_or_undefined(m_env, proxy)) {
+//                DEBUG_WRITE("Returned existing proxy for object: %d", javaObjectID);
+//                return proxy;
+//            } else {
+//                napi_value err;
+//                napi_get_and_clear_last_exception(m_env, &err);
+//            }
+//        }
+//    }
 
-    auto itFound = m_idToObject.find(javaObjectID);
-    if (itFound != m_idToObject.end()) {
-        napi_value object = napi_util::get_ref_value(m_env, itFound->second);
-        napi_value weak_ref;
-        napi_get_named_property(m_env, object, "__proxy__", &weak_ref);
-        if (!napi_util::is_null_or_undefined(m_env, weak_ref)) {
-            napi_value deref;
-            napi_get_named_property(m_env, weak_ref, "deref", &deref);
-            napi_value proxy;
-            napi_call_function(m_env, weak_ref, deref, 0, nullptr, &proxy);
-            if (!napi_util::is_null_or_undefined(m_env, proxy)) {
-                DEBUG_WRITE("Returned existing proxy for object: %d", javaObjectID);
-                return proxy;
-            }
-        }
-    }
+    DEBUG_WRITE("%s %d", "Creating a new proxy for for java object with id:", javaObjectID);
 
     napi_value proxy;
     napi_value argv[3];
@@ -188,12 +225,14 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
     napi_get_boolean(m_env, isArray, &argv[2]);
     napi_call_function(m_env, nullptr, napi_util::get_ref_value(m_env, this->m_poJsProxyFunction),
                        3, argv, &proxy);
+
     napi_ref proxy_ref = napi_util::make_ref(m_env, proxy, 0);
     m_idToProxy.emplace(javaObjectID, proxy_ref);
 
     auto javaObjectIdFound = m_weakObjectIds.find(javaObjectID);
     if (javaObjectIdFound != m_weakObjectIds.end()) {
         m_weakObjectIds.erase(javaObjectID);
+        m_markedAsWeakIds.erase(javaObjectID);
         JEnv jenv;
         jenv.CallVoidMethod(m_javaRuntimeObject,
                             MAKE_INSTANCE_STRONG_METHOD_ID,
@@ -203,7 +242,11 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
 
     auto hint = new ProxyFinalizerHint(this, javaObjectID);
 
-    napi_add_finalizer(m_env, proxy, hint, JSProxyWrapperFinalizer, nullptr, nullptr);
+    napi_value external;
+    napi_create_external(m_env, hint, JSProxyWrapperFinalizer, nullptr, &external);
+    // Set external property on proxy's handler object.
+    napi_set_named_property(m_env, proxy, "[[external]]", external);
+//    napi_add_finalizer(m_env, proxy, hint, JSProxyWrapperFinalizer, nullptr, nullptr);
 
     return proxy;
 }
@@ -212,7 +255,6 @@ JniLocalRef ObjectManager::GetJavaObjectByJsObject(napi_env env, napi_value obje
     int32_t javaObjectId;
     napi_value javaObjectIdValue;
     napi_get_named_property(m_env, object, "javaObjectId", &javaObjectIdValue);
-
     if (!napi_util::is_null_or_undefined(m_env, javaObjectIdValue)) {
         napi_get_value_int32(m_env, javaObjectIdValue, &javaObjectId);
     } else {
@@ -293,7 +335,6 @@ void ObjectManager::UpdateCache(int objectID, jobject obj) {
 }
 
 jclass ObjectManager::GetJavaClass(napi_value value) {
-    DEBUG_WRITE("GetClass called");
     JSInstanceInfo *jsInfo = GetJSInstanceInfo(value);
     jclass clazz = jsInfo->ObjectClazz;
 
@@ -313,14 +354,6 @@ int ObjectManager::GetOrCreateObjectId(jobject object) {
 }
 
 napi_value ObjectManager::GetJsObjectByJavaObject(int javaObjectID) {
-    auto itProxyFound = m_idToProxy.find(javaObjectID);
-    if (itProxyFound != m_idToProxy.end()) {
-        napi_value proxy = napi_util::get_ref_value(m_env, itProxyFound->second);
-        if (napi_util::is_null_or_undefined(m_env, proxy)) {
-            return proxy;
-        }
-    }
-
     auto it = m_idToObject.find(javaObjectID);
     if (it == m_idToObject.end()) {
         return nullptr;
@@ -421,20 +454,17 @@ void ObjectManager::JSObjectFinalizer(napi_env env, void *finalizeData, void *fi
     DEBUG_WRITE("JS Object finalizer called for object id: %d",state->jsInfo->JavaObjectID);
     delete state->jsInfo;
     delete state;
-
 }
 
 void ObjectManager::JSProxyWrapperFinalizer(napi_env env, void *finalizeData, void *finalizeHint) {
     auto state = reinterpret_cast<ProxyFinalizerHint *>(finalizeData);
-    DEBUG_WRITE("JS Proxy finalizer called for object id: %d", state->javaObjectId);
-    JEnv jEnv;
     ObjectManager *objectManager = state->thisPtr;
-//    objectManager->m_buff.Write(state->javaObjectId);
-// TODO find a way to do this in a batch, maybe some GC callback but NAPI doesn't have it although an extension can be added to support this so we have to go to JNI only once after a single gc pass
-    jEnv.CallVoidMethod(objectManager->m_javaRuntimeObject,
-                        objectManager->MAKE_INSTANCE_WEAK_METHOD_ID, state->javaObjectId);
-    objectManager->m_weakObjectIds.emplace(state->javaObjectId);
+    objectManager->m_idToProxy.erase(state->javaObjectId);
 
+//    objectManager->m_buff.Write(state->javaObjectId);
+    objectManager->m_weakObjectIds.emplace(state->javaObjectId);
+//    JEnv jEnv;
+//    jEnv.CallVoidMethod(objectManager->m_javaRuntimeObject, objectManager->MAKE_INSTANCE_WEAK_METHOD_ID, state->javaObjectId);
     delete state;
 }
 
@@ -498,13 +528,14 @@ void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {
     jsize length = jenv.GetArrayLength(object_ids);
     int *cppArray = jenv.GetIntArrayElements(object_ids, nullptr);
     for (jsize i = 0; i < length; i++) {
-        int objectId = cppArray[i];
-        auto itFound = this->m_idToObject.find(objectId);
+        int javaObjectId = cppArray[i];
+        auto itFound = this->m_idToObject.find(javaObjectId);
         if (itFound != this->m_idToObject.end()) {
             napi_delete_reference(m_env, itFound->second);
-            this->m_idToObject.erase(objectId);
-            this->m_weakObjectIds.erase(objectId);
-            DEBUG_WRITE("JS Object released for object id: %d", objectId);
+            this->m_idToObject.erase(javaObjectId);
+            this->m_weakObjectIds.erase(javaObjectId);
+            this->m_markedAsWeakIds.erase(javaObjectId);
+            DEBUG_WRITE("JS Object released for object id: %d", javaObjectId);
 
         }
     }

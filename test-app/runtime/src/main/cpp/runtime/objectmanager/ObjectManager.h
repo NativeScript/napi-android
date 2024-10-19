@@ -153,6 +153,7 @@ namespace tns {
         robin_hood::unordered_map<int, napi_ref> m_idToObject;
         robin_hood::unordered_map<int, napi_ref> m_idToProxy;
         robin_hood::unordered_set<int> m_weakObjectIds;
+        robin_hood::unordered_set<int> m_markedAsWeakIds;
 
         LRUCache<int, jweak> m_cache;
 

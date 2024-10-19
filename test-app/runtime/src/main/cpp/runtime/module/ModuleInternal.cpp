@@ -14,6 +14,7 @@
 #include <dlfcn.h>
 #include <sys/stat.h>
 #include <ctime>
+#include "GlobalHelpers.h"
 #include <utime.h>
 
 using namespace tns;
@@ -188,8 +189,6 @@ napi_status ModuleInternal::Load(napi_env env, const std::string& path) {
     napi_value require;
     napi_get_named_property(env, global, "require", &require);
 
-    auto isFunc = napi_util::is_of_type(env, require, napi_function);
-
     napi_value args[1];
     napi_create_string_utf8(env, path.c_str(), path.size(), &args[0]);
 
@@ -279,8 +278,6 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     napi_value exportsObj;
     napi_create_object(env, &exportsObj);
 
-    napi_value exportsPropName;
-    napi_create_string_utf8(env, "exports", NAPI_AUTO_LENGTH, &exportsPropName);
     napi_set_named_property(env, moduleObj, "exports", exportsObj);
 
     napi_value fullRequiredModulePath;
@@ -312,9 +309,7 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
             throw NativeScriptException(errMsg);
         }
 
-        napi_value ft;
-        napi_create_function(env, "", 0, RequireNativeCallback, func, &ft);
-        moduleFunc = ft;
+        napi_create_function(env, "", 0, RequireNativeCallback, func, &moduleFunc);
     } else {
         std::string errMsg = "Unsupported file extension: " + modulePath;
         throw NativeScriptException(errMsg);
@@ -344,8 +339,6 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     napi_value thiz;
     napi_create_object(env, &thiz);
 
-    napi_value extendsName;
-    napi_create_string_utf8(env, "__extends", NAPI_AUTO_LENGTH, &extendsName);
     napi_value globalExtends;
     napi_get_named_property(env, context, "__extends", &globalExtends);
     napi_set_named_property(env, thiz, "__extends", globalExtends);
@@ -364,48 +357,18 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
 
 napi_value ModuleInternal::LoadScript(napi_env env, const std::string& path, napi_value fullRequiredModulePath) {
     napi_value scriptText = ModuleInternal::WrapModuleContent(env, path);
-
-    // napi_value fullRequiredModulePathWithSchema;
-    // napi_create_string_utf8(env, ("file://" + path).c_str(), NAPI_AUTO_LENGTH, &fullRequiredModulePathWithSchema);
-
-    // napi_value source;
-    // napi_create_object(env, &source);
-    // napi_set_named_property(env, source, "text", scriptText);
-    // napi_set_named_property(env, source, "url", fullRequiredModulePathWithSchema);
-
     return scriptText;
 }
 
 napi_value ModuleInternal::LoadData(napi_env env, const std::string& path) {
-    napi_value json;
-
     std::string jsonData = Runtime::GetRuntime(m_env)->ReadFileText(path);
+    napi_value json = JsonParseString(env, jsonData);
 
-    napi_value jsonStr;
-    napi_create_string_utf8(env, jsonData.c_str(), jsonData.size(), &jsonStr);
-
-    napi_value global;
-    napi_get_global(env, &global);
-
-    napi_value JSON;
-    napi_get_named_property(env, global, "JSON", &JSON);
-
-    napi_value parse;
-    napi_get_named_property(env, JSON, "parse", &parse);
-
-    napi_value result;
-    napi_status status = napi_call_function(env, JSON, parse, 1, &jsonStr, &result);
-    if (status != napi_ok) {
-        std::string errMsg = "Cannot parse JSON file " + path;
-        throw NativeScriptException(errMsg);
-    }
-
-    if (!napi_util::is_of_type(env, result, napi_object)) {
+    if (!napi_util::is_of_type(env, json, napi_object)) {
         std::string errMsg = "JSON is not valid, file=" + path;
         throw NativeScriptException(errMsg);
     }
 
-    json = result;
     napi_ref poObj = napi_util::make_ref(env, json);
     m_loadedModules.emplace(path, ModuleCacheEntry(poObj, true /* isData */));
     return json;

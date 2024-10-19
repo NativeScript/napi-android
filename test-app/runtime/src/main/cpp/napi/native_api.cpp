@@ -336,6 +336,7 @@ napi_status NAPICreateJSRuntime(napi_runtime *runtime) {
         return napi_generic_failure;
     }
 
+
     return napi_ok;
 }
 
@@ -354,9 +355,26 @@ napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
 
     JS_SetRuntimeOpaque(runtime->runtime, *env);
 
+    JS_SetGCAfterCallback(runtime->runtime, [](JSRuntime* rt) {
+            auto env = (napi_env) JS_GetRuntimeOpaque(rt);
+            if (env->gcAfter != nullptr) {
+                env->gcAfter->finalizeCallback(env, env->gcAfter->data, env->gcAfter->finalizeHint);
+            }
+    });
+
+    JS_SetGCBeforeCallback(runtime->runtime, [](JSRuntime* rt) -> int {
+        auto env = (napi_env) JS_GetRuntimeOpaque(rt);
+        bool hint = true;
+        if (env->gcAfter != nullptr) {
+            env->gcAfter->finalizeCallback(env, env->gcAfter->data, &hint);
+        }
+        return hint;
+    });
+
     // Resource - JSContext
     JSContext *context = JS_NewContext(runtime->runtime);
     // Create runtime atoms
+
 
     (*env)->atoms.napi_external = JS_NewAtom(context, "napi_external");
     (*env)->atoms.registerFinalizer = JS_NewAtom(context, "register");
@@ -426,8 +444,6 @@ napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
     JS_SetPropertyStr(context, globalValue, "gc", gc);
 
     JSValue jsNativeEngine = (JSValue) JS_MKPTR(JS_TAG_INT, (*env));
-
-
     JSValue FinalizationRegistry = JS_GetPropertyStr(context, globalValue, "FinalizationRegistry");
     JSValue FinalizeCallback = JS_NewCFunction(context,
                                                [](JSContext *ctx, JSValueConst this_val, int argc,
@@ -496,6 +512,7 @@ napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
     JSValue func = JS_Eval((*env)->context, script, strlen(script), "<napi_script>",
                            JS_EVAL_TYPE_GLOBAL);
     JS_FreeValue((*env)->context, func);
+
 
     return napi_clear_last_error((*env));
 }
@@ -1102,7 +1119,7 @@ napi_status napi_get_reference_value(napi_env env, napi_ref ref, napi_value *res
             return napi_set_last_error(env, status);
         }
 
-        *result = (napi_value) &handle->value;
+        *result = (napi_value) &ref->value;
     }
 
     return napi_clear_last_error(env);
@@ -3449,13 +3466,17 @@ napi_status napi_call_function(napi_env env, napi_value thisValue, napi_value fu
     JSValue returnValue = JS_Call(env->context, jsFunction, *((JSValue *) thisValue), (int) argc,
                                   args);
 
+
     if (args) {
         free(args);
     }
 
+    napi_run_microtasks(env);
+
     if (JS_IsException(returnValue)) {
-        napi_close_handle_scope(env, handleScope);
         print_exception(env, returnValue);
+        napi_close_handle_scope(env, handleScope);
+        *result = nullptr;
         return napi_set_last_error(env, napi_pending_exception);
     }
 
@@ -4215,23 +4236,18 @@ napi_check_object_type_tag(napi_env env, napi_value object, napi_type_tag tag, b
 }
 
 napi_status napi_run_microtasks(napi_env env) {
-    if (TRUTHY(!env))
-        return napi_invalid_arg;
-
-    int error = 1;
+    CHECK_ARG(env)
+    int error;
     do {
         JSContext *context;
         error = JS_ExecutePendingJob(JS_GetRuntime(env->context), &context);
         if (error == -1) {
-            // Under normal circumstances, JS_ExecutePendingJob returns -1
-            // Represents engine internal exceptions, such as memory allocation failure, etc.
-            // TODO(ChasonTang): Test when Promise throws an exception
             JSValue inlineExceptionValue = JS_GetException(context);
-
             JS_FreeValue(context, inlineExceptionValue);
+            return napi_ok;
         }
     } while (error != 0);
-
+    
     return napi_ok;
 }
 
@@ -4254,12 +4270,9 @@ napi_status napi_run_script(napi_env env,
     JSValue eval_result;
     const char *cScript = JS_ToCString(env->context, *((JSValue *) script));
     eval_result = JS_Eval(env->context, cScript, strlen(cScript), file, JS_EVAL_TYPE_GLOBAL);
-
-    napi_run_microtasks(env);
-
     // 3. Free the script char *
     JS_FreeCString(env->context, cScript);
-
+    napi_run_microtasks(env);
     if (JS_IsException(eval_result)) {
         JSValue exception = JS_GetException(env->context);
         const char *exceptionMessage = JS_ToCString(env->context, exception);
@@ -4278,6 +4291,7 @@ napi_status napi_run_script(napi_env env,
         // 6.Free the result from eval.
         JS_FreeValue(env->context, eval_result);
     }
+
 
     return napi_clear_last_error(env);
 }
@@ -4375,6 +4389,14 @@ napi_status NAPIFreeEnv(napi_env env) {
         free(env->instanceData);
     };
 
+    if (env->gcAfter != nullptr) {
+        free(env->gcAfter);
+    }
+
+    if (env->gcBefore != nullptr) {
+        free(env->gcBefore);
+    }
+
     // Free Atoms
     JS_FreeAtom(env->context, env->atoms.napi_external);
     JS_FreeAtom(env->context, env->atoms.registerFinalizer);
@@ -4401,16 +4423,29 @@ napi_status NAPIFreeEnv(napi_env env) {
 }
 
 
-napi_status napi_set_gc_being_callback(napi_env env, napi_callback cb, void *data) {
+napi_status napi_set_gc_begin_callback(napi_env env, napi_finalize cb, void* data) {
     CHECK_ARG(env)
     CHECK_ARG(cb)
+
+    auto info = (ExternalInfo *) malloc(sizeof(ExternalInfo));
+    info->data = data;
+    info->finalizeCallback = cb;
+    info->finalizeHint = nullptr;
+    env->gcBefore = info;
 
     return napi_clear_last_error(env);
 }
 
-napi_status napi_set_gc_end_callback(napi_env env, napi_callback cb, void *data) {
+napi_status napi_set_gc_finish_callback(napi_env env, napi_finalize cb, void* data ) {
     CHECK_ARG(env)
     CHECK_ARG(cb)
+
+    auto info = (ExternalInfo *) malloc(sizeof(ExternalInfo));
+    info->data = data;
+    info->finalizeCallback = cb;
+    info->finalizeHint = nullptr;
+
+    env->gcAfter = info;
 
     return napi_clear_last_error(env);
 }

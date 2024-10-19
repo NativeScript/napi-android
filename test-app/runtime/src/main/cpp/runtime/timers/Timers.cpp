@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <thread>
 #include "Util.h"
+#include "NativeScriptAssert.h"
 
 /**
  * Overall rules when modifying this file:
@@ -293,6 +294,8 @@ int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
 
         napi_value global;
         napi_get_global(env, &global);
+
+        napi_run_microtasks(env);
 
         napi_value cb = napi_util::get_ref_value(env, task->callback_);
         size_t argc = task->args_ == nullptr ? 0 : task->args_->size();
