@@ -54302,6 +54302,13 @@ void JS_SetStacktrace(JSContext *ctx, JSValueConst obj) {
     build_backtrace(ctx, obj, NULL, 0, 0, 0);
 }
 
+JSValue JS_WeakRefDeref(JSContext *ctx, JSValueConst this_val) {
+    JSWeakRefData *wrd = JS_GetOpaque2(ctx, this_val, JS_CLASS_WEAK_REF);
+    if (!wrd) return JS_UNDEFINED;
+    return js_dup(wrd->target);
+}
+
+
 
 #undef malloc
 #undef free

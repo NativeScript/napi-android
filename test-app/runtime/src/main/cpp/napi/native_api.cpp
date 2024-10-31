@@ -92,16 +92,6 @@ struct NAPIDeferred {
     napi_value reject;
 };
 
-struct WeakReference {
-    LIST_ENTRY(WeakReference)
-            node; // size_t * 2
-    // Weak references that are currently valid
-    LIST_HEAD(, NAPIReference)
-            weakRefList; // size_t
-    // NAPIFreeEnv will free all NAPIReference, referenceFinalize() only needs to free its own structure
-    bool isEnvFreed;
-};
-
 typedef struct {
     void *data;                     // size_t
     void *finalizeHint;             // size_t
@@ -139,12 +129,8 @@ struct NAPIEnvironment {
     JSContext *context;           // size_t
     LIST_HEAD(, NAPIHandleScope)
             handleScopeList; // size_t
-    LIST_HEAD(, WeakReference)
-            weakReferenceList; // size_t
     LIST_HEAD(, NAPIReference)
-            strongRefList; // size_t
-    LIST_HEAD(, NAPIReference)
-            valueList; // size_t
+            referencesList; // size_t
     // Tells whether the last thrown error was a null value.
     bool isThrowNull;
     ExternalInfo *instanceData;
@@ -471,9 +457,7 @@ napi_status NAPICreateEnv(napi_env *env, napi_runtime runtime) {
     JS_FreeValue(context, globalValue);
 
     LIST_INIT(&(*env)->handleScopeList);
-    LIST_INIT(&(*env)->weakReferenceList);
-    LIST_INIT(&(*env)->valueList);
-    LIST_INIT(&(*env)->strongRefList);
+    LIST_INIT(&(*env)->referencesList);
 
     (*env)->instanceData = NULL;
 
@@ -597,6 +581,17 @@ static inline napi_status CreateJSValueHandle(napi_env env, JSValue value, struc
     napi_handle_scope handleScope = LIST_FIRST(&env->handleScopeList);
     SLIST_INSERT_HEAD(&handleScope->handleList, *result, node);
 
+    return napi_clear_last_error(env);
+}
+
+static inline napi_status CreateScopedResult(napi_env env, JSValue value, napi_value *result) {
+    struct Handle *jsValueHandle;
+    napi_status status = CreateJSValueHandle(env, value, &jsValueHandle);
+    if (status != napi_ok) {
+        JS_FreeValue(env->context, value);
+        return napi_set_last_error(env, status);
+    }
+    *result = (napi_value) &jsValueHandle->value;
     return napi_clear_last_error(env);
 }
 
@@ -837,293 +832,7 @@ napi_status napi_get_last_error_info(napi_env env, const napi_extended_error_inf
     return napi_ok;
 }
 
-// References to values with a lifespan longer than that of the native method
 
-// static uint8_t contextCount = 0;
-
-static void reference_finalize(napi_env env, void *finalizeData, void *finalizeHint) {
-    // finalizeHint => env is unreliable
-    if (!env) {
-        assert(false);
-
-        return;
-    }
-
-    struct WeakReference *referenceInfo = (WeakReference *) finalizeData;
-
-    // isEnvFreed needs to exist because there are three situations
-    // 1. env is destructed
-    // 2. env is still there, and there is referenceInfo, but there is no weakRef
-    // 3. env is still there, there is also referenceInfo, and there is also weakRef
-    if (!referenceInfo->isEnvFreed) {
-        napi_ref reference, temp;
-        LIST_FOREACH_SAFE(reference, &referenceInfo->weakRefList, node, temp) {
-            // If you enter the loop, it means env is valid
-            assert(!reference->referenceCount);
-            reference->value = JS_UNDEFINED;
-            LIST_REMOVE(reference, node);
-            // So here finalizeHint is still valid env
-            LIST_INSERT_HEAD(&env->valueList, reference, node);
-        }
-        // Currently not the last GC
-        // LIST_REMOVE will affect the env structure
-        LIST_REMOVE(referenceInfo, node);
-    }
-
-    free(referenceInfo);
-}
-
-// NAPINameExpected/NAPIMemoryError/NAPIGenericFailure + napi_create_string_utf8 + napi_get_property + napi_typeof +
-// napi_create_external
-// + napi_get_value_external + napi_set_property
-static napi_status setWeak(napi_env env, napi_value value, napi_ref ref) {
-    CHECK_ARG(env)
-    CHECK_ARG(value)
-    CHECK_ARG(ref)
-
-    RETURN_STATUS_IF_FALSE(JS_IsSymbol(env->referenceSymbolValue), napi_name_expected)
-
-    napi_handle_scope handleScope = NULL;
-    napi_open_handle_scope(env, &handleScope);
-
-    napi_value referenceValue;
-    CHECK_NAPI(
-            napi_get_property(env, value, (napi_value) &env->referenceSymbolValue, &referenceValue))
-    napi_valuetype valueType;
-    CHECK_NAPI(napi_typeof(env, referenceValue, &valueType))
-    RETURN_STATUS_IF_FALSE(valueType == napi_undefined || valueType == napi_external,
-                           napi_generic_failure)
-
-    struct WeakReference *referenceInfo;
-    if (valueType == napi_undefined) {
-        referenceInfo = (WeakReference *) malloc(sizeof(WeakReference));
-        RETURN_STATUS_IF_FALSE(referenceInfo, napi_memory_error)
-        referenceInfo->isEnvFreed = false;
-        LIST_INIT(&referenceInfo->weakRefList);
-        {
-            napi_status status =
-                    napi_create_external(env, referenceInfo, reference_finalize, nullptr,
-                                         &referenceValue);
-            if (TRUTHY(status != napi_ok)) {
-                napi_close_handle_scope(env, handleScope);
-                free(referenceInfo);
-
-                return napi_set_last_error(env, status);
-            }
-        }
-        CHECK_NAPI(napi_set_property(env, value, (napi_value) &env->referenceSymbolValue,
-                                     referenceValue))
-        LIST_INSERT_HEAD(&env->weakReferenceList, referenceInfo, node);
-    } else {
-        CHECK_NAPI(napi_get_value_external(env, referenceValue, (void **) &referenceInfo))
-        if (TRUTHY(!referenceInfo)) {
-            napi_close_handle_scope(env, handleScope);
-            assert(false);
-
-            return napi_set_last_error(env, napi_generic_failure);
-        }
-    }
-    LIST_INSERT_HEAD(&referenceInfo->weakRefList, ref, node);
-
-    napi_close_handle_scope(env, handleScope);
-
-    return napi_clear_last_error(env);
-}
-
-// NAPINameExpected/NAPIGenericFailure + napi_create_string_utf8 + napi_get_property + napi_get_value_external +
-// napi_delete_property
-static napi_status clearWeak(napi_env env, napi_ref ref) {
-    NAPI_PREAMBLE(env)
-    CHECK_ARG(ref)
-
-    RETURN_STATUS_IF_FALSE(JS_IsSymbol(env->referenceSymbolValue), napi_name_expected)
-
-    napi_handle_scope handleScope = NULL;
-    napi_open_handle_scope(env, &handleScope);
-
-    napi_value externalValue;
-    CHECK_NAPI(napi_get_property(env, (napi_value) &ref->value,
-                                 (napi_value) &env->referenceSymbolValue, &externalValue))
-    struct WeakReference *referenceInfo;
-    CHECK_NAPI(napi_get_value_external(env, externalValue, (void **) &referenceInfo))
-
-    napi_close_handle_scope(env, handleScope);
-
-    if (TRUTHY(!referenceInfo)) {
-        assert(false);
-
-        return napi_set_last_error(env, napi_generic_failure);
-    }
-    bool needDelete = LIST_FIRST(&referenceInfo->weakRefList) == ref && !LIST_NEXT(ref, node);
-    LIST_REMOVE(ref, node);
-    if (needDelete) {
-        bool deleteResult;
-        // 一定不会在这里触发 GC
-        CHECK_NAPI(napi_delete_property(env, (napi_value) &ref->value,
-                                        (napi_value) &env->referenceSymbolValue, &deleteResult))
-        RETURN_STATUS_IF_FALSE(deleteResult, napi_generic_failure)
-    }
-
-    return napi_clear_last_error(env);
-}
-
-// NAPIMemoryError + setWeak
-napi_status
-napi_create_reference(napi_env env, napi_value value, uint32_t initialRefCount, napi_ref *result) {
-    CHECK_ARG(env)
-    CHECK_ARG(value)
-    CHECK_ARG(result)
-
-    *result = (NAPIReference *) malloc(sizeof(NAPIReference));
-    RETURN_STATUS_IF_FALSE(*result, napi_memory_error)
-
-    if (JS_IsUndefined(*((JSValue *) value))) {
-        (*result)->value = JS_UNDEFINED;
-        (*result)->referenceCount = 0;
-        return napi_ok;
-    }
-
-
-    // scalar && weak reference
-    if (!JS_IsObject(*((JSValue *) value)) && !initialRefCount) {
-        (*result)->referenceCount = 0;
-        (*result)->value = JS_UNDEFINED;
-        LIST_INSERT_HEAD(&env->valueList, *result, node);
-
-        return napi_clear_last_error(env);
-    }
-
-    // Object || Strong reference
-    (*result)->value = *((JSValue *) value);
-    (*result)->referenceCount = initialRefCount;
-
-    // Strong reference
-    if (initialRefCount) {
-        (*result)->value = JS_DupValue(env->context, (*result)->value);
-        LIST_INSERT_HEAD(&env->strongRefList, *result, node);
-
-        return napi_clear_last_error(env);
-    }
-
-    // Object && weak reference
-    // setWeak
-    napi_status status = setWeak(env, value, *result);
-
-    if (TRUTHY(status != napi_ok)) {
-        free(*result);
-
-        return napi_set_last_error(env, status);
-    }
-
-    return napi_clear_last_error(env);
-}
-
-// NAPIGenericFailure + clearWeak
-napi_status napi_delete_reference(napi_env env, napi_ref ref) {
-
-    NAPI_PREAMBLE(env)
-    CHECK_ARG(ref)
-
-    // Scalar && weak reference (this will also happen if it is GCed)
-    if (!JS_IsObject(ref->value) && !ref->referenceCount) {
-        LIST_REMOVE(ref, node);
-        free(ref);
-
-        return napi_clear_last_error(env);
-    }
-
-    // Object || Strong reference
-    if (ref->referenceCount) {
-        LIST_REMOVE(ref, node);
-        JS_FreeValue(env->context, ref->value);
-        free(ref);
-
-        return napi_clear_last_error(env);
-    }
-
-    // Object && weak reference
-    CHECK_NAPI(clearWeak(env, ref))
-    free(ref);
-
-    return napi_clear_last_error(env);
-}
-
-// NAPIGenericFailure + clearWeak
-napi_status napi_reference_ref(napi_env env, napi_ref ref, uint32_t *result) {
-
-    NAPI_PREAMBLE(env)
-    CHECK_ARG(ref)
-
-    if (!ref->referenceCount) {
-        // 弱引用
-        JSValue value = JS_DupValue(env->context, ref->value);
-        if (JS_IsObject(ref->value)) {
-            CHECK_NAPI(clearWeak(env, ref))
-        } else {
-            LIST_REMOVE(ref, node);
-        }
-        LIST_INSERT_HEAD(&env->strongRefList, ref, node);
-        ref->value = value;
-    }
-    uint8_t count = ++ref->referenceCount;
-    if (result) {
-        *result = count;
-    }
-
-    return napi_clear_last_error(env);
-}
-
-// NAPIGenericFailure + setWeak
-napi_status napi_reference_unref(napi_env env, napi_ref ref, uint32_t *result) {
-
-    NAPI_PREAMBLE(env)
-    CHECK_ARG(ref)
-
-    RETURN_STATUS_IF_FALSE(ref->referenceCount, napi_generic_failure)
-
-    if (ref->referenceCount == 1) {
-        LIST_REMOVE(ref, node);
-        if (JS_IsObject(ref->value)) {
-            CHECK_NAPI(setWeak(env, (napi_value) &ref->value, ref))
-            JS_FreeValue(env->context, ref->value);
-        } else {
-            LIST_INSERT_HEAD(&env->valueList, ref, node);
-            JS_FreeValue(env->context, ref->value);
-            ref->value = JS_UNDEFINED;
-        }
-    }
-    uint8_t count = --ref->referenceCount;
-    if (result) {
-        *result = count;
-    }
-
-    return napi_clear_last_error(env);
-}
-
-napi_status napi_get_reference_value(napi_env env, napi_ref ref, napi_value *result) {
-
-    CHECK_ARG(env)
-    CHECK_ARG(ref)
-    CHECK_ARG(result)
-
-    if (!ref->referenceCount && JS_IsUndefined(ref->value)) {
-        *result = (napi_value) &undefined;
-    } else {
-        JSValue strongValue = JS_DupValue(env->context, ref->value);
-        struct Handle *handle;
-
-        napi_status status = CreateJSValueHandle(env, strongValue, &handle);
-        if (TRUTHY(status != napi_ok)) {
-            JS_FreeValue(env->context, strongValue);
-
-            return napi_set_last_error(env, status);
-        }
-
-        *result = (napi_value) &ref->value;
-    }
-
-    return napi_clear_last_error(env);
-}
 
 // Cleanup on exit of the current Node.js environment
 
@@ -1136,16 +845,126 @@ napi_status napi_get_reference_value(napi_env env, napi_ref ref, napi_value *res
 
 // Created values must be added to current HandleScope
 
-static inline napi_status CreateScopedResult(napi_env env, JSValue value, napi_value *result) {
-    struct Handle *jsValueHandle;
-    napi_status status = CreateJSValueHandle(env, value, &jsValueHandle);
-    if (status != napi_ok) {
-        JS_FreeValue(env->context, value);
-        return napi_set_last_error(env, status);
+
+
+napi_status napi_create_reference(napi_env env, napi_value value, uint32_t initialRefCount, napi_ref *result) {
+    CHECK_ARG(env)
+    CHECK_ARG(value)
+    CHECK_ARG(result)
+
+    *result = (NAPIReference *) malloc(sizeof(NAPIReference));
+    RETURN_STATUS_IF_FALSE(*result, napi_memory_error)
+
+    JSValue jsValue = *((JSValue *) value);
+
+    if (JS_IsUndefined(jsValue)) {
+        (*result)->value = JS_UNDEFINED;
+        (*result)->referenceCount = 0;
+        return napi_ok;
     }
-    *result = (napi_value) &jsValueHandle->value;
+
+    if (initialRefCount == 0) {
+        JSValue global = JS_GetGlobalObject(env->context);
+        JSValue JS_WeakRef_Ctor = JS_GetPropertyStr(env->context, global, "WeakRef");
+        JSValue args[1] = {
+                jsValue
+        };
+        JSValue weak_ref = JS_CallConstructor(env->context, JS_WeakRef_Ctor, 1, args);
+
+        JS_FreeValue(env->context, global);
+        JS_FreeValue(env->context, JS_WeakRef_Ctor);
+        (*result)->value = weak_ref;
+    } else {
+        (*result)->value = jsValue;
+        (*result)->referenceCount = initialRefCount;
+        (*result)->value = JS_DupValue(env->context, (*result)->value);
+    }
+
+    LIST_INSERT_HEAD(&env->referencesList, *result, node);
+
     return napi_clear_last_error(env);
 }
+
+
+napi_status napi_delete_reference(napi_env env, napi_ref ref) {
+    CHECK_ARG(env)
+    CHECK_ARG(ref)
+
+    if (!JS_IsUndefined(ref->value)) {
+        JS_FreeValue(env->context, ref->value);
+    }
+
+    LIST_REMOVE(ref, node);
+
+    free(ref);
+
+    return napi_clear_last_error(env);
+}
+
+napi_status napi_reference_ref(napi_env env, napi_ref ref, uint32_t *result) {
+    CHECK_ARG(env)
+    CHECK_ARG(ref)
+
+    if (!ref->referenceCount) {
+        JSValue value = JS_WeakRefDeref(env->context, ref->value);
+        JS_FreeValue(env->context, ref->value);
+        ref->value = value;
+    }
+
+    uint8_t count = ++ref->referenceCount;
+    if (result) {
+        *result = count;
+    }
+
+    return napi_clear_last_error(env);
+}
+
+napi_status napi_reference_unref(napi_env env, napi_ref ref, uint32_t *result) {
+    CHECK_ARG(env)
+    CHECK_ARG(ref)
+
+    RETURN_STATUS_IF_FALSE(ref->referenceCount, napi_generic_failure)
+
+    if (ref->referenceCount == 1) {
+        JSValue global = JS_GetGlobalObject(env->context);
+        JSValue JS_WeakRef_Ctor = JS_GetPropertyStr(env->context, global, "WeakRef");
+
+        JSValue args[1] = {
+                ref->value
+        };
+        JSValue weak_ref = JS_CallConstructor(env->context, JS_WeakRef_Ctor, 1, args);
+        JS_FreeValue(env->context, global);
+        JS_FreeValue(env->context, JS_WeakRef_Ctor);
+        JS_FreeValue(env->context, ref->value);
+    }
+
+    uint8_t count = --ref->referenceCount;
+    if (result) {
+        *result = count;
+    }
+
+    return napi_clear_last_error(env);
+}
+
+
+napi_status napi_get_reference_value(napi_env env, napi_ref ref, napi_value *result) {
+    CHECK_ARG(env)
+    CHECK_ARG(ref)
+    CHECK_ARG(result)
+    if (!ref->referenceCount && JS_IsUndefined(ref->value)) {
+        *result = (napi_value) &undefined;
+    }
+    JSValue value;
+    if (ref->referenceCount > 0) {
+        value = JS_DupValue(env->context, ref->value);
+    } else {
+        value = JS_WeakRefDeref(env->context, ref->value);
+    }
+
+    return CreateScopedResult(env, value, result);
+}
+
+
 
 napi_status napi_create_error(napi_env env, napi_value code, napi_value msg, napi_value *result) {
     CHECK_ARG(env)
@@ -3944,6 +3763,7 @@ napi_status napi_unwrap(napi_env env, napi_value jsObject, void **result) {
 
     if (!isWrapped) {
         // Silently fail if value is not wrapped.
+        *result = nullptr;
         return napi_set_last_error(env, napi_generic_failure);
     }
 
@@ -4352,27 +4172,9 @@ napi_status NAPIFreeEnv(napi_env env) {
 
     // Free all strong references
     napi_ref ref, temp;
-    LIST_FOREACH_SAFE(ref, &env->strongRefList, node, temp) {
+    LIST_FOREACH_SAFE(ref, &env->referencesList, node, temp) {
         LIST_REMOVE(ref, node);
         JS_FreeValue(env->context, ref->value);
-        free(ref);
-    }
-
-    // Free all weak references
-    struct WeakReference *referenceInfo, *tempReferenceInfo;
-    LIST_FOREACH_SAFE(referenceInfo, &env->weakReferenceList, node, tempReferenceInfo) {
-        LIST_FOREACH_SAFE(ref, &referenceInfo->weakRefList, node, temp) {
-            LIST_REMOVE(ref, node);
-            free(ref);
-        }
-        LIST_REMOVE(referenceInfo, node);
-        referenceInfo->isEnvFreed = true;
-        // referenceInfo itself is not destroyed, it will be destroyed until the GC stage
-    }
-
-    // At this point, all weak references have been released.
-    LIST_FOREACH_SAFE(ref, &env->valueList, node, temp) {
-        LIST_REMOVE(ref, node);
         free(ref);
     }
 

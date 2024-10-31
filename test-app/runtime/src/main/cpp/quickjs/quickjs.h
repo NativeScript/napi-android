@@ -1024,6 +1024,7 @@ int JSGetLength64(JSContext *ctx, int64_t *pres, JSValueConst obj);
 uint8_t *JS_GetStringFromObject(JSValue obj);
 JSClassID JS_GetClassID2(JSValueConst v);
 void JS_SetStacktrace(JSContext *ctx, JSValueConst obj);
+JSValue JS_WeakRefDeref(JSContext *ctx, JSValueConst this_val);
 
 /* Version */
 

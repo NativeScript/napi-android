@@ -119,8 +119,6 @@ typedef enum {
     napi_promise_exception
 } napi_status;
 
-
-
 typedef enum {
   napi_int8_array,
   napi_uint8_array,

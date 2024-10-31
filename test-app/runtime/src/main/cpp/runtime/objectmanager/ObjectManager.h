@@ -44,11 +44,10 @@ namespace tns {
 
         void Link(napi_value object, uint32_t javaObjectID, jclass clazz);
 
-        void ReleaseNativeCounterpart(napi_value object);
 
         bool CloneLink(napi_value src, napi_value dest);
 
-        bool IsJsRuntimeObject(napi_env env, napi_value object);
+        bool IsRuntimeJsObject(napi_env env, napi_value object);
 
         std::string GetClassName(jobject javaObject);
 
@@ -59,19 +58,6 @@ namespace tns {
         void SetInstanceEnv(napi_env env);
 
         napi_value GetEmptyObject(napi_env env);
-
-        enum class MetadataNodeKeys {
-            JsInfo,
-            CallSuper,
-            END
-        };
-
-        enum JavaScriptMarkingMode {
-            Full,
-            None
-        };
-
-        JavaScriptMarkingMode GetMarkingMode();
 
         inline static void MarkObject(napi_env env, napi_value object) {
             napi_value marker;
@@ -88,7 +74,7 @@ namespace tns {
         void OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids);
 
     private:
-        static napi_value JSWrapperConstructorCallback(napi_env env, napi_callback_info info);
+        static napi_value JSObjectConstructorCallback(napi_env env, napi_callback_info info);
 
         struct JSInstanceInfo {
         public:
@@ -112,8 +98,8 @@ namespace tns {
             napi_ref target;
         };
 
-        struct ProxyFinalizerHint {
-            ProxyFinalizerHint(ObjectManager *_thisPtr, uint32_t _javaObjectId)
+        struct JSObjectProxyData {
+            JSObjectProxyData(ObjectManager *_thisPtr, uint32_t _javaObjectId)
                     :
                     thisPtr(_thisPtr), javaObjectId(_javaObjectId) {
             }
@@ -131,9 +117,9 @@ namespace tns {
         CreateJSWrapperHelper(jint javaObjectID, const std::string &typeName, jclass clazz,
                               bool isArray = false);
 
-        static void JSObjectFinalizer(napi_env env, void *finalizeData, void *finalizeHint);
+        static void JSObjectFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint);
 
-        static void JSProxyWrapperFinalizer(napi_env env, void *finalizeData, void *finalizeHint);
+        static void JSObjectProxyFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint);
 
 
         jweak GetJavaObjectByID(uint32_t javaObjectID);
@@ -145,8 +131,6 @@ namespace tns {
         static void DeleteWeakGlobalRefCallback(const jweak &object, void *state);
 
         jobject m_javaRuntimeObject;
-
-        int m_numberOfGC;
 
         napi_env m_env;
 
@@ -165,8 +149,6 @@ namespace tns {
 
         bool m_useGlobalRefs;
 
-        JavaScriptMarkingMode m_markingMode;
-
         jclass JAVA_LANG_CLASS;
 
         jmethodID GET_NAME_METHOD_ID;
@@ -180,8 +162,8 @@ namespace tns {
 
         jmethodID MAKE_INSTANCE_STRONG_METHOD_ID;
 
-        napi_ref m_poJsWrapperFunc;
-        napi_ref m_poJsProxyFunction;
+        napi_ref m_jsObjectCtor;
+        napi_ref m_jsObjectProxyCreator;
 
     };
 }

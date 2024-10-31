@@ -153,6 +153,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                     case CastType::Char:
                         castValue = NumericCasts::GetCastValue(m_env, arg);
                         if (castValue != nullptr) {
+
                             string value = ArgConverter::ConvertToString(m_env, castValue);
                             m_args[index].c = (jchar) value[0];
                             success = true;
@@ -172,8 +173,14 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                     case CastType::Short:
                         castValue = NumericCasts::GetCastValue(m_env, arg);
                         if (castValue != nullptr) {
-                            string strValue = ArgConverter::ConvertToString(m_env, castValue);
-                            int shortArg = atoi(strValue.c_str());
+                            int shortArg;
+                            if ( napi_util::is_of_type(m_env, castValue, napi_string)) {
+                                string strValue = ArgConverter::ConvertToString(m_env, castValue);
+                                shortArg = atoi(strValue.c_str());
+                            } else {
+                                napi_get_value_int32(m_env, castValue, &shortArg);
+                            }
+
                             jshort value = (jshort) shortArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }
@@ -182,8 +189,14 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                     case CastType::Long:
                         castValue = NumericCasts::GetCastValue(m_env, arg);
                         if (castValue != nullptr) {
-                            string strValue = ArgConverter::ConvertToString(m_env, castValue);
-                            int64_t longArg = atoll(strValue.c_str());
+                            int64_t longArg = 0;
+                            if ( napi_util::is_of_type(m_env, castValue, napi_string)) {
+                                string strValue = ArgConverter::ConvertToString(m_env, castValue);
+                                longArg = atoll(strValue.c_str());
+                            } else {
+                                napi_get_value_int64(m_env, castValue, &longArg);
+                            }
+
                             jlong value = (jlong) longArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }

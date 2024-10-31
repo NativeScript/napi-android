@@ -36,14 +36,12 @@ void NumericCasts::CreateGlobalCastFunctions(napi_env env, napi_value globalObje
 
 CastType NumericCasts::GetCastType(napi_env env, napi_value object) {
     CastType ret = CastType::None;
-    napi_value key;
-    napi_create_string_utf8(env, s_castMarker, NAPI_AUTO_LENGTH, &key);
 
     napi_value hidden;
 
     napi_get_named_property(env, object, s_castMarker, &hidden);
 
-    if (hidden != nullptr && !napi_util::is_undefined(env, hidden)) {
+    if (!napi_util::is_null_or_undefined(env, hidden)) {
         int32_t castType;
         napi_get_value_int32(env, hidden, &castType);
         ret = static_cast<CastType>(castType);
@@ -222,16 +220,13 @@ napi_value NumericCasts::MarkAsDoubleCallback(napi_env env, napi_callback_info i
 
 void
 NumericCasts::MarkJsObject(napi_env env, napi_value object, CastType castType, napi_value value) {
-    napi_value key;
-    napi_create_string_utf8(env, s_castMarker, NAPI_AUTO_LENGTH, &key);
-
     napi_value type;
     napi_create_int32(env, static_cast<int>(castType), &type);
 
     napi_set_named_property(env, object, s_castMarker, type);
     napi_set_named_property(env, object, "value", value);
 
-    DEBUG_WRITE("MarkJsObject: Marking js object with cast type: %d", castType);
+//    DEBUG_WRITE("MarkJsObject: Marking js object with cast type: %d", castType);
 }
 
 const char *NumericCasts::s_castMarker = "t::cast";
