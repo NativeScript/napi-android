@@ -139,13 +139,13 @@ string MethodCache::GetType(napi_env env, napi_value value)
     napi_typeof(env, value, &valueType);
     string type = "";
 
-    if (napi_util::is_of_type(env, value, napi_object))
+    if (valueType == napi_object || valueType == napi_function)
     {
 
         napi_value nullNode;
         napi_get_named_property(env, value, PROP_KEY_NULL_NODE_NAME, &nullNode);
 
-        if (nullNode != nullptr && !napi_util::is_undefined(env, nullNode))
+        if (!napi_util::is_null_or_undefined(env, nullNode))
         {
             void *data;
             napi_get_value_external(env, nullNode, &data);
@@ -159,23 +159,23 @@ string MethodCache::GetType(napi_env env, napi_value value)
     }
 
 
-    if (napi_util::is_of_type(env, value, napi_string)) {
+    if (valueType == napi_string) {
         type = "string";
-    } else if (napi_util::is_of_type(env, value, napi_null)) {
+    } else if (valueType == napi_null) {
         type = "null";
-    } else if (napi_util::is_of_type(env, value, napi_undefined)) {
+    } else if (valueType == napi_undefined) {
         type = "undefined";
-    } else if (napi_util::is_of_type(env, value, napi_number)) {
+    } else if (valueType == napi_number) {
         type = "number";
-    } else if (napi_util::is_of_type(env, value, napi_object)) {
+    } else if (valueType == napi_object) {
         type = "object";
     } else if (napi_util::is_array(env, value)) {
         type = "array";
-    } else if (napi_util::is_of_type(env, value, napi_function)) {
+    } else if (valueType == napi_function) {
         type = "function";
     } else if (napi_util::is_typedarray(env, value)) {
         type = "typedarray";
-    } else if (napi_util::is_of_type(env, value, napi_boolean)) {
+    } else if (valueType == napi_boolean) {
         type = "bool";
     } else if (napi_util::is_dataview(env, value)) {
         type = "view";
@@ -229,7 +229,7 @@ string MethodCache::GetType(napi_env env, napi_value value)
     }
 
     // Handle special cases for objects
-    if (type == "object")
+    if (type == "object" || type == "function")
     {
         auto castType = NumericCasts::GetCastType(env, value);
         MetadataNode *node;
@@ -257,6 +257,24 @@ string MethodCache::GetType(napi_env env, napi_value value)
         case CastType::None:
             node = MetadataNode::GetNodeFromHandle(env, value);
             type = (node != nullptr) ? node->GetName() : "<unknown>";
+
+            if (type == "<unknown>") {
+                if (napi_util::is_number_object(env, value)) {
+                    napi_value numValue = napi_util::valueOf(env, value);
+                   bool isFloat;
+                   napi_is_float(env, numValue, &isFloat);
+                   if (isFloat) {
+                       type = "float";
+                   } else {
+                       type = "int";
+                   }
+                } else if (napi_util::is_string_object(env, value)) {
+                    type = "string";
+                } else if (napi_util::is_number_object(env, value)) {
+                    type = "bool";
+                }
+            }
+
             break;
         default:
             throw NativeScriptException("Unsupported cast type");
