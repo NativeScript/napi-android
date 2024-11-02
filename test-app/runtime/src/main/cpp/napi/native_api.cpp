@@ -2533,6 +2533,21 @@ napi_status napi_instanceof(napi_env env, napi_value object, napi_value construc
     return napi_clear_last_error(env);
 }
 
+napi_status napi_is_float(napi_env env, napi_value value, bool *result) {
+    CHECK_ARG(env)
+    CHECK_ARG(value)
+
+    JSValue jsValue = *((JSValue *) value);
+    if (!JS_IsNumber(jsValue)) {
+        napi_set_last_error(env, napi_number_expected);
+        return napi_number_expected;
+    }
+
+    *result = JS_VALUE_GET_TAG(jsValue) == JS_TAG_FLOAT64;
+
+    return napi_ok;
+}
+
 napi_status napi_is_array(napi_env env, napi_value value, bool *result) {
 
     CHECK_ARG(env)
@@ -3262,7 +3277,7 @@ napi_status napi_call_function(napi_env env, napi_value thisValue, napi_value fu
     CHECK_ARG(env)
     CHECK_ARG(func)
 
-    napi_handle_scope handleScope = NULL;
+    napi_handle_scope handleScope;
     napi_open_handle_scope(env, &handleScope);
 
     JSValue jsFunction = *(JSValue *) func;
@@ -3316,8 +3331,8 @@ CallCFunction(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv
     JSRuntime *rt = JS_GetRuntime(ctx);
     napi_env env = (napi_env) JS_GetRuntimeOpaque(rt);
 
-    // Fixed 1 parameter
-    // JS_GetOpaque will not throw an exception
+
+
     FunctionInfo *functionInfo = (FunctionInfo *) JS_GetOpaque(funcData[0],
                                                                env->runtime->functionClassId);
 
@@ -3325,51 +3340,33 @@ CallCFunction(JSContext *ctx, JSValueConst thisVal, int argc, JSValueConst *argv
         return undefined;
     }
 
-    // thisVal may be undefined if the function is called directly, such as test() instead of this.test() or globalThis.test()
     bool useGlobalValue = false;
     if (JS_IsUndefined(thisVal)) {
         useGlobalValue = true;
         thisVal = JS_GetGlobalObject(ctx);
     }
 
-
-
     struct NAPICallbackInfo callbackInfo = {undefined, thisVal, argv, functionInfo->data, argc};
 
-    // The failure of napi_open_handle_scope requires fault tolerance, and it needs to be initialized to NULL for judgment here.
-    napi_handle_scope handleScope = NULL;
-    //    // Memory allocation fails, HandleScope is done by the outermost layer
-    if (napi_open_handle_scope(env, &handleScope) != napi_ok) {
-        return undefined;
-    }
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
 
-    // After callback is called, the return value should belong to the current handleScope management, otherwise the business party will be responsible for the consequences
-    napi_value retVal = functionInfo->callback(env, &callbackInfo);
+    napi_value result = functionInfo->callback(env, &callbackInfo);
+
     if (useGlobalValue) {
-        // Release the situation of thisVal = JS_GetGlobalObject(ctx);
         JS_FreeValue(ctx, thisVal);
     }
-    // Check NULL
+
     JSValue returnValue = undefined;
-    if (retVal) {
-        // The normal return value should be held by HandleScope, so the reference count +1 is required
-        // After this code is executed, a share of ownership is in handleScope, or undefinedValue
-        // One ownership is JS_DupValue()
-        returnValue = JS_DupValue(ctx, *((JSValue *) retVal));
-    }
-    // handleScope
-    // After closing handleScope, the return value can only be undefinedValue, or JS_DupValue() -> returnValue
-    // Unless handleScope == NULL, but this situation does not affect the execution of subsequent code
-
-    if (handleScope && napi_close_handle_scope(env, handleScope) != napi_ok) {
-        JS_FreeValue(ctx, returnValue);
-        return undefined;
+    if (result) {
+        returnValue = JS_DupValue(ctx, *((JSValue *) result));
     }
 
-    // Check exception
-    if (JS_IsException(returnValue)) {
+    napi_close_handle_scope(env, handleScope);
+
+    if (JS_HasException(ctx)) {
         JS_FreeValue(ctx, returnValue);
-        return JS_UNDEFINED;
+        return JS_Throw(ctx, JS_GetException(ctx));
     }
 
     return returnValue;
@@ -3589,12 +3586,23 @@ CallConstructor(JSContext *ctx, JSValueConst newTarget, int argc, JSValueConst *
     napi_value result =
             constructorInfo->functionInfo.callback(env, &callbackInfo);
 
-    JSValue returnValue = *((JSValue *) result);
+    JSValue returnValue = JS_UNDEFINED;
+    if (result != NULL) {
+        returnValue = *((JSValue *) result);
+    }
 
-    if (result && JS_IsObject(returnValue)) {
+    if (JS_IsObject(returnValue)) {
         JS_DupValue(ctx, returnValue);
     }
+
     napi_close_handle_scope(env, handleScope);
+
+    if (JS_HasException(ctx)) {
+        if (JS_IsObject(returnValue)) {
+            JS_FreeValue(ctx, returnValue);
+        }
+        return JS_Throw(ctx, JS_GetException(ctx));
+    }
 
     return returnValue;
 }

@@ -399,7 +399,7 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
                     if (returnValue == nullptr || napi_util::is_undefined(env, returnValue)) {
 
                         returnValue = objectManager->CreateJSWrapper(javaObjectID, *returnType,
-                                                                     result);
+                                                                     result, returnType->at(0) == '[');
                     }
                 }
 

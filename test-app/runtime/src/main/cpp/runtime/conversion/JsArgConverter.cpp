@@ -74,7 +74,7 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
 
 JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
                                const std::string &methodSignature)
-        : m_env(env),  m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
+        : m_env(env), m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
     m_argsLen = argc;
 
     JniSignatureParser parser(m_methodSignature);
@@ -123,7 +123,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
         napi_valuetype argType;
         napi_typeof(m_env, arg, &argType);
 
-        if (argType == napi_object) {
+        if (argType == napi_object || argType == napi_function) {
             bool isArray;
             napi_is_array(m_env, arg, &isArray);
 
@@ -141,7 +141,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
             } else {
                 auto castType = NumericCasts::GetCastType(m_env, arg);
 
-                napi_value castValue;
+                napi_value castValue = NumericCasts::GetCastValue(m_env, arg);
                 JniLocalRef obj;
 
                 auto runtime = Runtime::GetRuntime(m_env);
@@ -149,11 +149,14 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
 
                 JEnv jEnv;
 
+                napi_valuetype valueType = napi_undefined;
+                if (castValue != nullptr) {
+                    napi_typeof(env, castValue, &valueType);
+                }
+
                 switch (castType) {
                     case CastType::Char:
-                        castValue = NumericCasts::GetCastValue(m_env, arg);
-                        if (castValue != nullptr) {
-
+                        if (valueType == napi_string) {
                             string value = ArgConverter::ConvertToString(m_env, castValue);
                             m_args[index].c = (jchar) value[0];
                             success = true;
@@ -161,50 +164,49 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         break;
 
                     case CastType::Byte:
-                        castValue = NumericCasts::GetCastValue(m_env, arg);
-                        if (castValue != nullptr) {
+                        if (valueType == napi_string) {
                             string strValue = ArgConverter::ConvertToString(m_env, castValue);
                             int byteArg = atoi(strValue.c_str());
                             jbyte value = (jbyte) byteArg;
                             success = ConvertFromCastFunctionObject(value, index);
+                        } else if (valueType == napi_number) {
+                            int byteArg = napi_util::get_int32(env, castValue);
+                            jbyte value = (jbyte) byteArg;
+                            success = ConvertFromCastFunctionObject(value, index);
                         }
+
                         break;
 
                     case CastType::Short:
-                        castValue = NumericCasts::GetCastValue(m_env, arg);
-                        if (castValue != nullptr) {
+                        if (valueType == napi_string) {
+                            string strValue = ArgConverter::ConvertToString(m_env, castValue);
+                            int shortArg = atoi(strValue.c_str());
+                            jshort value = (jshort) shortArg;
+                            success = ConvertFromCastFunctionObject(value, index);
+                        } else if (valueType == napi_number) {
                             int shortArg;
-                            if ( napi_util::is_of_type(m_env, castValue, napi_string)) {
-                                string strValue = ArgConverter::ConvertToString(m_env, castValue);
-                                shortArg = atoi(strValue.c_str());
-                            } else {
-                                napi_get_value_int32(m_env, castValue, &shortArg);
-                            }
-
+                            napi_get_value_int32(m_env, castValue, &shortArg);
                             jshort value = (jshort) shortArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }
                         break;
 
                     case CastType::Long:
-                        castValue = NumericCasts::GetCastValue(m_env, arg);
-                        if (castValue != nullptr) {
-                            int64_t longArg = 0;
-                            if ( napi_util::is_of_type(m_env, castValue, napi_string)) {
-                                string strValue = ArgConverter::ConvertToString(m_env, castValue);
-                                longArg = atoll(strValue.c_str());
-                            } else {
-                                napi_get_value_int64(m_env, castValue, &longArg);
-                            }
-
+                        if (valueType == napi_string) {
+                            string strValue = ArgConverter::ConvertToString(m_env, castValue);
+                            int64_t longArg = atoll(strValue.c_str());
+                            jlong value = (jlong) longArg;
+                            success = ConvertFromCastFunctionObject(value, index);
+                        } else if (valueType == napi_number) {
+                            int64_t longArg;
+                            napi_get_value_int64(m_env, castValue, &longArg);
                             jlong value = (jlong) longArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }
                         break;
 
                     case CastType::Float:
-                        castValue = NumericCasts::GetCastValue(m_env, arg);
-                        if (castValue != nullptr) {
+                        if (valueType == napi_number) {
                             double floatArg;
                             napi_get_value_double(m_env, castValue, &floatArg);
                             jfloat value = (jfloat) floatArg;
@@ -213,8 +215,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         break;
 
                     case CastType::Double:
-                        castValue = NumericCasts::GetCastValue(m_env, arg);
-                        if (castValue != nullptr) {
+                        if (valueType == napi_number) {
                             double doubleArg;
                             napi_get_value_double(m_env, castValue, &doubleArg);
                             jdouble value = (jdouble) doubleArg;
@@ -299,10 +300,9 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             }
                         }
 
-                        napi_value privateValue;
-                        napi_get_named_property(m_env, arg, "nullNode", &privateValue);
-
-                        if (!napi_util::is_null_or_undefined(env, privateValue)) {
+                        napi_value nullNode;
+                        napi_get_named_property(env, arg, PROP_KEY_NULL_NODE_NAME, &nullNode);
+                        if (!napi_util::is_null_or_undefined(env, nullNode)) {
                             SetConvertedObject(index, nullptr);
                             success = true;
                             break;
@@ -313,6 +313,33 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         if (success) {
                             SetConvertedObject(index, obj.Move(), obj.IsGlobal());
                         } else {
+                            if (napi_util::is_number_object(env, arg)) {
+                                napi_value numValue = napi_util::valueOf(env, arg);
+
+                                bool isFloat;
+                                napi_is_float(env, numValue, &isFloat);
+                                if (isFloat) {
+                                    double floatArg;
+                                    napi_get_value_double(m_env, numValue, &floatArg);
+                                    jfloat value = (jfloat) floatArg;
+                                    success = ConvertFromCastFunctionObject(value, index);
+                                } else {
+                                    int intArg;
+                                    napi_get_value_int32(m_env, numValue, &intArg);
+                                    jint value = (jint) intArg;
+                                    success = ConvertFromCastFunctionObject(value, index);
+                                }
+                                break;
+                            } else if (napi_util::is_string_object(env, arg)) {
+                                napi_value stringValue = napi_util::valueOf(env, arg);
+                                success = ConvertJavaScriptString(env, stringValue, index);
+                                break;
+                            } else if (napi_util::is_boolean_object(env, arg)) {
+                                napi_value boolValue = napi_util::valueOf(env, arg);
+                                success = ConvertJavaScriptBoolean(env, boolValue, index);
+                                break;
+                            }
+
                             sprintf(buff, "Cannot convert object to %s at index %d",
                                     typeSignature.c_str(), index);
                         }

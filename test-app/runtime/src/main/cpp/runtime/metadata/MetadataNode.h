@@ -153,7 +153,7 @@ private:
 
     static napi_value InterfaceConstructorCallback(napi_env env, napi_callback_info info);
 
-    static napi_value ConstructorFunctionCallback(napi_env env, napi_callback_info info);
+    static napi_value ClassConstructorCallback(napi_env env, napi_callback_info info);
 
     static void SetInnerTypes(napi_env env, napi_value constructor, MetadataTreeNode *treeNode);
 

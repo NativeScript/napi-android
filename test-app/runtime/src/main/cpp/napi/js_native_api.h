@@ -549,6 +549,8 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_being_callback(napi_env env, napi
 
 NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_finish_callback(napi_env env, napi_finalize cb, void *data);
 
+NAPI_EXTERN napi_status NAPI_CDECL napi_is_float(napi_env env, napi_value value, bool *result);
+
 EXTERN_C_END
 
 #endif // SRC_JS_NATIVE_API_H_

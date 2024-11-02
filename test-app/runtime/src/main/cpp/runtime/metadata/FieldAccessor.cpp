@@ -39,7 +39,7 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                                                    fieldJniSig);
         } else {
             fieldData->clazz = jEnv.FindClass(fieldMetadata.getDeclaringType());
-            fieldData->fid = jEnv.GetFieldID(fieldMetadata.clazz, fieldMetadata.getName(),
+            fieldData->fid = jEnv.GetFieldID(fieldData->clazz, fieldMetadata.getName(),
                                              fieldJniSig);
         }
     }

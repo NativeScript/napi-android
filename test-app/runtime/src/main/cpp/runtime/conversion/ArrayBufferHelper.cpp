@@ -55,7 +55,7 @@ napi_value ArrayBufferHelper::CreateFromCallbackImpl(napi_env env, size_t argc, 
 
     napi_value arg = args[0];
 
-    bool isObject = napi_util::is_of_type(env, arg, napi_object);
+    bool isObject = napi_util::is_object(env, arg);
 
     if (!isObject) {
         throw NativeScriptException("Wrong type of argument (object expected)");

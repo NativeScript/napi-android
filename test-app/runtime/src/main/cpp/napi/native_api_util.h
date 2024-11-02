@@ -86,7 +86,22 @@
 #define SET_PROTOTYPE_OF "setPrototypeOf"
 #define CONSTRUCTOR "CONSTRUCTOR"
 
+#define UNDEFINED \
+napi_util::undefined(env);
+
 namespace napi_util {
+
+    inline napi_value undefined(napi_env env) {
+        napi_value undefined;
+        napi_get_undefined(env, &undefined);
+        return undefined;
+    }
+
+    inline napi_value null(napi_env env) {
+        napi_value null;
+        napi_get_null(env, &null);
+        return null;
+    }
 
     inline napi_ref make_ref(napi_env env, napi_value value,
                              uint32_t initialCount = 1) {
@@ -177,11 +192,61 @@ namespace napi_util {
         napi_call_function(env, global, set_proto, 2, argv, nullptr);
     }
 
+    inline bool is_object_explicit(napi_env env, napi_value value) {
+        napi_valuetype type;
+        napi_typeof(env, value, &type);
+        return type == napi_object;
+    }
+
+    inline bool is_object(napi_env env, napi_value value) {
+        napi_valuetype type;
+        napi_typeof(env, value, &type);
+        return type == napi_object || type == napi_function;
+    }
+
     inline bool is_of_type(napi_env env, napi_value value, napi_valuetype expected_type) {
         napi_valuetype type;
         napi_typeof(env, value, &type);
         return type == expected_type;
     }
+
+    inline bool is_number_object(napi_env env, napi_value value) {
+        bool result;
+        napi_value numberCtor;
+        napi_value global;
+        napi_get_global(env, &global);
+        napi_get_named_property(env, global, "Number", &numberCtor);
+        napi_instanceof(env, value, numberCtor, &result);
+        return result;
+    }
+
+    inline napi_value valueOf(napi_env env, napi_value value) {
+        napi_value valueOf, result;
+        napi_get_named_property(env, value, "valueOf", &valueOf);
+        napi_call_function(env, value, valueOf, 0, nullptr, &result);
+        return result;
+    }
+
+    inline bool is_string_object(napi_env env, napi_value value) {
+        bool result;
+        napi_value stringCtor;
+        napi_value global;
+        napi_get_global(env, &global);
+        napi_get_named_property(env, global, "String", &stringCtor);
+        napi_instanceof(env, value, stringCtor, &result);
+        return result;
+    }
+
+    inline bool is_boolean_object(napi_env env, napi_value value) {
+        bool result;
+        napi_value booleanCtor;
+        napi_value global;
+        napi_get_global(env, &global);
+        napi_get_named_property(env, global, "Boolean", &booleanCtor);
+        napi_instanceof(env, value, booleanCtor, &result);
+        return result;
+    }
+    
 
     inline bool is_array(napi_env env, napi_value value) {
         bool result;
@@ -306,7 +371,7 @@ namespace napi_util {
     napi_set_function(napi_env env, napi_value object, const char *name, napi_callback callback,
                       void *data = nullptr) {
         napi_value fn;
-        napi_create_function(env, name, 0, callback, data, &fn);
+        napi_create_function(env, name, strlen(name), callback, data, &fn);
         napi_set_named_property(env, object, name, fn);
         return fn;
     }

@@ -109,7 +109,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
         auto stringObject = ArgConverter::ConvertToJavaString(env, arg);
         SetConvertedObject(jEnv, index, stringObject);
         success = true;
-    } else if (argType == napi_object) {
+    } else if (argType == napi_object || argType == napi_function) {
         napi_value jsObj = arg;
 
         auto castType = NumericCasts::GetCastType(env, jsObj);
@@ -143,11 +143,18 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
             case CastType::Byte:
                 castValue = NumericCasts::GetCastValue(env, jsObj);
                 byteValue = 0;
+
                 if (castValue != nullptr) {
-                    string value = ArgConverter::ConvertToString(env, castValue);
-                    int byteArg = atoi(value.c_str());
-                    byteValue = (jbyte) byteArg;
+                    if (napi_util::is_of_type(env, castValue, napi_string)) {
+                        string value = ArgConverter::ConvertToString(env, castValue);
+                        int byteArg = atoi(value.c_str());
+                        byteValue = (jbyte) byteArg;
+                    } else {
+                        int byteArg = napi_util::get_int32(env, castValue);
+                        byteValue = (jbyte) byteArg;
+                    }
                 }
+
                 javaObject = JType::NewByte(jEnv, byteValue);
                 SetConvertedObject(jEnv, index, javaObject);
                 success = true;
@@ -157,11 +164,18 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 castValue = NumericCasts::GetCastValue(env, jsObj);
                 shortValue = 0;
                 if (castValue != nullptr) {
-                    string value = ArgConverter::ConvertToString(env, castValue);
-                    int shortArg = atoi(value.c_str());
-                    shortValue = (jshort) shortArg;
+                    if (napi_util::is_of_type(env, castValue, napi_string)) {
+                        string value = ArgConverter::ConvertToString(env, castValue);
+                        int shortArg = atoi(value.c_str());
+                        shortValue = (jshort) shortArg;
+                    } else {
+                        int shortArg = napi_util::get_int32(env, castValue);
+                        shortValue = (jshort) shortArg;
+                    }
                 }
+
                 javaObject = JType::NewShort(jEnv, shortValue);
+
                 SetConvertedObject(jEnv, index, javaObject);
                 success = true;
                 break;
@@ -170,8 +184,14 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 castValue = NumericCasts::GetCastValue(env, jsObj);
                 longValue = 0;
                 if (castValue != nullptr) {
-                    auto strValue = ArgConverter::ConvertToString(env, castValue);
-                    longValue = atoll(strValue.c_str());
+                    if (napi_util::is_of_type(env, castValue, napi_string)) {
+                        auto strValue = ArgConverter::ConvertToString(env, castValue);
+                        longValue = atoll(strValue.c_str());
+                    } else {
+                        int64_t longArg;
+                        napi_get_value_int64(env, castValue, &longArg);
+                        longValue = (jlong) longArg;
+                    }
                 }
                 javaObject = JType::NewLong(jEnv, longValue);
                 SetConvertedObject(jEnv, index, javaObject);
@@ -302,7 +322,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 }
 
                 napi_value privateValue;
-                napi_get_named_property(env, jsObj, "nullNode", &privateValue);
+                napi_get_named_property(env, jsObj, PROP_KEY_NULL_NODE_NAME, &privateValue);
 
                 if (!napi_util::is_null_or_undefined(env, privateValue)) {
                     void* data;
@@ -339,6 +359,43 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 if (success) {
                     SetConvertedObject(jEnv, index, obj.Move(), obj.IsGlobal());
                 } else {
+
+                    if (napi_util::is_number_object(env, arg)) {
+                        napi_value numValue = napi_util::valueOf(env, arg);
+
+                        bool isFloat;
+                        napi_is_float(env, numValue, &isFloat);
+                        if (isFloat) {
+                            double floatArg;
+                            napi_get_value_double(env, numValue, &floatArg);
+                            jfloat value = (jfloat) floatArg;
+                            javaObject = JType::NewFloat(jEnv, value);
+                            SetConvertedObject(jEnv, index, javaObject);
+                            success = true;
+                        } else {
+                            int intArg;
+                            napi_get_value_int32(env, numValue, &intArg);
+                            jint value = (jint) intArg;
+                            javaObject = JType::NewInt(jEnv, value);
+                            SetConvertedObject(jEnv, index, javaObject);
+                            success = true;
+                        }
+                        break;
+                    } else if (napi_util::is_string_object(env, arg)) {
+                        napi_value stringValue = napi_util::valueOf(env, arg);
+                        javaObject = ArgConverter::ConvertToJavaString(env, stringValue);
+                        SetConvertedObject(jEnv, index, javaObject);
+                        success = true;
+                        break;
+                    } else if (napi_util::is_boolean_object(env, arg)) {
+                        napi_value boolValue = napi_util::valueOf(env, arg);
+                        bool value = napi_util::get_bool(env, boolValue);
+                        javaObject = JType::NewBoolean(jEnv, value);
+                        SetConvertedObject(jEnv, index, javaObject);
+                        success = true;
+                        break;
+                    }
+
                     size_t str_len;
                     napi_get_value_string_utf8(env, jsObj, nullptr, 0, &str_len);
                     string jsObjStr(str_len, '\0');

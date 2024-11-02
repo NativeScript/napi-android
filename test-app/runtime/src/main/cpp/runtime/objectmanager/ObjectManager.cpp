@@ -102,7 +102,6 @@ void ObjectManager::Init(napi_env env) {
 		  if (typeof prop === "string" && !isNaN(prop)) {
 			return target.getValueAtIndex(Number(prop));
 		  }
-
 		  if (prop === Symbol.iterator) {
 			let index = 0;
 			const l = target.length;
@@ -160,6 +159,7 @@ void ObjectManager::Init(napi_env env) {
 			if (isArray) {
 			  return arrayHandler(target, prop);
 			}
+
 			return target[prop];
 		  },
 		  set: function(target, prop, value) {

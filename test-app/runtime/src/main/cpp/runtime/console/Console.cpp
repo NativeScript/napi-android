@@ -292,7 +292,7 @@ napi_value Console::dirCallback(napi_env env, napi_callback_info info) {
 
         if (argc > 0) {
             napi_value arg = args[0];
-            if (napi_util::is_of_type(env, arg, napi_object)) {
+            if (napi_util::is_object(env, arg)) {
                 ss << "==== object dump start ====" << std::endl;
 
                 napi_value propNames;

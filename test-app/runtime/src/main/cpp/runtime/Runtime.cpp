@@ -340,14 +340,12 @@ bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
 }
 
 bool Runtime::TryCallGC() {
-    if (m_gcFunc == nullptr) {
-        napi_value global;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "gc", &m_gcFunc);
-    }
-
+    napi_value gc;
+    napi_value global;
+    napi_get_global(env, &global);
+    napi_get_named_property(env, global, "gc", &gc);
     napi_value result;
-    napi_call_function(env, nullptr, m_gcFunc, 0, nullptr, &result);
+    napi_call_function(env, nullptr, gc, 0, nullptr, &result);
     return true;
 }
 

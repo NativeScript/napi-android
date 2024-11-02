@@ -10,7 +10,8 @@ using namespace tns;
 
 NativeScriptException::NativeScriptException(JEnv& env)
     : m_javascriptException(nullptr) {
-    m_javaException = JniLocalRef(env.ExceptionOccurred());
+    jthrowable  thrw = env.ExceptionOccurred();
+    m_javaException = JniLocalRef(thrw);
     env.ExceptionClear();
 }
 
@@ -61,7 +62,7 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
     jthrowable ex = nullptr;
     JEnv jEnv;
 
-    if (!m_javaException.IsNull() && env != nullptr) {
+    if (!m_javaException.IsNull()) {
         auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
 
         auto excClassName = objectManager->GetClassName((jobject)m_javaException);
@@ -69,7 +70,8 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
             ex = m_javaException;
         } else {
             JniLocalRef msg(jEnv.NewStringUTF("Java Error!"));
-            ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_THROWABLE_CTOR_ID, (jstring)msg, (jobject)m_javaException));
+            JniLocalRef stack(jEnv.NewStringUTF(""));
+            ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_THROWABLE_CTOR_ID, (jstring)msg, (jstring)stack, (jobject)m_javaException));
         }
     } else if (m_javascriptException != nullptr && env != nullptr) {
         napi_value errObj;
@@ -235,7 +237,7 @@ JniLocalRef NativeScriptException::TryGetJavaThrowableObject(JEnv& env, napi_env
     } else {
         napi_value nativeEx;
         napi_get_named_property(napiEnv, jsObj, "nativeException", &nativeEx);
-        if (napi_util::is_of_type(napiEnv, nativeEx, napi_object)) {
+        if (napi_util::is_object(napiEnv, nativeEx)) {
             javaObj = objectManager->GetJavaObjectByJsObject(napiEnv, nativeEx);
             objClass = JniLocalRef(env.GetObjectClass(javaObj));
         }
