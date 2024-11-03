@@ -258,7 +258,7 @@ task 'setPackageVersion' {
     doFirst {
         println "Setting runtime version: '${packageVersion}'"
 
-        def versionFile = "$projectDir/src/main/cpp/Version.h"
+        def versionFile = "$projectDir/src/main/cpp/runtime/version/Version.h"
         String contents = new File(versionFile).getText("UTF-8")
         contents = contents.replaceAll(/0.0.0.0/, packageVersion)
         new File(versionFile).write(contents, "UTF-8")
@@ -273,7 +273,7 @@ task 'setRuntimeCommit' {
     doFirst {
         println "Setting runtime commit: '${gitCommitVersion}'"
 
-        def versionFile = "$projectDir/src/main/cpp/Version.h"
+        def versionFile = "$projectDir/src/main/cpp/runtime/version/Version.h"
         String contents = new File(versionFile).getText("UTF-8")
         contents = contents.replaceAll(/RUNTIME_COMMIT_SHA_PLACEHOLDER/, gitCommitVersion)
         new File(versionFile).write(contents, "UTF-8")
@@ -287,7 +287,7 @@ task revertVersionFile(type: Exec) {
 
     doFirst {
         def isWinOs = System.properties['os.name'].toLowerCase().contains('windows')
-        def versionFileName = "$projectDir/src/main/cpp/Version.h"
+        def versionFileName = "$projectDir/src/main/cpp/runtime/version/Version.h"
         def versionFilePath = new File(versionFileName).getAbsolutePath()
         println "Reverting Version.h file: ${versionFilePath}"
 
