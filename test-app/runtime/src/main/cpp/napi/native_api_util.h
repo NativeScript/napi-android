@@ -122,7 +122,7 @@ namespace napi_util {
         return proto;
     }
 
-    inline char *get_string_value(napi_env env, napi_value str, size_t size = 256) {
+    inline char *get_string_value(napi_env env, napi_value str, size_t size = 0) {
         size_t str_size = size;
         if (str_size == 0) {
             napi_get_value_string_utf8(env, str, nullptr, 0, &str_size);
@@ -300,7 +300,7 @@ namespace napi_util {
 
     inline napi_value get_false(napi_env env) {
         napi_value falseValue;
-        napi_get_boolean(env, true, &falseValue);
+        napi_get_boolean(env, false, &falseValue);
         return falseValue;
     }
 
@@ -377,12 +377,8 @@ namespace napi_util {
     }
 
     inline napi_value symbolFor(napi_env env, const char *string) {
-        napi_value global, Symbol, SymbolFor, symbol, symbolString;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "Symbol", &Symbol);
-        napi_get_named_property(env, Symbol, "for", &SymbolFor);
-        napi_create_string_utf8(env, string, NAPI_AUTO_LENGTH, &symbolString);
-        napi_call_function(env, global, SymbolFor, 1, &symbolString, &symbol);
+        napi_value symbol;
+        node_api_symbol_for(env, string, strlen(string), &symbol);
         return symbol;
     }
 

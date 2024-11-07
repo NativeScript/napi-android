@@ -12,10 +12,8 @@ ArrayBufferHelper::ArrayBufferHelper()
 
 void ArrayBufferHelper::CreateConvertFunctions(napi_env env, napi_value global, ObjectManager* objectManager) {
     m_objectManager = objectManager;
-    napi_value extData;
-    napi_create_external(env, this, nullptr, nullptr, &extData);
     napi_value fromFunc;
-    napi_create_function(env, "from", NAPI_AUTO_LENGTH, CreateFromCallbackStatic, extData, &fromFunc);
+    napi_create_function(env, "from", NAPI_AUTO_LENGTH, CreateFromCallbackStatic, this, &fromFunc);
 
     napi_value arrBufferCtorFunc;
     napi_get_named_property(env, global, "ArrayBuffer", &arrBufferCtorFunc);
@@ -23,16 +21,10 @@ void ArrayBufferHelper::CreateConvertFunctions(napi_env env, napi_value global, 
 }
 
 napi_value ArrayBufferHelper::CreateFromCallbackStatic(napi_env env, napi_callback_info info) {
-    napi_value thisArg;
-    size_t argc = 1;
-    napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, &thisArg, nullptr);
-
+    NAPI_CALLBACK_BEGIN(1)
     try {
-        void* data;
-        napi_get_value_external(env, thisArg, &data);
         auto thiz = reinterpret_cast<ArrayBufferHelper*>(data);
-        return thiz->CreateFromCallbackImpl(env, argc, args);
+        return thiz->CreateFromCallbackImpl(env, argc, argv);
     } catch (NativeScriptException& e) {
         e.ReThrowToNapi(env);
     } catch (std::exception& e) {

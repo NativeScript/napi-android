@@ -346,6 +346,7 @@ namespace tns
             {
                 // we can never unschedule a callback, so we just mark it as removed
                 removed = true;
+                uint32_t  result;
             }
 
             AChoreographer_frameCallback frameCallback_ = [](long ts, void *data)
@@ -370,21 +371,22 @@ namespace tns
                     }
                     napi_env env = entry->env;
 
-                    napi_handle_scope handle_scope;
-                    napi_open_handle_scope(env, &handle_scope);
-
                     napi_value cb = napi_util::get_ref_value(env, entry->callback);
 
                     napi_value global;
                     napi_get_global(env, &global);
 
+                    entry->markUnscheduled();
+
                     napi_value args[1];
                     napi_create_double(env, ts, &args[0]);
+
+                    napi_valuetype type;
+                    napi_typeof(env, cb, &type);
 
                     napi_value result;
                     napi_call_function(env, global, cb, 1, args, &result);
 
-                    napi_close_handle_scope(env, handle_scope);
 
                     // check if we should remove it (it should be both unscheduled and removed)
                     if (entry->shouldRemoveAfterCall())

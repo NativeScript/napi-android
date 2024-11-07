@@ -48,9 +48,7 @@ napi_value ArrayHelper::CreateJavaArrayCallback(napi_env env, napi_callback_info
 }
 
 napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
-    size_t argc = 2;
-    napi_value argv[2];
-    napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+    NAPI_CALLBACK_BEGIN_VARGS()
 
     if (argc != 2) {
         Throw(env, "Expect two parameters.");
@@ -77,6 +75,15 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
             return nullptr;
         }
 
+        bool isFloat;
+        napi_is_float(env, length, &isFloat);
+
+        if (isFloat) {
+            Throw(env, "Expect integer value as a second argument.");
+            return nullptr;
+        }
+
+
         int32_t len;
         napi_get_value_int32(env, length, &len);
         if (len < 0) {
@@ -88,6 +95,14 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
         array = JniLocalRef(CreateArrayByClassName(typeName, len));
     } else if (typeType == napi_function) {
         if (lengthType != napi_number) {
+            Throw(env, "Expect integer value as a second argument.");
+            return nullptr;
+        }
+
+        bool isFloat;
+        napi_is_float(env, length, &isFloat);
+
+        if (isFloat) {
             Throw(env, "Expect integer value as a second argument.");
             return nullptr;
         }

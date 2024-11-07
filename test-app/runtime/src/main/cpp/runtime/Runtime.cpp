@@ -53,6 +53,7 @@ void Runtime::Init(JavaVM *vm) {
 }
 
 Runtime *Runtime::Current() {
+    if (!s_mainThreadInitialized) return nullptr;
     auto id = this_thread::get_id();
     auto size = Runtime::thread_id_to_rt_cache.size();
     auto itFound = Runtime::thread_id_to_rt_cache.find(id);
@@ -60,6 +61,13 @@ Runtime *Runtime::Current() {
     if (itFound != Runtime::thread_id_to_rt_cache.end()) {
         return itFound->second;
     }
+
+    itFound = Runtime::thread_id_to_rt_cache.find(s_main_thread_id);
+    if (itFound != Runtime::thread_id_to_rt_cache.end()) {
+        return itFound->second;
+    }
+
+
     return nullptr;
 }
 
@@ -441,9 +449,11 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
         m_objectManager->SetJavaClass(jsObject, instanceClass);
     }
 
-    DEBUG_WRITE("CallJSMethodNative called jsObject");
 
     string method_name = ArgConverter::jstringToString(methodName);
+
+    DEBUG_WRITE("CallJSMethodNative called jsObject %s", method_name.c_str());
+
     auto jsResult = CallbackHandlers::CallJSMethod(env, jEnv, jsObject, method_name, packagedArgs);
 
     int classReturnType = retType;

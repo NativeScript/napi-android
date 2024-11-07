@@ -188,11 +188,9 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
     }
 
     if (!isStatic) {
-        DEBUG_WRITE("CallJavaMethod called %s.%s. isSuper= %d", className.c_str(),
-                    methodName.c_str(),  isSuper);
+        DEBUG_WRITE("CallJavaMethod on instance");
     } else {
-        DEBUG_WRITE("CallJavaMethod called %s.%s. static method", className.c_str(),
-                    methodName.c_str());
+        DEBUG_WRITE("CallJavaMethod on class");
     }
 
 //    JSToJavaConverter argConverter = (entry != nullptr && entry->isExtensionFunction)

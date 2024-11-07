@@ -33,10 +33,10 @@ namespace tns {
             }
 
             JEnv jenv;
-            auto chars = jenv.GetStringChars(value, NULL);
+            auto chars = jenv.GetStringUTFChars(value, JNI_FALSE);
             auto length = jenv.GetStringLength(value);
             auto jsString = convertToJsString(env, chars, length);
-            jenv.ReleaseStringChars(value, chars);
+            jenv.ReleaseStringUTFChars(value, chars);
 
             return jsString;
         }
@@ -72,7 +72,7 @@ namespace tns {
 
         inline static jstring ConvertToJavaString(napi_env env, napi_value jsValue) {
             JEnv jenv;
-            const char * str = napi_util::get_string_value(env, jsValue);
+            const char * str = napi_util::get_string_value(env, jsValue, 0);
             return jenv.NewStringUTF(str);
         }
 

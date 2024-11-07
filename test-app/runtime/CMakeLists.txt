@@ -10,7 +10,7 @@ project(NativeScriptAndroidRuntime)
 # "-DANDROID_STL=c++_static" is just not enough for clang++ to find some libraries in the ndk
 MESSAGE(STATUS "## ANDROID_NDK_ROOT: " ${ANDROID_NDK_ROOT})
 
-set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Werror -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy -fno-rtti")
+set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy -fno-rtti")
 
 # AOSP has switched to using LLD by default and the NDK will use it by default in the next release.
 # BFD and Gold will be removed once LLD has been through a release cycle with no major unresolved issues (estimated r21)
@@ -61,6 +61,7 @@ include_directories(
         src/main/cpp/runtime/sighandler
         src/main/cpp/runtime/timers
         src/main/cpp/runtime/util
+        src/main/cpp/runtime/jsonhelper
         src/main/cpp/runtime/version
 )
 

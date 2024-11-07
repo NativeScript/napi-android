@@ -18,6 +18,7 @@
 #include "ArgsWrapper.h"
 #include "Util.h"
 #include "GlobalHelpers.h"
+#include "JSONObjectHelper.h"
 
 using namespace std;
 
@@ -323,13 +324,9 @@ napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_cal
     NAPI_CALLBACK_BEGIN(0)
 
     try {
-
         napi_value newTarget;
         napi_get_new_target(env, info, &newTarget);
-
-        if (newTarget == nullptr) {
-            return nullptr;
-        }
+        if (napi_util::is_null_or_undefined(env, newTarget)) return nullptr;
 
         auto extData = reinterpret_cast<ExtendedClassCallbackData *>(data);
         SetInstanceMetadata(env, jsThis, extData->node);
@@ -337,6 +334,21 @@ napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_cal
         napi_value implementationObject = napi_util::get_ref_value(env,
                                                                    extData->implementationObject);
         ObjectManager::MarkSuperCall(env, jsThis);
+
+        DEBUG_WRITE("%s", "CONSOLE LOG: EXTEND CTOR CALLED");
+
+//        napi_value global;
+//        napi_value console;
+//        napi_value log;
+//        napi_get_global(env, &global);
+//        napi_get_named_property(env, global, "console", &console);
+//        napi_get_named_property(env, console, "log", &log);
+//
+//        napi_value args[] = {
+//                jsThis
+//        };
+//
+//        napi_call_function(env, console, log, 1, args, nullptr);
 
         string fullClassName = extData->fullClassName;
 
@@ -515,7 +527,7 @@ MetadataNode::GetExtendLocation(napi_env env, string &extendLocation, bool isTyp
     auto frames = tns::BuildStacktraceFrames(env, nullptr, 3);
     tns::JsStacktraceFrame *frame;
     if (isTypeScriptExtend) {
-        frame = &frames[3]; // the _super.apply call to ts_helpers will always be the third call frame
+        frame = &frames[2]; // the _super.apply call to ts_helpers will always be the third call frame
     } else {
         frame = &frames[0];
     }
@@ -871,9 +883,9 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
                 RegisterSymbolHasInstanceCallback(env, child, cachedItem);
             }
 
-            //                if (node->m_name == "org/json" && child.name == "JSONObject") {
-            //                    JSONObjectHelper::RegisterFromFunction(isolate, cachedItem);
-            //                }
+            if (node->m_name == "org/json" && child.name == "JSONObject") {
+                JSONObjectHelper::RegisterFromFunction(env, cachedItem);
+            }
         }
 
         return napi_util::get_ref_value(env, methodInfo->value);
@@ -906,7 +918,12 @@ void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const Metadat
         return;
     }
 
-    napi_value hasInstance = napi_util::symbolFor(env, "hasInstance");
+    napi_value hasInstance;
+    napi_value symbol;
+    napi_value global;
+    napi_get_global(env, &global);
+    napi_get_named_property(env, global, "Symbol", &symbol);
+    napi_get_named_property(env, symbol, "hasInstance", &hasInstance);
     napi_value method;
     napi_create_function(env, "hasInstance", NAPI_AUTO_LENGTH, SymbolHasInstanceCallback, clazz,
                          &method);
@@ -933,8 +950,8 @@ napi_value MetadataNode::SymbolHasInstanceCallback(napi_env env, napi_callback_i
 
     napi_value object = argv[0];
 
-    if (napi_util::is_null_or_undefined(env, argv[0])) {
-        return nullptr;
+    if (!napi_util::is_object(env, object)) {
+        return napi_util::get_false(env);
     }
 
     auto clazz = reinterpret_cast<jclass>(data);
@@ -1538,6 +1555,20 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
             return UNDEFINED;
         }
 
+        if (!fieldMetadata.isStatic) {
+            napi_value constructor;
+            napi_value prototype;
+            napi_get_named_property(env, jsThis, "constructor", &constructor);
+            if (!napi_util::is_null_or_undefined(env, constructor)) {
+                napi_get_named_property(env, constructor, "prototype", &prototype);
+                bool isHolder;
+                napi_strict_equals(env, prototype, jsThis, &isHolder);
+                if (isHolder) {
+                    return UNDEFINED;
+                }
+            }
+        }
+
         return CallbackHandlers::GetJavaField(env, jsThis, fieldData);
 
     } catch (NativeScriptException &e) {
@@ -1562,9 +1593,20 @@ napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback
         auto fieldData = reinterpret_cast<FieldCallbackData *>(data);
         auto &fieldMetadata = fieldData->metadata;
 
-//        if (!fieldMetadata.isStatic) {
-//            return nullptr;
-//        }
+
+        if (!fieldMetadata.isStatic) {
+            napi_value constructor;
+            napi_value prototype;
+            napi_get_named_property(env, jsThis, "constructor", &constructor);
+            if (!napi_util::is_null_or_undefined(env, constructor)) {
+                napi_get_named_property(env, constructor, "prototype", &prototype);
+                bool isHolder;
+                napi_strict_equals(env, prototype, jsThis, &isHolder);
+                if (isHolder) {
+                    return UNDEFINED;
+                }
+            }
+        }
 
         if (fieldMetadata.getIsFinal()) {
             stringstream ss;
@@ -1776,7 +1818,6 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
         napi_util::define_property(
                 env, implementationObject, PROP_KEY_SUPER, nullptr, SuperAccessorGetterCallback,
                 nullptr, nullptr);
-
 
         napi_util::set_prototype(env, extendFuncPrototype, implementationObject);
 
