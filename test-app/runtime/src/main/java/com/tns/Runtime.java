@@ -97,6 +97,8 @@ public class Runtime {
         }
     }
 
+
+
     private boolean initialized;
 
     private final static String FAILED_CTOR_RESOLUTION_MSG = "Check the number and type of arguments.\n" +
@@ -670,8 +672,8 @@ public class Runtime {
 
     @RuntimeCallable
     public void disableVerboseLogging() {
-        logger.setEnabled(false);
-        ProxyGenerator.IsLogEnabled = false;
+//        logger.setEnabled(false);
+//        ProxyGenerator.IsLogEnabled = false;
     }
 
     public void run() throws NativeScriptException {
@@ -963,17 +965,16 @@ public class Runtime {
             throw new IllegalArgumentException("instance cannot be null");
         }
 
-        int key = objectId;
-        strongInstances.put(key, instance);
-        strongJavaObjectToID.put(instance, key);
-        this.gcListener.createPhantomReference(this, instance, objectId);
+        strongInstances.put(objectId, instance);
+        strongJavaObjectToID.put(instance, objectId);
 
         Class<?> clazz = instance.getClass();
         classStorageService.storeClass(clazz.getName(), clazz);
 
         if (logger != null && logger.isEnabled()) {
-            logger.write("MakeInstanceStrong (" + key + ", " + instance.getClass().toString() + ")");
+            logger.write("MakeInstanceStrong (" + objectId + ", " + instance.getClass().toString() + ")");
         }
+        this.gcListener.createPhantomReference(this, instance, objectId);
     }
 
     @RuntimeCallable
@@ -1129,7 +1130,6 @@ public class Runtime {
         if (result == null) {
             int objectId = generateNewObjectId(getRuntimeId());
             makeInstanceStrong(obj, objectId);
-
             result = objectId;
         }
 
@@ -1430,9 +1430,7 @@ public class Runtime {
 
     @RuntimeCallable
     private static boolean useGlobalRefs() {
-        int JELLY_BEAN = 16;
-        boolean useGlobalRefs = android.os.Build.VERSION.SDK_INT >= JELLY_BEAN;
-        return useGlobalRefs;
+        return true;
     }
 
     /*
@@ -1591,5 +1589,11 @@ public class Runtime {
 
         // TODO: Pete: Should we treat the message with higher priority?
         currentRuntime.mainThreadHandler.sendMessage(msg);
+    }
+
+    @Override
+    protected void finalize() throws Throwable {
+        GcListener.unsubscribe(this);
+        super.finalize();
     }
 }

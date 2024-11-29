@@ -28,14 +28,14 @@ EXTERN_C_START
 /**
  Opaque pointer to the QuickJS Runtime
  */
-typedef struct NAPIJSRuntime *napi_runtime;
-typedef struct NAPIEnvironment *napi_env;
+typedef struct NapiRuntime *napi_runtime;
+typedef struct NapiEnvironment *napi_env;
 typedef struct NAPIValue *napi_value;
-typedef struct NAPIReference *napi_ref;
-typedef struct NAPIHandleScope *napi_handle_scope;
-typedef struct NAPIEscapableHandleScope *napi_escapable_handle_scope;
-typedef struct NAPICallbackInfo *napi_callback_info;
-typedef struct NAPIDeferred* napi_deferred;
+typedef struct NapiReference *napi_ref;
+typedef struct NapiHandleScope *napi_handle_scope;
+typedef struct NapiEscapableHandleScope *napi_escapable_handle_scope;
+typedef struct NapiCallbackInfo *napi_callback_info;
+typedef struct NapiDeferred* napi_deferred;
 
 
 typedef enum

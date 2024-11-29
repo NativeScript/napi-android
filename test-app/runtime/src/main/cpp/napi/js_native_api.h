@@ -2,6 +2,7 @@
 #define SRC_JS_NATIVE_API_H_
 
 #include "js_native_api_types.h"
+#include <uchar.h>
 
 EXTERN_C_START
 
@@ -428,9 +429,8 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_is_promise(napi_env env,
 
 // Running a script
 NAPI_EXTERN napi_status NAPI_CDECL napi_run_script(napi_env env,
-                                                   napi_value script,
-                                                   const char *file,
-                                                   napi_value *result);
+                                                     napi_value script,
+                                                     napi_value *result);
 
 // Memory management
 NAPI_EXTERN napi_status NAPI_CDECL napi_adjust_external_memory(
@@ -528,23 +528,31 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_object_freeze(napi_env env,
                                                       napi_value object);
 NAPI_EXTERN napi_status NAPI_CDECL napi_object_seal(napi_env env,
                                                     napi_value object);
+
+NAPI_EXTERN napi_status NAPI_CDECL napi_is_float(napi_env env, napi_value value, bool *result);
 #endif // NAPI_VERSION >= 8
 
-NAPI_EXTERN napi_status NAPI_CDECL NAPICreateJSRuntime(napi_runtime *runtime);
+NAPI_EXTERN napi_status NAPI_CDECL js_create_runtime(napi_runtime *runtime);
 
-NAPI_EXTERN napi_status NAPI_CDECL NAPICreateEnv(napi_env *env, napi_runtime runtime);
+NAPI_EXTERN napi_status NAPI_CDECL js_create_napi_env(napi_env *env, napi_runtime runtime);
 
-NAPI_EXTERN napi_status NAPI_CDECL NAPIFreeEnv(napi_env env);
+NAPI_EXTERN napi_status NAPI_CDECL js_free_napi_env(napi_env env);
 
-NAPI_EXTERN napi_status NAPI_CDECL NAPIFreeRuntime(napi_runtime runtime);
+NAPI_EXTERN napi_status NAPI_CDECL js_free_runtime(napi_runtime runtime);
 
-NAPI_EXTERN napi_status NAPI_CDECL napi_run_microtasks(napi_env env);
+NAPI_EXTERN napi_status NAPI_CDECL js_execute_script(napi_env env,
+                                                     napi_value script,
+                                                     const char *file,
+                                                     napi_value *result);
 
 NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_being_callback(napi_env env, napi_finalize cb, void *data);
 
-NAPI_EXTERN napi_status NAPI_CDECL napi_set_gc_finish_callback(napi_env env, napi_finalize cb, void *data);
+NAPI_EXTERN napi_status NAPI_CDECL js_runtime_after_gc_callback(napi_env env, napi_finalize cb, void *data);
 
-NAPI_EXTERN napi_status NAPI_CDECL napi_is_float(napi_env env, napi_value value, bool *result);
+
+NAPI_EXTERN napi_status NAPI_CDECL js_execute_pending_jobs(napi_env env);
+
+NAPI_EXTERN napi_status NAPI_CDECL js_update_stack_top(napi_env env);
 
 EXTERN_C_END
 

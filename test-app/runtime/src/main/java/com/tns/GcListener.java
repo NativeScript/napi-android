@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.WeakHashMap;
-
+import java.util.concurrent.ConcurrentHashMap;
 
 
 class GCSubscriber {
@@ -19,7 +19,7 @@ public class GcListener {
     private final Thread monitorThread;
     private final int monitorInterval;
     private final double freeMemoryRatio;
-    private final WeakHashMap<Runtime, GCSubscriber> subscribers;
+    private final ConcurrentHashMap<Runtime, GCSubscriber> subscribers;
     private boolean firstStart = true;
     private static volatile GcListener instance;
 
@@ -45,7 +45,7 @@ public class GcListener {
         public void run() {
             while (true) {
                 try {
-                    if (subscribers.size() == 0) break;
+                    if (subscribers.isEmpty()) break;
                     for (Runtime runtime : subscribers.keySet()) {
                         GCSubscriber subscriber = subscribers.get(runtime);
                         if (subscriber != null) {
@@ -73,7 +73,7 @@ public class GcListener {
                             }
                         }
                     }
-                    Thread.sleep(3000);
+                    Thread.sleep(100);
                 } catch (InterruptedException e) {
                     if (com.tns.Runtime.isDebuggable()) {
                         e.printStackTrace();
@@ -118,7 +118,7 @@ public class GcListener {
     private GcListener(int monitorInterval, double freeMemoryRatio) {
         this.monitorInterval = monitorInterval;
         this.freeMemoryRatio = freeMemoryRatio;
-        this.subscribers = new WeakHashMap<>();
+        this.subscribers = new ConcurrentHashMap<>();
 
         gcThread = new Thread(new GcMonitor());
         gcThread.setName("NativeScript GC thread");

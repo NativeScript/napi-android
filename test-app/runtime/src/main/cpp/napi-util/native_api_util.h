@@ -116,10 +116,30 @@ namespace napi_util {
         return value;
     }
 
-    inline napi_value get_proto(napi_env env, napi_value constructor) {
+    inline napi_value get__proto__(napi_env env, napi_value object) {
         napi_value proto;
-        napi_get_prototype(env, constructor, &proto);
+        napi_get_named_property(env, object, "__proto__", &proto);
         return proto;
+    }
+
+    inline void set__proto__(napi_env env, napi_value object, napi_value __proto__) {
+        napi_set_named_property(env, object, "__proto__", __proto__);
+    }
+
+    inline napi_value getPrototypeOf(napi_env env, napi_value object) {
+        napi_value proto;
+        napi_get_prototype(env, object, &proto);
+        return proto;
+    }
+
+    inline napi_value get_prototype(napi_env env, napi_value object) {
+        napi_value prototype;
+        napi_get_named_property(env, object, "prototype", &prototype);
+        return prototype;
+    }
+
+    inline void set_prototype(napi_env env, napi_value object, napi_value prototype) {
+        napi_set_named_property(env, object, "prototype", prototype);
     }
 
     inline char *get_string_value(napi_env env, napi_value str, size_t size = 0) {
@@ -127,8 +147,8 @@ namespace napi_util {
         if (str_size == 0) {
             napi_get_value_string_utf8(env, str, nullptr, 0, &str_size);
         }
-        char *buffer = new char[str_size];
-        napi_get_value_string_utf8(env, str, buffer, str_size, nullptr);
+        char *buffer = new char[str_size + 1];
+        napi_get_value_string_utf8(env, str, buffer, str_size + 1, nullptr);
         return buffer;
     }
 
@@ -149,10 +169,8 @@ namespace napi_util {
         return napi_define_properties(env, object, 1, &desc);
     }
 
-    inline void set_prototype(napi_env env, napi_value object, napi_value prototype) {
+    inline void setPrototypeOf(napi_env env, napi_value object, napi_value prototype) {
         napi_value global, global_object, set_proto;
-
-        napi_value argv[2];
 
         // Get the global object
         napi_get_global(env, &global);
@@ -164,9 +182,10 @@ namespace napi_util {
         napi_get_named_property(env, global_object, SET_PROTOTYPE_OF, &set_proto);
 
         // Prepare the arguments for the setPrototypeOf call
-        argv[0] = object;
-        argv[1] = prototype;
-
+        napi_value argv[] {
+            object,
+            prototype
+        };
         // Call setPrototypeOf(object, prototype)
         napi_call_function(env, global, set_proto, 2, argv, nullptr);
     }
@@ -310,6 +329,26 @@ namespace napi_util {
         return result;
     }
 
+    inline bool is_float(napi_env env, napi_value value) {
+
+#ifdef __HERMES__
+        napi_value global, number, is_int, result;
+        napi_get_global(env, &global);
+        napi_get_named_property(env, global, "Number", &number);
+        napi_get_named_property(env, number, "isInteger", &is_int);
+        napi_call_function(env, number, is_int, 1, &value, &result);
+
+        return napi_util::get_bool(env, result) == false;
+#endif
+
+#ifdef __QJS__
+        bool result;
+        napi_is_float(env, value, &result);
+        return result;
+#endif
+
+    }
+
     // Same as Object.create()`
     inline napi_value object_create_from(napi_env env, napi_value object) {
         napi_value new_object;
@@ -376,14 +415,35 @@ namespace napi_util {
         return fn;
     }
 
-    inline napi_value symbolFor(napi_env env, const char *string) {
-        napi_value symbol;
-        node_api_symbol_for(env, string, strlen(string), &symbol);
-        return symbol;
-    }
+//    inline napi_value symbolFor(napi_env env, const char *string) {
+//        napi_value symbol;
+//        node_api_symbol_for(env, string, strlen(string), &symbol);
+//        return symbol;
+//    }
 
     inline bool is_null_or_undefined(napi_env env, napi_value value) {
         return value == nullptr || is_undefined(env, value) || is_null(env, value);
+    }
+
+    inline napi_value global(napi_env env) {
+        napi_value global;
+        napi_get_global(env, &global);
+        return global;
+    }
+
+
+    inline void log_value(napi_env env, napi_value value) {
+        napi_value global;
+        napi_value console;
+        napi_value log;
+        napi_get_global(env, &global);
+        napi_get_named_property(env, global, "console", &console);
+        napi_get_named_property(env, console, "log", &log);
+        napi_value argv[] = {
+                value
+        };
+
+        napi_call_function(env, console, log, 1, argv, nullptr);
     }
 
 }
