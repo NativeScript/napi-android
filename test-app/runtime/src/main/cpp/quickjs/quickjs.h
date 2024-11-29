@@ -61,9 +61,11 @@ typedef uint32_t JSAtom;
    - string contents is either pure ASCII or is UTF-8 encoded.
  */
 
+/* Overridable purely for testing purposes; don't touch. */
+#ifndef JS_NAN_BOXING
 #if INTPTR_MAX < INT64_MAX
-/* Use NAN boxing for 32bit builds. */
-#define JS_NAN_BOXING
+#define JS_NAN_BOXING 1 /* Use NAN boxing for 32bit builds. */
+#endif
 #endif
 
 enum {
@@ -87,14 +89,10 @@ enum {
     /* any larger tag is FLOAT64 if JS_NAN_BOXING */
 };
 
-typedef struct JSRefCountHeader {
-    int ref_count;
-} JSRefCountHeader;
-
 #define JS_FLOAT64_NAN NAN
 #define JSValueConst JSValue /* For backwards compatibility. */
 
-#if defined(JS_NAN_BOXING)
+#if defined(JS_NAN_BOXING) && JS_NAN_BOXING
 
 typedef uint64_t JSValue;
 
@@ -178,12 +176,40 @@ typedef struct JSValue {
 #define JS_VALUE_GET_FLOAT64(v) ((v).u.float64)
 #define JS_VALUE_GET_PTR(v) ((v).u.ptr)
 
+/* msvc doesn't understand designated initializers without /std:c++20 */
+#ifdef __cplusplus
+static inline JSValue JS_MKPTR(int64_t tag, void *ptr)
+{
+    JSValue v;
+    v.u.ptr = ptr;
+    v.tag = tag;
+    return v;
+}
+static inline JSValue JS_MKVAL(int64_t tag, int32_t int32)
+{
+    JSValue v;
+    v.u.int32 = int32;
+    v.tag = tag;
+    return v;
+}
+static inline JSValue JS_MKNAN(void)
+{
+    JSValue v;
+    v.u.float64 = JS_FLOAT64_NAN;
+    v.tag = JS_TAG_FLOAT64;
+    return v;
+}
+/* provide as macros for consistency and backward compat reasons */
+#define JS_MKPTR(tag, ptr) JS_MKPTR(tag, ptr)
+#define JS_MKVAL(tag, val) JS_MKVAL(tag, val)
+#define JS_NAN             JS_MKNAN() /* alas, not a constant expression */
+#else
+#define JS_MKPTR(tag, p)   (JSValue){ (JSValueUnion){ .ptr = p }, tag }
 #define JS_MKVAL(tag, val) (JSValue){ (JSValueUnion){ .int32 = val }, tag }
-#define JS_MKPTR(tag, p) (JSValue){ (JSValueUnion){ .ptr = p }, tag }
+#define JS_NAN             (JSValue){ (JSValueUnion){ .float64 = JS_FLOAT64_NAN }, JS_TAG_FLOAT64 }
+#endif
 
 #define JS_TAG_IS_FLOAT64(tag) ((unsigned)(tag) == JS_TAG_FLOAT64)
-
-#define JS_NAN (JSValue){ (JSValueUnion){ .float64 = JS_FLOAT64_NAN }, JS_TAG_FLOAT64 }
 
 static inline JSValue __JS_NewFloat64(double d)
 {
@@ -291,6 +317,11 @@ typedef struct JSMallocFunctions {
     size_t (*js_malloc_usable_size)(const void *ptr);
 } JSMallocFunctions;
 
+// Finalizers run in LIFO order at the very end of JS_FreeRuntime.
+// Intended for cleanup of associated resources; the runtime itself
+// is no longer usable.
+typedef void JSRuntimeFinalizer(JSRuntime *rt, void *arg);
+
 typedef struct JSGCObjectHeader JSGCObjectHeader;
 
 JS_EXTERN JSRuntime *JS_NewRuntime(void);
@@ -301,8 +332,6 @@ JS_EXTERN void JS_SetMemoryLimit(JSRuntime *rt, size_t limit);
 JS_EXTERN void JS_SetDumpFlags(JSRuntime *rt, uint64_t flags);
 JS_EXTERN size_t JS_GetGCThreshold(JSRuntime *rt);
 JS_EXTERN void JS_SetGCThreshold(JSRuntime *rt, size_t gc_threshold);
-JS_EXTERN void JS_SetGCBeforeCallback(JSRuntime *rt, JS_BOOL(*cb)(JSRuntime*));
-JS_EXTERN void JS_SetGCAfterCallback(JSRuntime *rt, void(*cb)(JSRuntime*));
 /* use 0 to disable maximum stack size check */
 JS_EXTERN void JS_SetMaxStackSize(JSRuntime *rt, size_t stack_size);
 /* should be called when changing thread to update the stack top value
@@ -312,6 +341,8 @@ JS_EXTERN JSRuntime *JS_NewRuntime2(const JSMallocFunctions *mf, void *opaque);
 JS_EXTERN void JS_FreeRuntime(JSRuntime *rt);
 JS_EXTERN void *JS_GetRuntimeOpaque(JSRuntime *rt);
 JS_EXTERN void JS_SetRuntimeOpaque(JSRuntime *rt, void *opaque);
+JS_EXTERN int JS_AddRuntimeFinalizer(JSRuntime *rt,
+                                     JSRuntimeFinalizer *finalizer, void *arg);
 typedef void JS_MarkFunc(JSRuntime *rt, JSGCObjectHeader *gp);
 JS_EXTERN void JS_MarkValue(JSRuntime *rt, JSValue val, JS_MarkFunc *mark_func);
 JS_EXTERN void JS_RunGC(JSRuntime *rt);
@@ -325,6 +356,7 @@ JS_EXTERN void JS_SetContextOpaque(JSContext *ctx, void *opaque);
 JS_EXTERN JSRuntime *JS_GetRuntime(JSContext *ctx);
 JS_EXTERN void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
 JS_EXTERN JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
+JS_EXTERN JSValue JS_GetFunctionProto(JSContext *ctx);
 
 /* the following functions are used to select the intrinsic object to
    save memory */
@@ -482,21 +514,25 @@ JS_EXTERN int JS_IsRegisteredClass(JSRuntime *rt, JSClassID class_id);
 
 static js_force_inline JSValue JS_NewBool(JSContext *ctx, JS_BOOL val)
 {
+    (void)&ctx;
     return JS_MKVAL(JS_TAG_BOOL, (val != 0));
 }
 
 static js_force_inline JSValue JS_NewInt32(JSContext *ctx, int32_t val)
 {
+    (void)&ctx;
     return JS_MKVAL(JS_TAG_INT, val);
 }
 
 static js_force_inline JSValue JS_NewFloat64(JSContext *ctx, double val)
 {
+    (void)&ctx;
     return __JS_NewFloat64(val);
 }
 
 static js_force_inline JSValue JS_NewCatchOffset(JSContext *ctx, int32_t val)
 {
+    (void)&ctx;
     return JS_MKVAL(JS_TAG_CATCH_OFFSET, val);
 }
 
@@ -534,8 +570,8 @@ static inline JS_BOOL JS_IsNumber(JSValue v)
 
 static inline JS_BOOL JS_IsBigInt(JSContext *ctx, JSValue v)
 {
-    int tag = JS_VALUE_GET_TAG(v);
-    return tag == JS_TAG_BIG_INT;
+    (void)&ctx;
+    return JS_VALUE_GET_TAG(v) == JS_TAG_BIG_INT;
 }
 
 static inline JS_BOOL JS_IsBool(JSValue v)
@@ -591,46 +627,10 @@ JS_EXTERN JSValue __js_printf_like(2, 3) JS_ThrowReferenceError(JSContext *ctx, 
 JS_EXTERN JSValue __js_printf_like(2, 3) JS_ThrowRangeError(JSContext *ctx, const char *fmt, ...);
 JS_EXTERN JSValue __js_printf_like(2, 3) JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
 JS_EXTERN JSValue JS_ThrowOutOfMemory(JSContext *ctx);
-
-JS_EXTERN void __JS_FreeValue(JSContext *ctx, JSValue v);
-static inline void JS_FreeValue(JSContext *ctx, JSValue v)
-{
-    if (JS_VALUE_HAS_REF_COUNT(v)) {
-        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
-        if (--p->ref_count <= 0) {
-            __JS_FreeValue(ctx, v);
-        }
-    }
-}
-JS_EXTERN void __JS_FreeValueRT(JSRuntime *rt, JSValue v);
-static inline void JS_FreeValueRT(JSRuntime *rt, JSValue v)
-{
-    if (JS_VALUE_HAS_REF_COUNT(v)) {
-        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
-        if (--p->ref_count <= 0) {
-            __JS_FreeValueRT(rt, v);
-        }
-    }
-}
-
-static inline JSValue JS_DupValue(JSContext *ctx, JSValue v)
-{
-    if (JS_VALUE_HAS_REF_COUNT(v)) {
-        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
-        p->ref_count++;
-    }
-    return v;
-}
-
-static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValue v)
-{
-    if (JS_VALUE_HAS_REF_COUNT(v)) {
-        JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
-        p->ref_count++;
-    }
-    return v;
-}
-
+JS_EXTERN void JS_FreeValue(JSContext *ctx, JSValue v);
+JS_EXTERN void JS_FreeValueRT(JSRuntime *rt, JSValue v);
+JS_EXTERN JSValue JS_DupValue(JSContext *ctx, JSValue v);
+JS_EXTERN JSValue JS_DupValueRT(JSRuntime *rt, JSValue v);
 JS_EXTERN int JS_ToBool(JSContext *ctx, JSValue val); /* return -1 for JS_EXCEPTION */
 JS_EXTERN int JS_ToInt32(JSContext *ctx, int32_t *pres, JSValue val);
 static inline int JS_ToUint32(JSContext *ctx, uint32_t *pres, JSValue val)
@@ -701,6 +701,7 @@ JS_EXTERN int JS_DeleteProperty(JSContext *ctx, JSValue obj, JSAtom prop, int fl
 JS_EXTERN int JS_SetPrototype(JSContext *ctx, JSValue obj, JSValue proto_val);
 JS_EXTERN JSValue JS_GetPrototype(JSContext *ctx, JSValue val);
 JS_EXTERN int JS_GetLength(JSContext *ctx, JSValue obj, int64_t *pres);
+JS_EXTERN int JS_SetLength(JSContext *ctx, JSValue obj, int64_t len);
 
 #define JS_GPN_STRING_MASK  (1 << 0)
 #define JS_GPN_SYMBOL_MASK  (1 << 1)
@@ -726,6 +727,12 @@ JS_EXTERN JSValue JS_CallConstructor(JSContext *ctx, JSValue func_obj,
 JS_EXTERN JSValue JS_CallConstructor2(JSContext *ctx, JSValue func_obj,
                                       JSValue new_target,
                                       int argc, JSValue *argv);
+/* Try to detect if the input is a module. Returns TRUE if parsing the input
+ * as a module produces no syntax errors. It's a naive approach that is not
+ * wholly infallible: non-strict classic scripts may _parse_ okay as a module
+ * but not _execute_ as one (different runtime semantics.) Use with caution.
+ * |input| can be either ASCII or UTF-8 encoded source code.
+ */
 JS_EXTERN JS_BOOL JS_DetectModule(const char *input, size_t input_len);
 /* 'input' must be zero terminated i.e. input[input_len] = '\0'. */
 JS_EXTERN JSValue JS_Eval(JSContext *ctx, const char *input, size_t input_len,
@@ -748,7 +755,7 @@ JS_EXTERN int JS_DefinePropertyValueStr(JSContext *ctx, JSValue this_obj,
 JS_EXTERN int JS_DefinePropertyGetSet(JSContext *ctx, JSValue this_obj,
                                       JSAtom prop, JSValue getter, JSValue setter,
                                       int flags);
-JS_EXTERN void JS_SetOpaque(JSValue obj, void *opaque);
+JS_EXTERN JS_BOOL JS_SetOpaque(JSValue obj, void *opaque);
 JS_EXTERN void *JS_GetOpaque(JSValue obj, JSClassID class_id);
 JS_EXTERN void *JS_GetOpaque2(JSContext *ctx, JSValue obj, JSClassID class_id);
 JS_EXTERN void *JS_GetAnyOpaque(JSValue obj, JSClassID *class_id);
@@ -927,7 +934,8 @@ static inline JSValue JS_NewCFunctionMagic(JSContext *ctx, JSCFunctionMagic *fun
                                            int length, JSCFunctionEnum cproto, int magic)
 {
     /* Used to squelch a -Wcast-function-type warning. */
-    JSCFunctionType ft = { .generic_magic = func };
+    JSCFunctionType ft;
+    ft.generic_magic = func;
     return JS_NewCFunction2(ctx, ft.generic, name, length, cproto, magic);
 }
 JS_EXTERN void JS_SetConstructor(JSContext *ctx, JSValue func_obj,
@@ -983,6 +991,7 @@ typedef struct JSCFunctionListEntry {
 #define JS_CFUNC_SPECIAL_DEF(name, length, cproto, func1) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, 0, { .func = { length, JS_CFUNC_ ## cproto, { .cproto = func1 } } } }
 #define JS_ITERATOR_NEXT_DEF(name, length, func1, magic) { name, JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE, JS_DEF_CFUNC, magic, { .func = { length, JS_CFUNC_iterator_next, { .iterator_next = func1 } } } }
 #define JS_CGETSET_DEF(name, fgetter, fsetter) { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET, 0, { .getset = { .get = { .getter = fgetter }, .set = { .setter = fsetter } } } }
+#define JS_CGETSET_DEF2(name, fgetter, fsetter, prop_flags) { name, prop_flags, JS_DEF_CGETSET, 0, { .getset = { .get = { .getter = fgetter }, .set = { .setter = fsetter } } } }
 #define JS_CGETSET_MAGIC_DEF(name, fgetter, fsetter, magic) { name, JS_PROP_CONFIGURABLE, JS_DEF_CGETSET_MAGIC, magic, { .getset = { .get = { .getter_magic = fgetter }, .set = { .setter_magic = fsetter } } } }
 #define JS_PROP_STRING_DEF(name, cstr, prop_flags) { name, prop_flags, JS_DEF_PROP_STRING, 0, { .str = cstr } }
 #define JS_PROP_INT32_DEF(name, val, prop_flags) { name, prop_flags, JS_DEF_PROP_INT32, 0, { .i32 = val } }
@@ -1024,14 +1033,20 @@ int JSGetLength64(JSContext *ctx, int64_t *pres, JSValueConst obj);
 uint8_t *JS_GetStringFromObject(JSValue obj);
 JSClassID JS_GetClassID2(JSValueConst v);
 void JS_SetStacktrace(JSContext *ctx, JSValueConst obj);
-JSValue JS_WeakRefDeref(JSContext *ctx, JSValueConst this_val);
+JSValue JS_WeakRef_Deref(JSContext *ctx, JSValueConst this_val);
+JS_EXTERN void JS_SetGCBeforeCallback(JSRuntime *rt, JS_BOOL(*cb)(JSRuntime*));
+JS_EXTERN void JS_SetGCAfterCallback(JSRuntime *rt, void(*cb)(JSRuntime*));
+
+typedef struct JSRefCountHeader {
+    int ref_count;
+} JSRefCountHeader;
 
 /* Version */
 
 #define QJS_VERSION_MAJOR 0
 #define QJS_VERSION_MINOR 6
-#define QJS_VERSION_PATCH 0
-#define QJS_VERSION_SUFFIX "dev"
+#define QJS_VERSION_PATCH 1
+#define QJS_VERSION_SUFFIX ""
 
 JS_EXTERN const char* JS_GetVersion(void);
 
