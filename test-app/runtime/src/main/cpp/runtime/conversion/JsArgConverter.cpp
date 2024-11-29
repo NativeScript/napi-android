@@ -224,7 +224,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         break;
 
                     case CastType::None:
-                        obj = objectManager->GetJavaObjectByJsObject(env, arg);
+                        obj = objectManager->GetJavaObjectByJsObject(arg);
 
                         if (obj.IsNull()) {
                             bool isTypedArray;
@@ -296,7 +296,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
 
                                 objectManager->Link(arg, id, clazz);
 
-                                obj = objectManager->GetJavaObjectByJsObject(env, arg);
+                                obj = objectManager->GetJavaObjectByJsObject(arg);
                             }
                         }
 
@@ -314,21 +314,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             SetConvertedObject(index, obj.Move(), obj.IsGlobal());
                         } else {
                             if (napi_util::is_number_object(env, arg)) {
-                                napi_value numValue = napi_util::valueOf(env, arg);
-
-                                bool isFloat;
-                                napi_is_float(env, numValue, &isFloat);
-                                if (isFloat) {
-                                    double floatArg;
-                                    napi_get_value_double(m_env, numValue, &floatArg);
-                                    jfloat value = (jfloat) floatArg;
-                                    success = ConvertFromCastFunctionObject(value, index);
-                                } else {
-                                    int intArg;
-                                    napi_get_value_int32(m_env, numValue, &intArg);
-                                    jint value = (jint) intArg;
-                                    success = ConvertFromCastFunctionObject(value, index);
-                                }
+                                success = ConvertJavaScriptNumber(env, arg, index);
                                 break;
                             } else if (napi_util::is_string_object(env, arg)) {
                                 napi_value stringValue = napi_util::valueOf(env, arg);
@@ -407,37 +393,61 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
     switch (typePrefix) {
         case 'B': { // byte
             int32_t intValue;
-            napi_get_value_int32(env, jsValue, &intValue);
+            if (napi_util::is_number_object(env, jsValue)) {
+                napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
+            } else {
+                napi_get_value_int32(env, jsValue, &intValue);
+            }
             value.b = (jbyte) intValue;
             break;
         }
         case 'S': { // short
-            int32_t intValue;
-            napi_get_value_int32(env, jsValue, &intValue);
+            int intValue;
+            if (napi_util::is_number_object(env, jsValue)) {
+                napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
+            } else {
+                napi_get_value_int32(env, jsValue, &intValue);
+            }
             value.s = (jshort) intValue;
             break;
         }
         case 'I': { // int
-            int32_t intValue;
-            napi_get_value_int32(env, jsValue, &intValue);
+            int intValue;
+            if (napi_util::is_number_object(env, jsValue)) {
+                napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
+            } else {
+                napi_get_value_int32(env, jsValue, &intValue);
+            }
             value.i = (jint) intValue;
             break;
         }
         case 'J': { // long
             int64_t intValue;
-            napi_get_value_int64(env, jsValue, &intValue);
+            if (napi_util::is_number_object(env, jsValue)) {
+                napi_get_value_int64(env,  napi_util::valueOf(env, jsValue), &intValue);
+            } else {
+                napi_get_value_int64(env, jsValue, &intValue);
+            }
             value.j = (jlong) intValue;
             break;
         }
         case 'F': { // float
             double doubleValue;
-            napi_get_value_double(env, jsValue, &doubleValue);
+            if (napi_util::is_number_object(env, jsValue)) {
+                napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue);
+            } else {
+                napi_get_value_double(env, jsValue, &doubleValue);
+            }
             value.f = (jfloat) doubleValue;
             break;
         }
         case 'D': { // double
             double doubleValue;
-            napi_get_value_double(env, jsValue, &doubleValue);
+            if (napi_util::is_number_object(env, jsValue)) {
+                napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue);
+            } else {
+                napi_get_value_double(env, jsValue, &doubleValue);
+            }
             value.d = (jdouble) doubleValue;
             break;
         }

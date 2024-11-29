@@ -75,14 +75,12 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
             return nullptr;
         }
 
-        bool isFloat;
-        napi_is_float(env, length, &isFloat);
+        bool isFloat = napi_util::is_float(env, length);
 
         if (isFloat) {
             Throw(env, "Expect integer value as a second argument.");
             return nullptr;
         }
-
 
         int32_t len;
         napi_get_value_int32(env, length, &len);
@@ -99,8 +97,7 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
             return nullptr;
         }
 
-        bool isFloat;
-        napi_is_float(env, length, &isFloat);
+        bool isFloat = napi_util::is_float(env, length);
 
         if (isFloat) {
             Throw(env, "Expect integer value as a second argument.");
@@ -125,7 +122,7 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
             return nullptr;
         }
 
-        auto c = objectManager->GetJavaObjectByJsObject(env, classVal);
+        auto c = objectManager->GetJavaObjectByJsObject(classVal);
 
         JEnv jenv;
         array = jenv.NewObjectArray(len, static_cast<jclass>(c), nullptr);

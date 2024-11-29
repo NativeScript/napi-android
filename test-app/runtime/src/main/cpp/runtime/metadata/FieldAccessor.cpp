@@ -45,7 +45,7 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
     }
 
     if (!isStatic) {
-        targetJavaObject = objectManager->GetJavaObjectByJsObject(env, target);
+        targetJavaObject = objectManager->GetJavaObjectByJsObject(target);
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;
@@ -228,7 +228,7 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
     }
 
     if (!isStatic) {
-        targetJavaObject = objectManager->GetJavaObjectByJsObject(env, target);
+        targetJavaObject = objectManager->GetJavaObjectByJsObject(target);
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;
@@ -338,7 +338,7 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
                 // TODO: validate valie is a string;
                 result = ArgConverter::ConvertToJavaString(env, value);
             } else {
-                result = objectManager->GetJavaObjectByJsObject(env, value);
+                result = objectManager->GetJavaObjectByJsObject(value);
             }
         }
 

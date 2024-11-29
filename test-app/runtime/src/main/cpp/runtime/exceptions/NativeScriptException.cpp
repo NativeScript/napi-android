@@ -13,14 +13,19 @@ NativeScriptException::NativeScriptException(JEnv& env)
     jthrowable  thrw = env.ExceptionOccurred();
     m_javaException = JniLocalRef(thrw);
     env.ExceptionClear();
+    DEBUG_WRITE("%s, %s", GetExceptionMessage(env, m_javaException).c_str(), GetExceptionStackTrace(env, m_javaException).c_str());
 }
 
 NativeScriptException::NativeScriptException(const string& message)
     : m_javascriptException(nullptr), m_javaException(JniLocalRef()), m_message(message) {
+
+    DEBUG_WRITE("%s", m_message.c_str());
 }
 
 NativeScriptException::NativeScriptException(const string& message, const string& stackTrace)
     : m_javascriptException(nullptr), m_javaException(JniLocalRef()), m_message(message), m_stackTrace(stackTrace) {
+
+    DEBUG_WRITE("%s, %s ", m_message.c_str(), m_stackTrace.c_str());
 }
 
 NativeScriptException::NativeScriptException(napi_env env, napi_value error, const string& message)
@@ -45,7 +50,6 @@ void NativeScriptException::ReThrowToNapi(napi_env env) {
             }
         }
     } else if (!m_fullMessage.empty()) {
-
         napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, m_fullMessage), &errObj);
     } else if (!m_message.empty()) {
         napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, m_message), &errObj);
@@ -168,9 +172,9 @@ napi_value NativeScriptException::WrapJavaToJsException(napi_env env) {
         jlong addr = jenv.GetLongField(m_javaException, fieldID);
 
         if (addr != 0) {
-            auto pv = (napi_ref*)addr;
-            napi_get_reference_value(env, *pv, &errObj);
-            napi_delete_reference(env, *pv);
+            auto pv = reinterpret_cast<napi_ref>(addr);
+            napi_get_reference_value(env, pv, &errObj);
+            napi_delete_reference(env, pv);
         } else {
             errObj = GetJavaExceptionFromEnv(env, m_javaException, jenv);
         }
@@ -210,6 +214,11 @@ napi_value NativeScriptException::GetJavaExceptionFromEnv(napi_env env, const Jn
 }
 
 string NativeScriptException::GetFullMessage(napi_env env, napi_value error, const string& jsExceptionMessage) {
+    bool isError;
+    if (!napi_is_error(env, error, &isError)) {
+        return jsExceptionMessage;
+    }
+
     stringstream ss;
     ss << jsExceptionMessage;
 
@@ -229,7 +238,7 @@ JniLocalRef NativeScriptException::TryGetJavaThrowableObject(JEnv& env, napi_env
 
     auto objectManager = Runtime::GetRuntime(napiEnv)->GetObjectManager();
 
-    auto javaObj = objectManager->GetJavaObjectByJsObject(napiEnv, jsObj);
+    auto javaObj = objectManager->GetJavaObjectByJsObject(jsObj);
     JniLocalRef objClass;
 
     if (!javaObj.IsNull()) {
@@ -238,7 +247,7 @@ JniLocalRef NativeScriptException::TryGetJavaThrowableObject(JEnv& env, napi_env
         napi_value nativeEx;
         napi_get_named_property(napiEnv, jsObj, "nativeException", &nativeEx);
         if (napi_util::is_object(napiEnv, nativeEx)) {
-            javaObj = objectManager->GetJavaObjectByJsObject(napiEnv, nativeEx);
+            javaObj = objectManager->GetJavaObjectByJsObject(nativeEx);
             objClass = JniLocalRef(env.GetObjectClass(javaObj));
         }
     }
@@ -261,6 +270,9 @@ void NativeScriptException::PrintErrorMessage(const string& errorMessage) {
 }
 
 string NativeScriptException::GetErrorMessage(napi_env env, napi_value error, const string& prependMessage) {
+    bool isError;
+    if (!napi_is_error(env, error, &isError)) return "";
+
     napi_value message;
     napi_get_named_property(env, error, "message", &message);
 
@@ -282,12 +294,11 @@ string NativeScriptException::GetErrorMessage(napi_env env, napi_value error, co
         ss << errMessage;
     }
 
-    string str = ArgConverter::ConvertToString(env, error);
-    if (!str.empty()) {
+    if (!mes.empty()) {
         if (hasFullErrorMessage) {
             ss << endl;
         }
-        ss << str;
+        ss << mes;
     }
 
     return ss.str();
@@ -296,8 +307,12 @@ string NativeScriptException::GetErrorMessage(napi_env env, napi_value error, co
 string NativeScriptException::GetErrorStackTrace(napi_env env, napi_value error) {
     stringstream ss;
 
+    bool isError;
+    if (!napi_is_error(env, error, &isError)) return "";
+
     napi_value stack;
     napi_get_named_property(env, error, "stack", &stack);
+
 
     string stackStr = ArgConverter::ConvertToString(env, stack);
     ss << stackStr;

@@ -260,9 +260,8 @@ string MethodCache::GetType(napi_env env, napi_value value)
 
             if (type == "<unknown>") {
                 if (napi_util::is_number_object(env, value)) {
-                    napi_value numValue = napi_util::valueOf(env, value);
-                   bool isFloat;
-                   napi_is_float(env, numValue, &isFloat);
+                   napi_value numValue = napi_util::valueOf(env, value);
+                   bool isFloat = napi_util::is_float(env, numValue);
                    if (isFloat) {
                        type = "float";
                    } else {

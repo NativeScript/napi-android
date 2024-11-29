@@ -5,6 +5,10 @@
 #include "NumericCasts.h"
 #include "NativeScriptAssert.h"
 #include <sstream>
+#ifdef USE_MIMALLOC
+#include "mimalloc.h"
+#endif
+
 
 using namespace std;
 using namespace tns;
@@ -13,33 +17,40 @@ void ArgConverter::Init(napi_env env) {
     auto cache = GetTypeLongCache(env);
 
     napi_value longNumberCtorFunc;
-    napi_value longNumberPrototype;
-
     napi_value valueOfFunc;
     napi_value toStringFunc;
 
+    napi_define_class(env, "NativeScriptLongNumber", NAPI_AUTO_LENGTH, ArgConverter::NativeScriptLongFunctionCallback,nullptr, 0, nullptr, &longNumberCtorFunc);
 
+    napi_value longNumberPrototype = napi_util::get_prototype(env, longNumberCtorFunc);
 
-    napi_create_function(env, "NativeScriptLongFunctionCallback", NAPI_AUTO_LENGTH,
-                         ArgConverter::NativeScriptLongFunctionCallback, nullptr,
-                         &longNumberCtorFunc);
-    napi_create_object(env, &longNumberPrototype);
-    napi_create_function(env, "NativeScriptLongValueOfFunctionCallback", NAPI_AUTO_LENGTH,
+    napi_create_function(env, nullptr, 0,
                          ArgConverter::NativeScriptLongValueOfFunctionCallback, nullptr,
                          &valueOfFunc);
-    napi_create_function(env, "NativeScriptLongToStringFunctionCallback", NAPI_AUTO_LENGTH,
+
+    napi_create_function(env, nullptr, 0,
                          ArgConverter::NativeScriptLongToStringFunctionCallback, nullptr,
                          &toStringFunc);
 
     napi_set_named_property(env, longNumberPrototype, "valueOf", valueOfFunc);
     napi_set_named_property(env, longNumberPrototype, "toString", toStringFunc);
-    napi_set_named_property(env, longNumberCtorFunc, "prototype", longNumberPrototype);
 
 
     cache->LongNumberCtorFunc = napi_util::make_ref(env, longNumberCtorFunc, 1);
     napi_value nanValue;
     napi_create_double(env, numeric_limits<double>::quiet_NaN(), &nanValue);
-    cache->NanNumberObject = napi_util::make_ref(env, nanValue, 1);
+
+
+    napi_value global;
+    napi_get_global(env, &global);
+
+    napi_value numCtor;
+    napi_get_named_property(env, global, "Number", &numCtor);
+
+    napi_value nanObject;
+    napi_new_instance(env, numCtor, 1, &nanValue, &nanObject);
+
+    cache->NanNumberObject = napi_util::make_ref(env, nanObject, 1);
 }
 
 napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info) {
@@ -61,8 +72,7 @@ napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, n
     return nullptr;
 }
 
-napi_value
-ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, napi_callback_info info) {
+napi_value ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, napi_callback_info info) {
     try {
         napi_value thisArg;
         napi_get_cb_info(env, info, nullptr, nullptr, &thisArg, nullptr);
@@ -88,7 +98,6 @@ ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, napi_callba
 napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_callback_info info) {
     try {
         NAPI_CALLBACK_BEGIN(1);
-
         auto cache = GetTypeLongCache(env);
         napi_value javaLong;
         napi_get_boolean(env, true, &javaLong);
@@ -96,9 +105,7 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
 
         NumericCasts::MarkAsLong(env, jsThis, argv[0]);
 
-        napi_util::napi_inherits(env, jsThis,
-                                 napi_util::get_ref_value(env, cache->NanNumberObject));
-
+        napi_set_named_property(env, jsThis, "prototype", napi_util::get_ref_value(env, cache->NanNumberObject));
         return jsThis;
 
     } catch (NativeScriptException &e) {
@@ -119,7 +126,11 @@ napi_value* ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray arg
     JEnv jenv;
     int argc = jenv.GetArrayLength(args) / 3;
 
-    napi_value* arr = argc == 0 ? nullptr : (napi_value *) malloc(sizeof(napi_value) * argc);
+    #ifdef USE_MIMALLOC
+        napi_value* arr = argc == 0 ? nullptr : (napi_value *) mi_malloc(sizeof(napi_value) * argc);
+    #else
+        napi_value* arr = argc == 0 ? nullptr : (napi_value *) malloc(sizeof(napi_value) * argc);
+    #endif
 
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();

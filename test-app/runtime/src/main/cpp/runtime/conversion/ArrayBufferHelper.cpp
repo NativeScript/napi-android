@@ -55,7 +55,7 @@ napi_value ArrayBufferHelper::CreateFromCallbackImpl(napi_env env, size_t argc, 
 
     auto argObj = arg;
 
-    auto obj = m_objectManager->GetJavaObjectByJsObject(env, argObj);
+    auto obj = m_objectManager->GetJavaObjectByJsObject(argObj);
 
     if (obj.IsNull()) {
         throw NativeScriptException("Wrong type of argument (object expected)");

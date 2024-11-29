@@ -61,7 +61,7 @@ napi_value JSONObjectHelper::CreateFromFunction(napi_env env) {
     napi_create_string_utf8(env, source, NAPI_AUTO_LENGTH, &script);
 
     napi_value result;
-    napi_run_script(env, script, "<from_function>", &result);
+    js_execute_script(env, script, "<from_function>", &result);
 
     return result;
 }

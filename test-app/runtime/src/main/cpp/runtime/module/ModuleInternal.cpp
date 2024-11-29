@@ -24,7 +24,7 @@ ModuleInternal::ModuleInternal()
     : m_env(nullptr), m_requireFunction(nullptr), m_requireFactoryFunction(nullptr) {
 }
 
-ModuleInternal::~ModuleInternal() {
+void ModuleInternal::DeInit() {
     if (m_env != nullptr) {
         napi_delete_reference(m_env, this->m_requireFunction);
         napi_delete_reference(m_env, this->m_requireFactoryFunction);
@@ -75,7 +75,7 @@ void ModuleInternal::Init(napi_env env, const std::string& baseDir) {
     napi_get_global(env, &global);
 
     napi_value result;
-    status = napi_run_script(env, source,"<require_factory>", &result);
+    status = js_execute_script(env, source, "<require_factory>", &result);
     assert(status == napi_ok);
 
     m_requireFactoryFunction = napi_util::make_ref(m_env, result);
@@ -171,7 +171,6 @@ napi_value ModuleInternal::RequireCallbackImpl(napi_env env, napi_callback_info 
         napi_get_named_property(env, moduleObj, "exports", &exports);
         assert(!napi_util::is_null_or_undefined(env, exports));
         return exports;
-        
     }
 }
 
@@ -198,8 +197,15 @@ napi_status ModuleInternal::Load(napi_env env, const std::string& path) {
 }
 
 void ModuleInternal::LoadWorker(napi_env env, const string& path) {
-    napi_status status = Load(env, path);
-    assert(status == napi_ok);
+    Load(env, path);
+    bool hasPendingException;
+    napi_is_exception_pending(env, &hasPendingException);
+
+    if (hasPendingException) {
+        napi_value error;
+        napi_get_and_clear_last_exception(env, &error);
+        CallbackHandlers::CallWorkerScopeOnErrorHandle(env, error);
+    }
 }
 
 void ModuleInternal::CheckFileExists(napi_env env, const std::string& path, const std::string& baseDir) {
@@ -292,9 +298,19 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     if (Util::EndsWith(modulePath, ".js")) {
         napi_value script = LoadScript(env, modulePath, fullRequiredModulePath);
 
-        napi_status status = napi_run_script(env, script, modulePath.c_str(), &moduleFunc);
+        napi_status status = js_execute_script(env, script, modulePath.c_str(), &moduleFunc);
         if (status != napi_ok) {
-            throw NativeScriptException("Error running script " + modulePath);
+            bool pendingException;
+            napi_is_exception_pending(env, &pendingException);
+            napi_value error = nullptr;
+            if (pendingException) {
+                napi_get_and_clear_last_exception(env, &error);
+            }
+            if (error) {
+                throw NativeScriptException(env, error, "Error running script " + modulePath);
+            } else {
+                throw NativeScriptException("Error running script " + modulePath);
+            }
         }
     } else if (Util::EndsWith(modulePath, ".so")) {
         auto handle = dlopen(modulePath.c_str(), RTLD_LAZY);
@@ -346,7 +362,13 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     napi_value callResult;
     napi_status status = napi_call_function(env, thiz, moduleFunc, 5, requireArgs, &callResult);
     if (status != napi_ok) {
-        throw NativeScriptException("Error calling module function ");
+        napi_value exception;
+        napi_get_and_clear_last_exception(env, &exception);
+        if (exception) {
+            throw NativeScriptException(env, exception, "Error calling module function: ");
+        } else {
+            throw NativeScriptException("Error calling module function: " + modulePath);
+        }
     }
 
     tempModule.SaveToCache();
@@ -365,8 +387,15 @@ napi_value ModuleInternal::LoadData(napi_env env, const std::string& path) {
     napi_value json = JsonParseString(env, jsonData);
 
     if (!napi_util::is_of_type(env, json, napi_object)) {
-        std::string errMsg = "JSON is not valid, file=" + path;
-        throw NativeScriptException(errMsg);
+        bool pendingException;
+        napi_is_exception_pending(env, &pendingException);
+        if (pendingException) {
+            napi_value error;
+            napi_get_and_clear_last_exception(env, &error);
+            throw NativeScriptException(env, error, "JSON is not valid, file=" + path);
+        } else {
+            throw NativeScriptException("JSON is not valid, file=" + path);
+        }
     }
 
     napi_ref poObj = napi_util::make_ref(env, json);

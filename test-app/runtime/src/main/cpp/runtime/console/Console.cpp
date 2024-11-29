@@ -82,7 +82,10 @@ std::string transformJSObject(napi_env env, napi_value object) {
 }
 
 std::string buildStringFromArg(napi_env env, napi_value val) {
-    if (napi_util::is_of_type(env, val, napi_function)) {
+    napi_valuetype type;
+    napi_typeof(env, val, &type);
+
+    if (type == napi_function) {
         napi_value funcString;
         napi_coerce_to_string(env, val, &funcString);
         return napi_util::get_string_value(env, funcString);
@@ -90,9 +93,9 @@ std::string buildStringFromArg(napi_env env, napi_value val) {
         napi_value global;
         napi_get_global(env, &global);
         return JsonStringifyObject(env, val, false);
-    } else if (napi_util::is_of_type(env, val, napi_object)) {
+    } else if (type == napi_object) {
         return transformJSObject(env, val);
-    } else if (napi_util::is_of_type(env, val, napi_symbol)) {
+    } else if (type == napi_symbol) {
         napi_value symString;
         napi_coerce_to_string(env, val, &symString);
         return "Symbol(" + ArgConverter::ConvertToString(env, symString) + ")";

@@ -21,6 +21,12 @@
 #include "GlobalHelpers.h"
 #include <regex>
 
+#ifdef USE_MIMALLOC
+
+#include "mimalloc.h"
+
+#endif
+
 using namespace std;
 using namespace tns;
 
@@ -56,10 +62,24 @@ void CallbackHandlers::Init(napi_env env) {
                                                          "()V");
     assert(ENABLE_VERBOSE_LOGGING_METHOD_ID != nullptr);
 
-    // INIT_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "initWorker",
-    //                                                "(Ljava/lang/String;Ljava/lang/String;I)V");
+     INIT_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "initWorker",
+                                                    "(Ljava/lang/String;Ljava/lang/String;I)V");
 
-    // assert(INIT_WORKER_METHOD_ID != nullptr);
+     assert(INIT_WORKER_METHOD_ID != nullptr);
+
+    SEND_MESSAGE_TO_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "sendMessageFromMainToWorker",
+                                                        "(ILjava/lang/String;)V");
+    assert(SEND_MESSAGE_TO_WORKER_METHOD_ID != nullptr);
+
+    SEND_MESSAGE_TO_MAIN_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "sendMessageFromWorkerToMain",
+                                                              "(Ljava/lang/String;)V");
+    assert(SEND_MESSAGE_TO_MAIN_METHOD_ID != nullptr);
+
+    TERMINATE_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "workerObjectTerminate", "(I)V");
+    assert(TERMINATE_WORKER_METHOD_ID != nullptr);
+
+    WORKER_SCOPE_CLOSE_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "workerScopeClose", "()V");
+    assert(WORKER_SCOPE_CLOSE_METHOD_ID != nullptr);
 
     MetadataNode::Init(env);
 
@@ -188,14 +208,10 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
     }
 
     if (!isStatic) {
-        DEBUG_WRITE("CallJavaMethod on instance");
+        DEBUG_WRITE("CallJavaMethod on instance %s", methodName.c_str());
     } else {
-        DEBUG_WRITE("CallJavaMethod on class");
+        DEBUG_WRITE("CallJavaMethod on class %s", methodName.c_str());
     }
-
-//    JSToJavaConverter argConverter = (entry != nullptr && entry->isExtensionFunction)
-//                                     ? JSToJavaConverter(isolate, args, *sig, entry, caller)
-//                                     : JSToJavaConverter(isolate, args, *sig, entry);
 
     JsArgConverter argConverter = (entry != nullptr && entry->isExtensionFunction)
                                   ? JsArgConverter(env, caller, argv.data(), argc, *sig, entry)
@@ -215,13 +231,14 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
     auto objectManager = runtime->GetObjectManager();
 
     if (!isStatic) {
-        callerJavaObject = objectManager->GetJavaObjectByJsObject(env, caller);
+        callerJavaObject = objectManager->GetJavaObjectByJsObject(caller);
+
         if (callerJavaObject.IsNull()) {
             stringstream ss;
 
             napi_value new_target;
             napi_get_new_target(env, info, &new_target);
-            if (new_target != nullptr || !napi_util::is_undefined(env, new_target)) {
+            if (!napi_util::is_null_or_undefined(env, new_target)) {
                 ss << "No java object found on which to call \"" << methodName
                    << "\" method. It is possible your Javascript object is not linked with the corresponding Java class. Try passing context(this) to the constructor function.";
             } else {
@@ -397,7 +414,7 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
                     if (returnValue == nullptr || napi_util::is_undefined(env, returnValue)) {
 
                         returnValue = objectManager->CreateJSWrapper(javaObjectID, *returnType,
-                                                                     result, returnType->at(0) == '[');
+                                                                     result);
                     }
                 }
 
@@ -416,12 +433,6 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
 
 
     return returnValue;
-
-//    static uint32_t adjustMemCount = 0;
-//
-//    if ((++adjustMemCount % 2) == 0) {
-//        AdjustAmountOfExternalAllocatedMemory(env, isolate);
-//    }
 }
 
 
@@ -496,7 +507,6 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
         DEBUG_WRITE_FORCE("RegisterInstance failed with null new instance class: %s",
                           fullClassName.c_str());
     }
-
 
     return success;
 }
@@ -753,29 +763,28 @@ napi_value CallbackHandlers::LogMethodCallback(napi_env env, napi_callback_info 
         }
     }
     catch (NativeScriptException &e) {
-        // e.ReThrowToNapi(env);
+        e.ReThrowToNapi(env);
     }
     catch (std::exception &e) {
         std::stringstream ss;
         ss << "Error: c++ exception: " << e.what() << std::endl;
         NativeScriptException nsEx(ss.str());
-        // nsEx.ReThrowToNapi(env);
+        nsEx.ReThrowToNapi(env);
     }
     catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        // nsEx.ReThrowToNapi(env);
+        nsEx.ReThrowToNapi(env);
     }
 
     return nullptr;
 }
 
 napi_value CallbackHandlers::DrainMicrotaskCallback(napi_env env, napi_callback_info info) {
-    napi_run_microtasks(env);
+    js_execute_pending_jobs(env);
     return nullptr;
 }
 
 napi_value CallbackHandlers::TimeCallback(napi_env env, napi_callback_info info) {
-
     auto nano = std::chrono::time_point_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now());
     double duration = nano.time_since_epoch().count();
@@ -784,10 +793,22 @@ napi_value CallbackHandlers::TimeCallback(napi_env env, napi_callback_info info)
     return result;
 }
 
-napi_value
-CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info) {
-    // NOOP
-    return nullptr;
+napi_value CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info) {
+    NAPI_CALLBACK_BEGIN_VARGS();
+
+    if (argc != 1) {
+        napi_throw_error(env, "0", "Unexpected arguments count!");
+        return napi_util::undefined(env);
+    }
+
+    if (!napi_util::is_of_type(env, argv[0], napi_object)) {
+        napi_throw_error(env, "0", "Argument is not an object!");
+        return napi_util::undefined(env);
+    }
+
+
+    Runtime::GetRuntime(env)->GetObjectManager()->ReleaseNativeObject(env, argv[0]);
+    return napi_util::undefined(env);
 }
 
 void CallbackHandlers::validateProvidedArgumentsLength(napi_env env, napi_callback_info info,
@@ -923,22 +944,45 @@ vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index) 
 napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
                                           napi_value jsObject, const string &methodName,
                                           jobjectArray args) {
-
     JEnv jEnv(_jEnv);
     napi_value result;
     napi_value method;
 
     napi_get_named_property(env, jsObject, methodName.c_str(), &method);
+    napi_value jObjectId;
+    napi_get_named_property(env, jsObject, "javaObjectId", &jObjectId);
+
+    napi_valuetype t;
+    napi_typeof(env, jObjectId, &t);
 
     if (method == nullptr || !napi_util::is_of_type(env, method, napi_function)) {
         stringstream ss;
         ss << "Cannot find method '" << methodName << "' implementation";
         throw NativeScriptException(ss.str());
     } else {
+        DEBUG_WRITE("Calling JS Method %s", methodName.c_str());
         size_t argc;
-        napi_value* jsArgs = ArgConverter::ConvertJavaArgsToJsArgs(env, args, &argc);
+        napi_value *jsArgs = ArgConverter::ConvertJavaArgsToJsArgs(env, args, &argc);
+
+        bool exceptionPending;
+        napi_is_exception_pending(env, &exceptionPending);
+
         napi_call_function(env, jsObject, method, argc, argc == 0 ? nullptr : jsArgs, &result);
+
+#ifdef USE_MIMALLOC
+        mi_free(jsArgs);
+#else
         free(jsArgs);
+#endif
+
+        if (!exceptionPending) {
+            napi_is_exception_pending(env, &exceptionPending);
+            if (exceptionPending) {
+                napi_value error;
+                napi_get_and_clear_last_exception(env, &error);
+                throw NativeScriptException(env, error, "Error calling js method: " + methodName);
+            }
+        }
     }
 
     return result;
@@ -968,7 +1012,7 @@ int CallbackHandlers::GetArrayLength(napi_env env, napi_value arr) {
 
     JEnv jEnv;
 
-    auto javaArr = objectManager->GetJavaObjectByJsObject(env, arr);
+    auto javaArr = objectManager->GetJavaObjectByJsObject(arr);
 
     auto length = jEnv.GetArrayLength(javaArr);
 
@@ -1184,7 +1228,7 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
             throw NativeScriptException("Worker should be called as a constructor!");
         }
 
-        if (argc > 1 || !napi_util::is_of_type(env, argv[0], napi_string)) {
+        if (argc != 1 || !napi_util::is_of_type(env, argv[0], napi_string)) {
             throw NativeScriptException(
                     "Worker should be called with one string parameter (name of file to run)!");
         }
@@ -1193,7 +1237,8 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         napi_get_global(env, &global);
 
         auto frames = tns::BuildStacktraceFrames(env, nullptr, 1);
-        string currentExecutingScriptNameStr = frames.size() < 3 ? frames[0].filename : frames[2].filename;
+        string currentExecutingScriptNameStr =
+                frames.size() < 3 ? frames[0].filename : frames[2].filename;
 
         auto lastForwardSlash = currentExecutingScriptNameStr.find_last_of("/");
         auto currentDir = currentExecutingScriptNameStr.substr(0, lastForwardSlash + 1);
@@ -1258,13 +1303,11 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
         auto id = napi_util::get_int32(env, jsId);
 
         JEnv jEnv;
-        auto mId = jEnv.GetStaticMethodID(RUNTIME_CLASS, "sendMessageFromMainToWorker",
-                                          "(ILjava/lang/String;)V");
 
         jstring jmsg = jEnv.NewStringUTF(msg.c_str());
         JniLocalRef jmsgRef(jmsg);
 
-        jEnv.CallStaticVoidMethod(RUNTIME_CLASS, mId, id, (jstring) jmsgRef);
+        jEnv.CallStaticVoidMethod(RUNTIME_CLASS, SEND_MESSAGE_TO_WORKER_METHOD_ID, id, (jstring) jmsgRef);
 
         DEBUG_WRITE(
                 "MAIN: WorkerObjectPostMessageCallback called postMessage on Worker object(id=%d)",
@@ -1297,14 +1340,20 @@ void CallbackHandlers::WorkerGlobalOnMessageCallback(napi_env env, jstring messa
 
             napi_value obj;
             napi_create_object(env, &obj);
-            napi_set_named_property(env, obj, "data", dataObject);
+            if (napi_util::is_of_type(env, dataObject, napi_object)) {
+                napi_set_named_property(env, obj, "data", dataObject);
+            }
 
-            napi_value args[1];
-            args[0] = obj;
+            napi_value args[1] = {
+                    obj
+            };
+
             napi_value result;
             napi_status status = napi_call_function(env, globalObject, callback, 1, args, &result);
-            if (status != napi_ok) {
-                throw NativeScriptException("Error calling onmessage callback");
+            if (status == napi_pending_exception) {
+                napi_value error;
+                napi_get_and_clear_last_exception(env, &error);
+                CallWorkerScopeOnErrorHandle(env, error);
             }
         } else {
             DEBUG_WRITE(
@@ -1335,17 +1384,22 @@ CallbackHandlers::WorkerGlobalPostMessageCallback(napi_env env, napi_callback_in
             return nullptr;
         }
 
+        bool pendingException;
+        napi_is_exception_pending(env, &pendingException);
+        if (pendingException) {
+            napi_value err;
+            napi_get_and_clear_last_exception(env, &err);
+            CallWorkerScopeOnErrorHandle(env, err);
+        }
+
         napi_value objToStringify = argv[0];
         std::string msg = tns::JsonStringifyObject(env, objToStringify, false);
 
         JEnv jenv;
-        auto mId = jenv.GetStaticMethodID(RUNTIME_CLASS, "sendMessageFromWorkerToMain",
-                                          "(Ljava/lang/String;)V");
-
         auto jmsg = jenv.NewStringUTF(msg.c_str());
         JniLocalRef jmsgRef(jmsg);
 
-        jenv.CallStaticVoidMethod(RUNTIME_CLASS, mId, (jstring) jmsgRef);
+        jenv.CallStaticVoidMethod(RUNTIME_CLASS, SEND_MESSAGE_TO_MAIN_METHOD_ID, (jstring) jmsgRef);
 
         DEBUG_WRITE("WORKER: WorkerGlobalPostMessageCallback called.");
     } catch (NativeScriptException &ex) {
@@ -1454,9 +1508,7 @@ napi_value CallbackHandlers::WorkerObjectTerminateCallback(napi_env env, napi_ca
         napi_set_named_property(env, thiz, "isTerminated", trueValue);
 
         JEnv jenv;
-        auto mId = jenv.GetStaticMethodID(RUNTIME_CLASS, "workerObjectTerminate", "(I)V");
-
-        jenv.CallStaticVoidMethod(RUNTIME_CLASS, mId, id);
+        jenv.CallStaticVoidMethod(RUNTIME_CLASS, TERMINATE_WORKER_METHOD_ID, id);
 
         CallbackHandlers::ClearWorkerPersistent(env, id);
     } catch (NativeScriptException &ex) {
@@ -1493,7 +1545,7 @@ napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callba
 
         if (terminating) {
             DEBUG_WRITE("WORKER: WorkerThreadCloseCallback - Worker is currently terminating...");
-            return nullptr;
+            return napi_util::undefined(env);
         }
 
         napi_value trueValue;
@@ -1509,10 +1561,16 @@ napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callba
             napi_call_function(env, global, callback, 0, nullptr, &result);
         }
 
-        JEnv jenv;
-        auto mId = jenv.GetStaticMethodID(RUNTIME_CLASS, "workerScopeClose", "()V");
+        bool pendingException;
+        napi_is_exception_pending(env, &pendingException);
+        if (pendingException) {
+            napi_value err;
+            napi_get_and_clear_last_exception(env, &err);
+            CallWorkerScopeOnErrorHandle(env, err);
+        }
 
-        jenv.CallStaticVoidMethod(RUNTIME_CLASS, mId);
+        JEnv jenv;
+        jenv.CallStaticVoidMethod(RUNTIME_CLASS, WORKER_SCOPE_CLOSE_METHOD_ID);
     } catch (NativeScriptException &ex) {
         ex.ReThrowToNapi(env);
     } catch (std::exception e) {
@@ -1524,7 +1582,8 @@ napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callba
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToNapi(env);
     }
-    return nullptr;
+
+    return napi_util::undefined(env);
 }
 
 void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value error) {
@@ -1535,43 +1594,74 @@ void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value err
         napi_value callback;
         napi_get_named_property(env, global, "onerror", &callback);
 
+        napi_value message = nullptr;
+        napi_value stack = nullptr;
+        std::vector<JsStacktraceFrame> frames;
+        if (napi_util::is_of_type(env, error, napi_object)) {
+            frames = tns::BuildStacktraceFrames(env, error, 1);
+            napi_get_named_property(env, error, "message", &message);
+            napi_get_named_property(env, error, "stack", &stack);
+        } else {
+            napi_coerce_to_string(env, error, &message);
+            napi_create_string_utf8(env, "", 0, &stack);
+        }
+
         if (napi_util::is_of_type(env, callback, napi_function)) {
             napi_value args[1] = {error};
-
             napi_value result;
             napi_call_function(env, global, callback, 1, args, &result);
 
-            bool handled;
-            napi_get_value_bool(env, result, &handled);
+            bool pendingException;
+            napi_is_exception_pending(env, &pendingException);
+            if (pendingException) {
+                napi_value perror = nullptr;
+                napi_value pmessage = nullptr;
+                napi_value pstack = nullptr;
+                napi_get_and_clear_last_exception(env, &perror);
 
-            if (handled) {
-                return;
+                std::vector<JsStacktraceFrame> pframes;
+                if (napi_util::is_of_type(env, perror, napi_object)) {
+                    pframes = tns::BuildStacktraceFrames(env, perror, 1);
+                    napi_get_named_property(env, perror, "message", &pmessage);
+                    napi_get_named_property(env, perror, "stack", &pstack);
+                } else {
+                    napi_coerce_to_string(env, perror, &pmessage);
+                    napi_create_string_utf8(env, "", 0, &pstack);
+                }
+
+                auto line = 0;
+                std::string filename;
+                if (!pframes.empty()) {
+                    line = pframes[0].line;
+                    filename = pframes[0].filename;
+                }
+                Runtime::GetRuntime(env)->PassUncaughtExceptionFromWorkerToMainHandler(
+                        pmessage,
+                        pstack,
+                        ArgConverter::convertToJsString(env, filename),
+                        line
+                );
+            } else if (!napi_util::is_null_or_undefined(env, result)) {
+                bool handled;
+                napi_get_value_bool(env, result, &handled);
+                if (handled) {
+                    return;
+                }
             }
         }
 
-        auto frames = tns::BuildStacktraceFrames(env, error, 1);
-        napi_value message;
-        napi_get_named_property(env, error, "message", &message);
-        napi_value stack;
-        napi_get_named_property(env, error, "stack", &stack);
-
+        auto line = 0;
+        std::string filename;
         if (!frames.empty()) {
-            auto &frame = frames[0];
-            Runtime::GetRuntime(env)->PassUncaughtExceptionFromWorkerToMainHandler(
-                    message,
-                    stack,
-                    ArgConverter::convertToJsString(env, frame.filename),
-                    frame.line
-                    );
-        } else {
-            Runtime::GetRuntime(env)->PassUncaughtExceptionFromWorkerToMainHandler(
-                    message,
-                    stack,
-                    ArgConverter::convertToJsString(env, ""),
-                    0
-            );
+            line = frames[0].line;
+            filename = frames[0].filename;
         }
-
+        Runtime::GetRuntime(env)->PassUncaughtExceptionFromWorkerToMainHandler(
+                message,
+                stack,
+                ArgConverter::convertToJsString(env, filename),
+                line
+        );
 
 
     } catch (NativeScriptException &ex) {
@@ -1674,7 +1764,7 @@ void CallbackHandlers::ClearWorkerPersistent(napi_env env, int workerId) {
 
 void CallbackHandlers::TerminateWorkerThread(napi_env env) {
     try {
-        NAPIFreeEnv(env);
+        Runtime::GetRuntime(env)->DestroyRuntime();
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
     } catch (std::exception e) {
@@ -1709,6 +1799,10 @@ jmethodID CallbackHandlers::GET_TYPE_METADATA = nullptr;
 jmethodID CallbackHandlers::ENABLE_VERBOSE_LOGGING_METHOD_ID = nullptr;
 jmethodID CallbackHandlers::DISABLE_VERBOSE_LOGGING_METHOD_ID = nullptr;
 jmethodID CallbackHandlers::INIT_WORKER_METHOD_ID = nullptr;
+jmethodID CallbackHandlers::SEND_MESSAGE_TO_MAIN_METHOD_ID = nullptr;
+jmethodID CallbackHandlers::SEND_MESSAGE_TO_WORKER_METHOD_ID = nullptr;
+jmethodID CallbackHandlers::TERMINATE_WORKER_METHOD_ID = nullptr;
+jmethodID CallbackHandlers::WORKER_SCOPE_CLOSE_METHOD_ID = nullptr;
 
 NumericCasts CallbackHandlers::castFunctions;
 ArrayElementAccessor CallbackHandlers::arrayElementAccessor;

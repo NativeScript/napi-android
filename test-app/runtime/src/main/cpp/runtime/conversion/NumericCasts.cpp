@@ -97,13 +97,17 @@ napi_value NumericCasts::MarkAsByteCallback(napi_env env, napi_callback_info inf
     napi_valuetype type;
     napi_typeof(env, argv[0], &type);
 
-    if (type != napi_string && type != napi_number) {
+    if (type != napi_string && type != napi_number && !napi_util::is_number_object(env, argv[0]) && !napi_util::is_string_object(env, argv[0])) {
         napi_throw_error(env, nullptr,
                          "byte(x) should be called with single parameter containing a byte number representation");
         return nullptr;
     }
-
-    napi_value value = argv[0];
+    napi_value value;
+    if (type == napi_number) {
+         value = argv[0];
+    } else {
+        napi_coerce_to_string(env, argv[0], &value);
+    }
 
     napi_value cast;
     napi_create_object(env, &cast);
@@ -122,13 +126,17 @@ napi_value NumericCasts::MarkAsShortCallback(napi_env env, napi_callback_info in
     napi_valuetype type;
     napi_typeof(env, argv[0], &type);
 
-    if (type != napi_string && type != napi_number) {
+    if (type != napi_string && type != napi_number && !napi_util::is_number_object(env, argv[0]) && !napi_util::is_string_object(env, argv[0])) {
         napi_throw_error(env, nullptr,
-                         "short(x) should be called with single parameter containing a short number representation");
+                         "short(x) should be called with single parameter containing a byte number representation");
         return nullptr;
     }
-
-    napi_value value = argv[0];
+    napi_value value;
+    if (type == napi_number) {
+        value = argv[0];
+    } else {
+        napi_coerce_to_string(env, argv[0], &value);
+    }
 
     napi_value cast;
     napi_create_object(env, &cast);

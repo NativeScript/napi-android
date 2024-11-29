@@ -15,6 +15,10 @@
 #include "ArrayBufferHelper.h"
 #include <thread>
 
+#ifdef __HERMES__
+#include "jsr.h"
+#endif
+
 namespace tns {
     class Runtime {
     public:
@@ -77,6 +81,7 @@ namespace tns {
 
     private:
         Runtime(JNIEnv* env, jobject runtime, int id);
+        static napi_value GlobalAccessorCallback(napi_env env, napi_callback_info  info);
 
         int m_id;
         jobject m_runtime;

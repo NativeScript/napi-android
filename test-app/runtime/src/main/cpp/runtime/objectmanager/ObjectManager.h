@@ -22,7 +22,7 @@ namespace tns {
 
         void Init(napi_env env);
 
-        JniLocalRef GetJavaObjectByJsObject(napi_env env, napi_value object);
+        JniLocalRef GetJavaObjectByJsObject(napi_value object);
 
         void UpdateCache(int objectID, jobject obj);
 
@@ -47,7 +47,7 @@ namespace tns {
 
         bool CloneLink(napi_value src, napi_value dest);
 
-        bool IsRuntimeJsObject(napi_env env, napi_value object);
+        bool IsRuntimeJsObject(napi_value object);
 
         std::string GetClassName(jobject javaObject);
 
@@ -55,9 +55,7 @@ namespace tns {
 
         int GenerateNewObjectID();
 
-        void SetInstanceEnv(napi_env env);
-
-        napi_value GetEmptyObject(napi_env env);
+        napi_value GetEmptyObject();
 
         inline static void MarkObject(napi_env env, napi_value object) {
             napi_value marker;
@@ -72,6 +70,10 @@ namespace tns {
         }
 
         void OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids);
+
+        void ReleaseNativeObject(napi_env env, napi_value object);
+
+        void ReleaseObjectNow(int javaObjectId);
 
     private:
         static napi_value JSObjectConstructorCallback(napi_env env, napi_callback_info info);
@@ -121,7 +123,6 @@ namespace tns {
 
         static void JSObjectProxyFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint);
 
-
         jweak GetJavaObjectByID(uint32_t javaObjectID);
 
         jobject GetJavaObjectByIDImpl(uint32_t javaObjectID);
@@ -135,7 +136,6 @@ namespace tns {
         napi_env m_env;
 
         robin_hood::unordered_map<int, napi_ref> m_idToObject;
-        robin_hood::unordered_map<int, napi_ref> m_idToProxy;
         robin_hood::unordered_set<int> m_weakObjectIds;
         robin_hood::unordered_set<int> m_markedAsWeakIds;
 
@@ -147,8 +147,6 @@ namespace tns {
 
         DirectBuffer m_outBuff;
 
-        bool m_useGlobalRefs;
-
         jclass JAVA_LANG_CLASS;
 
         jmethodID GET_NAME_METHOD_ID;
@@ -156,6 +154,7 @@ namespace tns {
         jmethodID GET_JAVAOBJECT_BY_ID_METHOD_ID;
 
         jmethodID GET_OR_CREATE_JAVA_OBJECT_ID_METHOD_ID;
+
         jmethodID MAKE_INSTANCE_WEAK_BATCH_METHOD_ID;
 
         jmethodID MAKE_INSTANCE_WEAK_METHOD_ID;

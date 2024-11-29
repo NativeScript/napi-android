@@ -3,11 +3,20 @@
 #include "CallbackHandlers.h"
 #include <sstream>
 
+#ifdef __HERMES__
+#include <fbjni/fbjni.h>
+#endif
+
 using namespace std;
 using namespace tns;
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     try {
+#ifdef __HERMES__
+        facebook::jni::initialize(vm, [] {
+            DEBUG_WRITE("fbjni::loaded");
+        });
+#endif
         Runtime::Init(vm);
     } catch (NativeScriptException& e) {
         e.ReThrowToJava(nullptr);
@@ -34,7 +43,9 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_SetManualInstrumentationMode(JNIE
 
 extern "C" JNIEXPORT void Java_com_tns_Runtime_initNativeScript(JNIEnv* _env, jobject obj, jint runtimeId, jstring filesPath, jstring nativeLibDir, jboolean verboseLoggingEnabled, jboolean isDebuggable, jstring packageName, jobjectArray args, jstring callingDir, jint maxLogcatObjectSize, jboolean forceLog) {
     try {
+        DEBUG_WRITE("NativeScript Initializing!");
         Runtime::Init(_env, obj, runtimeId, filesPath, nativeLibDir, verboseLoggingEnabled, isDebuggable, packageName, args, callingDir, maxLogcatObjectSize, forceLog);
+        DEBUG_WRITE("NativeScript Initialized!");
     } catch (NativeScriptException& e) {
         e.ReThrowToJava(nullptr);
     } catch (std::exception e) {
@@ -290,12 +301,8 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_TerminateWorkerCallback(JNIEnv* e
         DEBUG_WRITE("TerminateWorkerCallback: trying to call terminate before worker is loaded.");
         return;
     }
-
     auto napiEnv = runtime->GetNapiEnv();
     CallbackHandlers::TerminateWorkerThread(napiEnv);
-    runtime->DestroyRuntime();
-    NAPIFreeEnv(napiEnv);
-
     delete runtime;
 }
 

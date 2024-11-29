@@ -37,6 +37,7 @@ void Runtime::Init(JavaVM *vm) {
                         "NativeScript Runtime Version %s, commit %s", NATIVE_SCRIPT_RUNTIME_VERSION,
                         NATIVE_SCRIPT_RUNTIME_COMMIT_SHA);
 
+
     if (Runtime::java_vm == nullptr) {
         java_vm = vm;
         JEnv::Init(java_vm);
@@ -134,6 +135,12 @@ Runtime::Init(JNIEnv *_env, jobject obj, int runtimeId, jstring filesPath, jstri
                   callingDir, maxLogcatObjectSize, forceLog);
 }
 
+napi_value Runtime::GlobalAccessorCallback(napi_env env, napi_callback_info  info) {
+    napi_value global;
+    napi_get_global(env, &global);
+    return global;
+}
+
 
 void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
                    bool verboseLoggingEnabled, bool isDebuggable, jstring packageName,
@@ -151,19 +158,21 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 
     JniLocalRef profilerOutputDir(_env->GetObjectArrayElement(args, 2));
 
-    NAPICreateJSRuntime(&rt);
-    NAPICreateEnv(&env, rt);
+    js_create_runtime(&rt);
+    js_create_napi_env(&env, rt);
+
     napi_open_handle_scope(env, &global_scope);
 
     napi_handle_scope handleScope;
     napi_open_handle_scope(env, &handleScope);
     env_to_runtime_cache.emplace(env, this);
 
-    m_objectManager->SetInstanceEnv(env);
     napi_set_instance_data(env, this, nullptr, nullptr);
 
     napi_value global;
     napi_get_global(env, &global);
+
+    Console::createConsole(env, maxLogcatObjectSize, forceLog);
 
     Timers::InitStatic(env, global);
 
@@ -239,11 +248,14 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
         napi_value worker;
         napi_define_class(env, "Worker", strlen("Worker"), CallbackHandlers::NewThreadCallback,
                           nullptr, 0, nullptr, &worker);
-        napi_value prototype = napi_util::get_proto(env, worker);
+        napi_value prototype = napi_util::get_prototype(env, worker);
         napi_util::napi_set_function(env, prototype, "postMessage",
                                      CallbackHandlers::WorkerObjectPostMessageCallback, nullptr);
         napi_util::napi_set_function(env, prototype, "terminate",
                                      CallbackHandlers::WorkerObjectTerminateCallback, nullptr);
+        napi_util::napi_set_function(env, prototype, "close",
+                                     CallbackHandlers::WorkerGlobalCloseCallback, nullptr);
+
         napi_set_named_property(env, global, "Worker", worker);
     }
         /*
@@ -259,30 +271,28 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
         napi_util::define_property(env, global, "__ns__worker", napi_util::get_true(env));
     }
 
-
-    napi_util::define_property(env, global, "global", global);
+    napi_util::define_property(env, global, "global", nullptr, GlobalAccessorCallback);
 
     if (!s_mainThreadInitialized) {
         MetadataNode::BuildMetadata(filesRoot);
     } else {
         // Do not set 'self' accessor to main thread
-        napi_util::define_property(env, global, "self", global);
+        napi_util::define_property(env, global, "self", nullptr, GlobalAccessorCallback);
     }
 
     MetadataNode::CreateTopLevelNamespaces(env);
 
     ArrayHelper::Init(env);
 
+    Performance::createPerformance(env, global);
+
     m_arrayBufferHelper.CreateConvertFunctions(env, global, m_objectManager);
 
     m_loopTimer->Init(env);
 
-    Console::createConsole(env, maxLogcatObjectSize, forceLog);
-
-    Performance::createPerformance(env, global);
+    napi_close_handle_scope(env, handleScope);
 
     s_mainThreadInitialized = true;
-    napi_close_handle_scope(env, handleScope);
 }
 
 int Runtime::GetAndroidVersion() {
@@ -332,28 +342,33 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
-    id_to_runtime_cache.erase(m_id);
-    env_to_runtime_cache.erase(env);
     tns::GlobalHelpers::onDisposeEnv(env);
     Runtime::thread_id_to_rt_cache.erase(this_thread::get_id());
     Console::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
-    NAPIFreeEnv(env);
+    this->m_module.DeInit();
+    js_free_napi_env(env);
+    js_free_runtime(rt);
+    id_to_runtime_cache.erase(m_id);
+    env_to_runtime_cache.erase(env);
 }
 
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
     m_objectManager->OnGarbageCollected(jEnv, object_ids);
-    this->TryCallGC();
+//    this->TryCallGC();
     return true;
 }
 
 bool Runtime::TryCallGC() {
-    napi_value gc;
-    napi_value global;
-    napi_get_global(env, &global);
-    napi_get_named_property(env, global, "gc", &gc);
-    napi_value result;
-    napi_call_function(env, nullptr, gc, 0, nullptr, &result);
+//    napi_value gc;
+//    napi_value global;
+//    napi_get_global(env, &global);
+//    napi_get_named_property(env, global, "gc", &gc);
+//    napi_util::log_value(env, gc);
+//    napi_value result;
+//    napi_call_function(env, nullptr, gc, 0, nullptr, &result);
+//    napi_value ex;
+//    napi_get_and_clear_last_exception(env, &ex);
     return true;
 }
 
@@ -361,16 +376,16 @@ void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
     JEnv jEnv(_jEnv);
     string filePath = ArgConverter::jstringToString(scriptFile);
     napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
+//    napi_open_handle_scope(env, &handleScope);
     m_module.Load(env, filePath);
-    napi_close_handle_scope(env, handleScope);
+//    napi_close_handle_scope(env, handleScope);
 }
 
 void Runtime::RunModule(const char *moduleName) {
     napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
+//    napi_open_handle_scope(env, &handleScope);
     m_module.Load(env, moduleName);
-    napi_close_handle_scope(env, handleScope);
+//    napi_close_handle_scope(env, handleScope);
 }
 
 void Runtime::RunWorker(jstring scriptFile) {
@@ -384,21 +399,21 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     auto filename = ArgConverter::jstringToString(scriptFile);
     auto src = ReadFileText(filename);
 
-    napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
+//    napi_handle_scope handleScope;
+//    napi_open_handle_scope(env, &handleScope);
 
     napi_value soureCode;
     napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode);
 
     napi_value result;
-    status = napi_run_script(env, soureCode, filename.c_str(), &result);
+    status = js_execute_script(env, soureCode, filename.c_str(), &result);
 
     if (status != napi_ok) {
         const napi_extended_error_info *info;
         napi_get_last_error_info(env, &info);
     }
 
-    napi_close_handle_scope(env, handleScope);
+//    napi_close_handle_scope(env, handleScope);
 
     return nullptr;
 }
@@ -426,9 +441,8 @@ int Runtime::GetReader() {
 jobject
 Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstring methodName,
                             jint retType, jboolean isConstructor, jobjectArray packagedArgs) {
-
-    napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
+//    napi_handle_scope handleScope;
+//    napi_open_handle_scope(env, &handleScope);
     JEnv jEnv(_jEnv);
 
     DEBUG_WRITE("CallJSMethodNative called javaObjectID=%d", javaObjectID);
@@ -458,17 +472,17 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
 
     int classReturnType = retType;
     jobject javaObject = ConvertJsValueToJavaObject(jEnv, jsResult, classReturnType);
-    napi_close_handle_scope(env, handleScope);
+//    napi_close_handle_scope(env, handleScope);
+
     return javaObject;
 }
 
 void
 Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, jint javaObjectID,
                                 jstring className) {
-    napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
+//    napi_handle_scope handleScope;
+//    napi_open_handle_scope(env, &handleScope);
     DEBUG_WRITE("createJSInstanceNative called");
-
     JEnv jEnv(_jEnv);
 
     string existingClassName = ArgConverter::jstringToString(className);
@@ -501,7 +515,7 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     jclass clazz = jEnv.FindClass(jniName);
     m_objectManager->Link(jsInstance, javaObjectID, clazz);
-    napi_close_handle_scope(env, handleScope);
+//    napi_close_handle_scope(env, handleScope);
 }
 
 jint Runtime::GenerateNewObjectId(JNIEnv *jEnv, jobject obj) {
@@ -584,7 +598,7 @@ Runtime::PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_v
     JniLocalRef stTrace(stckTrace);
 
     jEnv.CallStaticVoidMethod(runtimeClass, mId, (jstring) jMsgLocal, (jstring) jfileNameLocal,
-                              (jstring) stTrace, lineno);
+                              (jstring) stTrace, (jint) lineno);
 }
 
 void Runtime::SetManualInstrumentationMode(jstring mode) {

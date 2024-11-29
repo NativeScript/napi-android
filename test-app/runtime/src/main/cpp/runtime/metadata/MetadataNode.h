@@ -43,6 +43,8 @@ public:
 
     static void onDisposeEnv(napi_env env);
 
+    bool isArray();
+
 private:
     struct CtorCacheData;
     struct PackageGetterMethodData;

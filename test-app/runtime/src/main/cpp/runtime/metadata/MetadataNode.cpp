@@ -44,7 +44,7 @@ napi_value MetadataNode::CreateArrayObjectConstructor(napi_env env) {
                           NAPI_CALLBACK_BEGIN(0)
                           return jsThis;
                       }, nullptr, 0, nullptr, &arrayConstructor);
-    napi_value proto = napi_util::get_proto(env, arrayConstructor);
+    napi_value proto = napi_util::get_prototype(env, arrayConstructor);
     ObjectManager::MarkObject(env, proto);
 
     napi_util::napi_set_function(env, proto, "setValueAtIndex", ArraySetterCallback, nullptr);
@@ -66,14 +66,14 @@ napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *ob
     auto cacheData = GetCachedExtendedClassData(env, proxyClassName);
 
     if (cacheData.node != nullptr) {
-        extInstance = objectManager->GetEmptyObject(env);
+        extInstance = objectManager->GetEmptyObject();
         ObjectManager::MarkSuperCall(env, extInstance);
 
         napi_value extendedCtorFunc = napi_util::get_ref_value(env,
                                                                cacheData.extendedCtorFunction);
 
-        napi_set_named_property(env, extInstance, "__proto__",
-                                napi_util::get_proto(env, extendedCtorFunc));
+        napi_util::setPrototypeOf(env, extInstance, napi_util::get_prototype(env, extendedCtorFunc));
+
         napi_set_named_property(env, extInstance, CONSTRUCTOR, extendedCtorFunc);
 
         SetInstanceMetadata(env, extInstance, cacheData.node);
@@ -94,16 +94,20 @@ MetadataNode *MetadataNode::GetNodeFromHandle(napi_env env, napi_value value) {
     return node;
 }
 
+bool MetadataNode::isArray() {
+    return m_isArray;
+}
+
 napi_value MetadataNode::CreateJSWrapper(napi_env env, ObjectManager *objectManager) {
     napi_value obj;
 
     if (m_isArray) {
         obj = CreateArrayWrapper(env);
     } else {
-        obj = objectManager->GetEmptyObject(env);
+        obj = objectManager->GetEmptyObject();
         napi_value ctorFunc = GetConstructorFunction(env);
         napi_set_named_property(env, obj, CONSTRUCTOR, ctorFunc);
-        napi_util::set_prototype(env, obj, napi_util::get_proto(env, ctorFunc));
+        napi_util::setPrototypeOf(env, obj, napi_util::get_prototype(env, ctorFunc));
         SetInstanceMetadata(env, obj, this);
     }
 
@@ -221,13 +225,10 @@ napi_value MetadataNode::ArrayLengthCallback(napi_env env, napi_callback_info in
 }
 
 napi_value MetadataNode::CreateArrayWrapper(napi_env env) {
-    auto node = GetOrCreate("java/lang/Object");
-    auto ctorFunc = node->GetConstructorFunction(env);
     napi_value constructor = CreateArrayObjectConstructor(env);
     napi_value instance;
     napi_new_instance(env, constructor, 0, nullptr, &instance);
     SetInstanceMetadata(env, instance, this);
-
     return instance;
 }
 
@@ -246,18 +247,21 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 
     bool hasProperty;
 
-    napi_has_own_named_property(env, object, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT,
-                                &hasProperty);
+    napi_value prototypeImplObjectKey;
+    napi_create_string_utf8(env, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, NAPI_AUTO_LENGTH, &prototypeImplObjectKey);
+    napi_has_own_property(env, object, prototypeImplObjectKey, &hasProperty);
 
     if (hasProperty) {
         bool maybeHasOwnProperty;
-        napi_has_own_named_property(env, object, PROTOTYPE, &maybeHasOwnProperty);
+        napi_value prototypeKey;
+        napi_create_string_utf8(env, PROTOTYPE, NAPI_AUTO_LENGTH, &prototypeKey);
+        napi_has_own_property(env, object, prototypeKey, &maybeHasOwnProperty);
 
         if (!maybeHasOwnProperty) {
             return nullptr;
         }
 
-        return napi_util::get_proto(env, object);
+        return napi_util::get_prototype(env, object);
     }
 
     napi_value activityImplementationObject;
@@ -276,14 +280,14 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
     bool foundImplementationObject = false;
 
     while (!foundImplementationObject) {
-        currentPrototype = napi_util::get_proto(env, currentPrototype);
+        currentPrototype = napi_util::get_prototype(env, currentPrototype);
 
         if (napi_util::is_null(env, currentPrototype)) {
             break;
         }
 
         if (lastPrototype == currentPrototype) {
-            auto abovePrototype = napi_util::get_proto(env, currentPrototype);
+            auto abovePrototype = napi_util::get_prototype(env, currentPrototype);
             prototypeCycleDetected = abovePrototype == currentPrototype;
             break;
         }
@@ -309,12 +313,18 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 
 void MetadataNode::SetInstanceMetadata(napi_env env, napi_value object, MetadataNode *node) {
     auto cache = GetMetadataNodeCache(env);
-    napi_wrap(env, object, node, nullptr, nullptr, nullptr);
+    napi_value external;
+    napi_create_external(env, node, nullptr,nullptr, &external);
+    napi_set_named_property(env, object, "#instance_metadata", external);
+//    napi_wrap(env, object, node, nullptr, nullptr, nullptr);
 }
 
 MetadataNode *MetadataNode::GetInstanceMetadata(napi_env env, napi_value object) {
     void *node;
-    napi_unwrap(env, object, &node);
+    napi_value external;
+    napi_get_named_property(env, object, "#instance_metadata", &external);
+    napi_get_value_external(env, external, &node);
+//    napi_unwrap(env, object, &node);
     if (node == nullptr)
         return nullptr;
     return reinterpret_cast<MetadataNode *>(node);
@@ -334,21 +344,6 @@ napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_cal
         napi_value implementationObject = napi_util::get_ref_value(env,
                                                                    extData->implementationObject);
         ObjectManager::MarkSuperCall(env, jsThis);
-
-        DEBUG_WRITE("%s", "CONSOLE LOG: EXTEND CTOR CALLED");
-
-//        napi_value global;
-//        napi_value console;
-//        napi_value log;
-//        napi_get_global(env, &global);
-//        napi_get_named_property(env, global, "console", &console);
-//        napi_get_named_property(env, console, "log", &log);
-//
-//        napi_value args[] = {
-//                jsThis
-//        };
-//
-//        napi_call_function(env, console, log, 1, args, nullptr);
 
         string fullClassName = extData->fullClassName;
 
@@ -427,11 +422,9 @@ napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callbac
 
         ObjectManager::MarkSuperCall(env, jsThis);
 
-        napi_value jsThis_proto;
-        napi_get_named_property(env, jsThis, "__proto__", &jsThis_proto);
-        napi_util::set_prototype(env, implementationObject, jsThis_proto);
+        napi_util::setPrototypeOf(env, implementationObject, napi_util::getPrototypeOf(env, jsThis));
 
-        napi_util::set_prototype(env, jsThis, implementationObject);
+        napi_util::setPrototypeOf(env, jsThis, implementationObject);
 
         napi_set_named_property(env, jsThis, CLASS_IMPLEMENTATION_OBJECT, implementationObject);
 
@@ -475,6 +468,8 @@ napi_value MetadataNode::ClassConstructorCallback(napi_env env, napi_callback_in
         napi_value jsThisProxy;
         bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argsWrapper,
                                                           nullptr, false, &jsThisProxy, className);
+
+
         return jsThisProxy;
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -520,6 +515,7 @@ bool MetadataNode::IsValidExtendName(napi_env env, napi_value name) {
     return true;
 }
 
+
 bool
 MetadataNode::GetExtendLocation(napi_env env, string &extendLocation, bool isTypeScriptExtend) {
     stringstream extendLocationStream;
@@ -532,10 +528,15 @@ MetadataNode::GetExtendLocation(napi_env env, string &extendLocation, bool isTyp
         frame = &frames[0];
     }
 
+    if (frame == NULL) {
+        DEBUG_WRITE("%s", "FRAME IS NULL!");
+        return true;
+    }
+
     string srcFileName = Util::ReplaceAll(frame->filename, "file://", "");
 
     string fullPathToFile;
-    if (srcFileName == "<embedded>") {
+    if (srcFileName == "<embedded>" || srcFileName == "<input>" || srcFileName == "JavaScript") {
         fullPathToFile = "script";
     } else {
         string hardcodedPathToSkip = Constants::APP_ROOT_FOLDER_PATH;
@@ -570,6 +571,10 @@ MetadataNode::GetExtendLocation(napi_env env, string &extendLocation, bool isTyp
     if (frame->line == 1) {
         column -= ModuleInternal::MODULE_PROLOGUE_LENGTH;
     }
+
+#ifdef __HERMES__
+    column = column - 6;
+#endif
 
     extendLocationStream << fullPathToFile << "_" << frame->line << "_" << column << "_";
     extendLocation = extendLocationStream.str();
@@ -958,7 +963,7 @@ napi_value MetadataNode::SymbolHasInstanceCallback(napi_env env, napi_callback_i
     auto runtime = Runtime::GetRuntime(env);
 
     auto objectManager = runtime->GetObjectManager();
-    auto obj = objectManager->GetJavaObjectByJsObject(env, object);
+    auto obj = objectManager->GetJavaObjectByJsObject(object);
 
     if (obj.IsNull()) {
         // Couldn't find a corresponding java instance counterpart. This could happen
@@ -1002,6 +1007,9 @@ napi_value MetadataNode::CreatePackageObject(napi_env env) {
 
     if (ptrChildren != nullptr) {
         const auto &children = *ptrChildren;
+
+        auto lastChildName = "";
+
         for (auto childNode: children) {
 
             auto *info = new PackageGetterMethodData();
@@ -1009,6 +1017,10 @@ napi_value MetadataNode::CreatePackageObject(napi_env env) {
             info->node = this;
             info->value = nullptr;
 
+            if (strcmp(info->utf8name, lastChildName) == 0) {
+                continue;
+            }
+            lastChildName = info->utf8name;
             napi_property_descriptor descriptor{
                     childNode->name.c_str(),
                     nullptr,
@@ -1065,7 +1077,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
 
     robin_hood::unordered_map<std::string, MethodCallbackData *> collectedExtensionMethods;
 
-    napi_value prototype = napi_util::get_proto(env, constructor);
+    napi_value prototype = napi_util::get_prototype(env, constructor);
 
     auto extensionFunctionsCount = *reinterpret_cast<uint16_t *>(curPtr);
     curPtr += sizeof(uint16_t);
@@ -1278,7 +1290,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
     std::string lastMethodName;
     MethodCallbackData *callbackData = nullptr;
 
-    napi_value proto = napi_util::get_proto(env, constructor);
+    napi_value proto = napi_util::get_prototype(env, constructor);
 
     while (std::getline(s, line)) {
         std::stringstream tmp(line);
@@ -1409,7 +1421,7 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
                       node, 0, nullptr, &constructor);
 
     // Mark this constructor's prototype as a runtime object.
-    ObjectManager::MarkObject(env, napi_util::get_proto(env, constructor));
+    ObjectManager::MarkObject(env, napi_util::get_prototype(env, constructor));
 
     // 2. Create the base constructor if it doesn't exist and inherit from it.
     napi_value baseConstructor;
@@ -1454,7 +1466,7 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
     napi_ref constructorRef = napi_util::make_ref(env, constructor);
 
     if (baseConstructor != nullptr && !napi_util::is_undefined(env, baseConstructor)) {
-        napi_util::set_prototype(env, constructor, baseConstructor);
+        napi_util::setPrototypeOf(env, constructor, baseConstructor);
     }
 
     CtorCacheData ctorCacheItem(constructorRef, instanceMethodsCallbackData);
@@ -1508,8 +1520,11 @@ MetadataReader *MetadataNode::getMetadataReader() {
 napi_value MetadataNode::NullObjectAccessorGetterCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(0)
     try {
+
         bool value;
-        napi_has_own_named_property(env, jsThis, PROP_KEY_NULL_NODE_NAME, &value);
+        napi_value nullNodeKey;
+        napi_create_string_utf8(env, PROP_KEY_NULL_NODE_NAME, NAPI_AUTO_LENGTH, &nullNodeKey);
+        napi_has_own_property(env, jsThis, nullNodeKey, &value);
 
         if (!value) {
             auto node = reinterpret_cast<MetadataNode *>(data);
@@ -1705,10 +1720,6 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
     NAPI_CALLBACK_BEGIN_VARGS()
 
     try {
-
-
-        static int extended_count = 0;
-
         napi_value extendName;
         napi_value implementationObject;
         string extendLocation;
@@ -1749,12 +1760,8 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
             extendName = argv[0];
             implementationObject = argv[1];
         } else {
-            ++extended_count;
-
             bool validExtend = GetExtendLocation(env, extendLocation, isTypeScriptExtend);
-
             napi_create_string_utf8(env, "", 0, &extendName);
-
             auto validArgs = ValidateExtendArguments(env, argc, argv.data(), validExtend,
                                                      extendLocation,
                                                      &extendName, &implementationObject,
@@ -1801,6 +1808,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
         }
 
         auto baseClassCtorFunction = node->GetConstructorFunction(env);
+
         napi_value extendFuncCtor;
         napi_define_class(env, fullExtendedName.c_str(), NAPI_AUTO_LENGTH,
                           MetadataNode::ExtendedClassConstructorCallback,
@@ -1809,19 +1817,19 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
                                                                             implementationObject),
                                                         fullClassName), 0, nullptr,
                           &extendFuncCtor);
-        napi_value extendFuncPrototype = napi_util::get_proto(env, extendFuncCtor);
+        napi_value extendFuncPrototype = napi_util::get_prototype(env, extendFuncCtor);
         ObjectManager::MarkObject(env, extendFuncPrototype);
 
-        napi_util::set_prototype(env, implementationObject,
-                                 napi_util::get_proto(env, baseClassCtorFunction));
+        napi_util::setPrototypeOf(env, implementationObject,
+                                  napi_util::get_prototype(env, baseClassCtorFunction));
 
         napi_util::define_property(
                 env, implementationObject, PROP_KEY_SUPER, nullptr, SuperAccessorGetterCallback,
                 nullptr, nullptr);
 
-        napi_util::set_prototype(env, extendFuncPrototype, implementationObject);
+        napi_util::setPrototypeOf(env, extendFuncPrototype, implementationObject);
 
-        napi_util::set_prototype(env, extendFuncCtor, baseClassCtorFunction);
+        napi_util::setPrototypeOf(env, extendFuncCtor, baseClassCtorFunction);
 
         SetClassAccessor(env, extendFuncCtor);
 
@@ -1863,19 +1871,18 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
 
         if (superValue == nullptr || napi_util::is_undefined(env, superValue)) {
             auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
-            superValue = objectManager->GetEmptyObject(env);
+            superValue = objectManager->GetEmptyObject();
             napi_delete_property(env, superValue,
                                  ArgConverter::convertToJsString(env, PROP_KEY_TOSTRING), nullptr);
             napi_delete_property(env, superValue,
                                  ArgConverter::convertToJsString(env, PROP_KEY_VALUEOF), nullptr);
             ObjectManager::MarkSuperCall(env, superValue);
 
-            // jsThis.prototype.prototype.prototype
-            napi_value superProto = napi_util::get_proto(env, napi_util::get_proto(env,
-                                                                                   napi_util::get_proto(
-                                                                                           env,
-                                                                                           jsThis)));
-            napi_util::set_prototype(env, superValue, superProto);
+            napi_value superProto = napi_util::getPrototypeOf(env, napi_util::getPrototypeOf(env,
+                                                                                             napi_util::getPrototypeOf(
+                                                                                                     env,
+                                                                                                     jsThis)));
+            napi_util::setPrototypeOf(env, superValue, superProto);
             napi_set_named_property(env, jsThis, PROP_KEY_SUPERVALUE, superValue);
             objectManager->CloneLink(jsThis, superValue);
             auto node = GetInstanceMetadata(env, jsThis);
@@ -2034,7 +2041,7 @@ void MetadataNode::SetMissingBaseMethods(
 
             if (callbackData == nullptr) {
                 callbackData = new MethodCallbackData(this);
-                napi_value proto = napi_util::get_proto(env, constructor);
+                napi_value proto = napi_util::get_prototype(env, constructor);
                 napi_value method;
                 napi_create_function(env, methodName.c_str(), NAPI_AUTO_LENGTH, MethodCallback,
                                      callbackData, &method);

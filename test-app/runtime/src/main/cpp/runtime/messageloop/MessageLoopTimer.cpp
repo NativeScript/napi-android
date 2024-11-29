@@ -88,7 +88,7 @@ int MessageLoopTimer::PumpMessageLoopCallback(int fd, int events, void* data) {
     read(fd, &msg, sizeof(uint8_t));
     auto env = (napi_env) data;
 
-    napi_run_microtasks(env);
+    js_execute_pending_jobs(env);
 
     return 1;
 }

@@ -50,6 +50,7 @@ void Timers::Init(napi_env env, napi_value global) {
     napi_util::napi_set_function(env, global, "__ns__clearTimeout", ClearTimer, this);
     napi_util::napi_set_function(env, global, "__ns__clearInterval", ClearTimer, this);
 
+    napi_value object;
     napi_add_finalizer(env, global, this, [](napi_env env, void *finalizeData, void *finalizeHint) {
         auto thiz = reinterpret_cast<Timers *>(finalizeData);
         delete thiz;
@@ -290,12 +291,6 @@ int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
             task->startTime_ = task->dueTime_;
             thiz->addTask(task);
         }
-
-
-        napi_value global;
-        napi_get_global(env, &global);
-
-        napi_run_microtasks(env);
 
         napi_value cb = napi_util::get_ref_value(env, task->callback_);
         size_t argc = task->args_ == nullptr ? 0 : task->args_->size();

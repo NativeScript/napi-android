@@ -53,15 +53,9 @@ napi_value GetSmartJSONStringifyFunction(napi_env env) {
     napi_value global;
     napi_get_global(env, &global);
 
-    napi_value script;
-    napi_status status = napi_run_script(env, source, "<json_helper>", &script);
-    if (status != napi_ok) {
-        return nullptr;
-    }
-
     napi_value result;
-    status = napi_call_function(env, global, script, 0, nullptr, &result);
-    if (status != napi_ok || result == nullptr) {
+    napi_status status = js_execute_script(env, source, "<json_helper>", &result);
+    if (status != napi_ok) {
         return nullptr;
     }
 
@@ -88,11 +82,10 @@ std::string tns::JsonStringifyObject(napi_env env, napi_value value, bool handle
     std::string result;
     if (smartJSONStringifyFunction != nullptr) {
         napi_value resultValue;
-        napi_status status;
         napi_value args[2];
         args[0] = value;
         args[1] = handleCircularReferences ? napi_util::get_true(env) : napi_util::get_false(env);
-        status = napi_call_function(env, nullptr, smartJSONStringifyFunction, 1, args, &resultValue);
+        napi_call_function(env, napi_util::global(env), smartJSONStringifyFunction, 1, args, &resultValue);
         result = ArgConverter::ConvertToString(env, resultValue);
     }
 
@@ -111,31 +104,49 @@ napi_value tns::JsonParseString(napi_env env, const std::string& value) {
     napi_value args[1];
     args[0] = ArgConverter::convertToJsString(env, value);
     napi_value result;
-    napi_status status = napi_call_function(env, json, parse, 1, args, &result);
+    napi_call_function(env, json, parse, 1, args, &result);
     return result;
 }
 
 std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, napi_value error, int size) {
     std::vector<tns::JsStacktraceFrame> frames;
-    napi_value err, stack;
+    napi_value stack;
     if (error != nullptr) {
-        err = error;
+        napi_get_named_property(env, error, "stack", &stack);
     } else {
+#ifdef __QJS__
+        napi_value err;
         napi_value msg;
-        napi_create_string_utf8(env, "", 0, &msg);
+        napi_create_string_utf8(env, "Test error", 0, &msg);
+        napi_value ex;
+        napi_get_and_clear_last_exception(env, &ex);
         napi_create_error(env, nullptr, msg, &err);
-    }
+        napi_get_named_property(env, err, "stack", &stack);
+#elif __HERMES__
+        napi_value global;
+        napi_get_global(env, &global);
+        napi_value getErrorStack;
+        napi_get_named_property(env, global, "getErrorStack", &getErrorStack);
+        napi_call_function(env, global, getErrorStack, 0, nullptr, &stack);
+#endif
 
-    napi_get_named_property(env, err, "stack", &stack);
+    }
 
     if (napi_util::is_null_or_undefined(env, stack)) return frames;
 
-    string stackTrace = ArgConverter::ConvertToString(env, stack);
+    string stackTrace = napi_util::get_string_value(env, stack);
     vector<string> stackLines;
     Util::SplitString(stackTrace, "\n", stackLines);
 
     int current = 0;
+    int count = 0;
     for (auto &frame : stackLines) {
+        count++;
+#ifdef __HERMES__
+            if (error == nullptr && count < 3) continue;
+#endif
+
+
         regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
         smatch match;
         if (regex_search(frame, match, frameRegex)) {
@@ -146,12 +157,9 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
                                 frame);
             if (current == size) break;
         }
-
     }
     return frames;
 }
-
-
 
 void tns::GlobalHelpers::onDisposeEnv(napi_env env) {
     auto found = envToPersistentSmartJSONStringify.find(env);

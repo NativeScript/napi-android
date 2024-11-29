@@ -12,8 +12,6 @@ class ModuleInternal {
     public:
         ModuleInternal();
 
-        ~ModuleInternal();
-
         void Init(napi_env env, const std::string& baseDir = "");
 
         napi_status Load(napi_env env, const std::string& path);
@@ -31,6 +29,7 @@ class ModuleInternal {
         static void CheckFileExists(napi_env env, const std::string& path, const std::string& baseDir);
 
         static int MODULE_PROLOGUE_LENGTH;
+        void DeInit();
     private:
         enum class ModulePathKind {
             Global,

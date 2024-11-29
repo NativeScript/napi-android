@@ -226,7 +226,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
             case CastType::None:
 
-                obj = objectManager->GetJavaObjectByJsObject(env, jsObj);
+                obj = objectManager->GetJavaObjectByJsObject(jsObj);
 
                 bool bufferOrTypedArrayOrDataView;
 
@@ -318,7 +318,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     auto clazz = jEnv.GetObjectClass(buffer);
                     objectManager->Link(jsObj, id, clazz);
 
-                    obj = objectManager->GetJavaObjectByJsObject(env, jsObj);
+                    obj = objectManager->GetJavaObjectByJsObject(jsObj);
                 }
 
                 napi_value privateValue;
@@ -359,12 +359,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 if (success) {
                     SetConvertedObject(jEnv, index, obj.Move(), obj.IsGlobal());
                 } else {
-
                     if (napi_util::is_number_object(env, arg)) {
                         napi_value numValue = napi_util::valueOf(env, arg);
-
-                        bool isFloat;
-                        napi_is_float(env, numValue, &isFloat);
+                        bool isFloat = napi_util::is_float(env, numValue);
                         if (isFloat) {
                             double floatArg;
                             napi_get_value_double(env, numValue, &floatArg);
@@ -396,11 +393,10 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                         break;
                     }
 
-                    size_t str_len;
-                    napi_get_value_string_utf8(env, jsObj, nullptr, 0, &str_len);
-                    string jsObjStr(str_len, '\0');
-                    napi_get_value_string_utf8(env, jsObj, &jsObjStr[0], str_len + 1, &str_len);
-                    s << "Cannot marshal JavaScript argument " << jsObjStr << " at index " << index
+                    napi_value objStr;
+                    napi_coerce_to_string(env, jsObj, &objStr);
+                    const char * objStrValue = napi_util::get_string_value(env, objStr);
+                    s << "Cannot marshal JavaScript argument " << objStrValue << " at index " << index
                       << " to Java type.";
                 }
                 break;

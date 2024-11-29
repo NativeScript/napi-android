@@ -19,10 +19,8 @@
 #include "NativeScriptException.h"
 #include "Runtime.h"
 
-namespace tns
-{
-    class CallbackHandlers
-    {
+namespace tns {
+    class CallbackHandlers {
     public:
         /*
          * Stores persistent handles of all 'Worker' objects initialized on the main thread
@@ -42,7 +40,7 @@ namespace tns
                                      const ArgsWrapper &argWrapper,
                                      napi_value implementationObject,
                                      bool isInterface,
-                                     napi_value* jsThisProxy,
+                                     napi_value *jsThisProxy,
                                      const std::string &baseClassName = std::string());
 
         static jclass ResolveClass(napi_env env, const std::string &baseClassName,
@@ -187,10 +185,9 @@ namespace tns
          * Will execute `onerror` if one is implemented for the Worker Object instance
          * Will throw a NativeScript Exception if 'onerror' isn't implemented or returns false
          */
-        static void
-        CallWorkerObjectOnErrorHandle(napi_env env, jint workerId, jstring message,
-                                      jstring stackTrace, jstring filename, jint lineno,
-                                      jstring threadName);
+        static void CallWorkerObjectOnErrorHandle(napi_env env, jint workerId, jstring message,
+                                                  jstring stackTrace, jstring filename, jint lineno,
+                                                  jstring threadName);
 
         static napi_value PostFrameCallback(napi_env env, napi_callback_info info);
 
@@ -207,24 +204,23 @@ namespace tns
         typedef AChoreographer *(*func_AChoreographer_getInstance)();
 
         typedef void (*func_AChoreographer_postFrameCallback)(
-            AChoreographer *choreographer, AChoreographer_frameCallback callback,
-            void *data);
+                AChoreographer *choreographer, AChoreographer_frameCallback callback,
+                void *data);
 
         typedef void (*func_AChoreographer_postFrameCallback64)(
-            AChoreographer *choreographer, AChoreographer_frameCallback64 callback,
-            void *data);
+                AChoreographer *choreographer, AChoreographer_frameCallback64 callback,
+                void *data);
 
         typedef void (*func_AChoreographer_postFrameCallbackDelayed)(
-            AChoreographer *choreographer, AChoreographer_frameCallback callback,
-            void *data, long delayMillis);
+                AChoreographer *choreographer, AChoreographer_frameCallback callback,
+                void *data, long delayMillis);
 
         typedef void (*func_AChoreographer_postFrameCallbackDelayed64)(
-            AChoreographer *choreographer, AChoreographer_frameCallback64 callback,
-            void *data, uint32_t delayMillis);
+                AChoreographer *choreographer, AChoreographer_frameCallback64 callback,
+                void *data, uint32_t delayMillis);
 
     private:
-        CallbackHandlers()
-        {
+        CallbackHandlers() {
         }
 
         static void AdjustAmountOfExternalAllocatedMemory(JEnv &jEnv, napi_env napiEnv);
@@ -234,7 +230,8 @@ namespace tns
          */
         static jobjectArray GetJavaStringArray(JEnv &jEnv, int length);
 
-        static void validateProvidedArgumentsLength(napi_env env, napi_callback_info info, int expectedSize);
+        static void
+        validateProvidedArgumentsLength(napi_env env, napi_callback_info info, int expectedSize);
 
         static short MAX_JAVA_STRING_ARRAY_LENGTH;
 
@@ -256,22 +253,24 @@ namespace tns
 
         static jmethodID INIT_WORKER_METHOD_ID;
 
+        static jmethodID SEND_MESSAGE_TO_WORKER_METHOD_ID;
+        static jmethodID SEND_MESSAGE_TO_MAIN_METHOD_ID;
+        static jmethodID TERMINATE_WORKER_METHOD_ID;
+        static jmethodID WORKER_SCOPE_CLOSE_METHOD_ID;
+
         static NumericCasts castFunctions;
 
         static ArrayElementAccessor arrayElementAccessor;
 
         static FieldAccessor fieldAccessor;
 
-        struct JavaObjectIdScope
-        {
+        struct JavaObjectIdScope {
             JavaObjectIdScope(JEnv &_jEnv, jfieldID fieldId, jobject runtime, int javaObjectId)
-                : jEnv(_jEnv), _fieldID(fieldId), _runtime(runtime)
-            {
+                    : jEnv(_jEnv), _fieldID(fieldId), _runtime(runtime) {
                 jEnv.SetIntField(_runtime, _fieldID, javaObjectId);
             }
 
-            ~JavaObjectIdScope()
-            {
+            ~JavaObjectIdScope() {
                 jEnv.SetIntField(_runtime, _fieldID, -1);
             }
 
@@ -283,26 +282,23 @@ namespace tns
 
         static std::atomic_int64_t count_;
 
-        struct Callback
-        {
+        struct Callback {
             Callback() {}
+
             Callback(uint64_t id)
-                : id_(id)
-            {
+                    : id_(id) {
             }
+
             uint64_t id_;
         };
 
-        struct CacheEntry
-        {
+        struct CacheEntry {
             CacheEntry(napi_env env, napi_value callback)
-                : env_(env)
-            {
+                    : env_(env) {
                 napi_create_reference(env, callback, 1, &callback_);
             }
 
-            ~CacheEntry()
-            {
+            ~CacheEntry() {
                 napi_delete_reference(env_, callback_);
             }
 
@@ -314,17 +310,14 @@ namespace tns
 
         static std::atomic_uint64_t frameCallbackCount_;
 
-        struct FrameCallbackCacheEntry
-        {
+        struct FrameCallbackCacheEntry {
             FrameCallbackCacheEntry(napi_env _env, napi_value callback_, uint64_t aId)
-                : env(_env),
-                  id(aId)
-            {
+                    : env(_env),
+                      id(aId) {
                 napi_create_reference(env, callback_, 1, &callback);
             }
 
-            ~FrameCallbackCacheEntry()
-            {
+            ~FrameCallbackCacheEntry() {
                 napi_delete_reference(env, callback);
             }
 
@@ -332,40 +325,33 @@ namespace tns
             napi_ref callback;
             uint64_t id;
 
-            bool isScheduled()
-            {
+            bool isScheduled() {
                 return scheduled;
             }
 
-            void markScheduled()
-            {
+            void markScheduled() {
                 scheduled = true;
                 removed = false;
             }
-            void markRemoved()
-            {
+
+            void markRemoved() {
                 // we can never unschedule a callback, so we just mark it as removed
                 removed = true;
-                uint32_t  result;
+                uint32_t result;
             }
 
-            AChoreographer_frameCallback frameCallback_ = [](long ts, void *data)
-            {
-                execute((double)ts, data);
+            AChoreographer_frameCallback frameCallback_ = [](long ts, void *data) {
+                execute((double) ts, data);
             };
 
-            AChoreographer_frameCallback64 frameCallback64_ = [](int64_t ts, void *data)
-            {
-                execute((double)ts, data);
+            AChoreographer_frameCallback64 frameCallback64_ = [](int64_t ts, void *data) {
+                execute((double) ts, data);
             };
 
-            static void execute(double ts, void *data)
-            {
-                if (data != nullptr)
-                {
+            static void execute(double ts, void *data) {
+                if (data != nullptr) {
                     auto entry = static_cast<FrameCallbackCacheEntry *>(data);
-                    if (entry->shouldRemoveBeforeCall())
-                    {
+                    if (entry->shouldRemoveBeforeCall()) {
                         frameCallbackCache_.erase(entry->id); // invalidates *entry
                         return;
                     }
@@ -389,8 +375,7 @@ namespace tns
 
 
                     // check if we should remove it (it should be both unscheduled and removed)
-                    if (entry->shouldRemoveAfterCall())
-                    {
+                    if (entry->shouldRemoveAfterCall()) {
                         frameCallbackCache_.erase(entry->id); // invalidates *entry
                     }
                 }
@@ -399,19 +384,17 @@ namespace tns
         private:
             bool removed = false;
             bool scheduled = false;
-            void markUnscheduled()
-            {
+
+            void markUnscheduled() {
                 scheduled = false;
                 removed = true;
             }
 
-            bool shouldRemoveBeforeCall()
-            {
+            bool shouldRemoveBeforeCall() {
                 return removed;
             }
 
-            bool shouldRemoveAfterCall()
-            {
+            bool shouldRemoveAfterCall() {
                 return !scheduled && removed;
             }
         };

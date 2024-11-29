@@ -13,7 +13,7 @@ napi_value ArrayElementAccessor::GetArrayElement(napi_env env, napi_value array,
 
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
-    auto arr = objectManager->GetJavaObjectByJsObject(env, array);
+    auto arr = objectManager->GetJavaObjectByJsObject(array);
 
     assertNonNullNativeArray(arr);
 
@@ -83,7 +83,7 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
 
-    tns::JniLocalRef arr = objectManager->GetJavaObjectByJsObject(env, array);
+    tns::JniLocalRef arr = objectManager->GetJavaObjectByJsObject(array);
 
     assertNonNullNativeArray(arr);
 
