@@ -8,7 +8,7 @@ describe("Tests instancing java arrays", function () {
 			exceptionCaught = true;
 		}
 		expect(exceptionCaught).toBe(true);
-		
+
 		exceptionCaught = false;
 		try {
 			var arr = Array.create(1);
@@ -50,7 +50,7 @@ describe("Tests instancing java arrays", function () {
 			exceptionCaught = true;
 		}
 		expect(exceptionCaught).toBe(true);
-		
+
 		exceptionCaught = false;
 		try {
 			var arr = Array.create("int", 1.5);
@@ -82,7 +82,7 @@ describe("Tests instancing java arrays", function () {
 		expect(arr.length).toBe(len);
 		expect(arr.getClass().getName()).toBe("[C");
 	});
-	
+
 	it("should instantiate primitive boolean array", function () {
 		var len = 123;
 		var arr = Array.create("boolean", len);
@@ -132,7 +132,7 @@ describe("Tests instancing java arrays", function () {
 		expect(arr.length).toBe(len);
 		expect(arr.getClass().getName()).toBe("[D");
 	});
-	
+
 	it("should instantiate Object array", function () {
 		var len = 123;
 		var arr = Array.create(java.lang.Object, len);

@@ -59,6 +59,8 @@ describe("Test Method Resolution", function () {
         var i1 = new com.tns.tests.InterfaceOne({});
         var i2 = new com.tns.tests.InterfaceTwo({});
 
+        console.log(d, i1, i2);
+
         var res1 = d.overloadMethod(i1)
         var res2 = d.overloadMethod(i2)
 

@@ -118,7 +118,6 @@ describe("Tests extended classes ", function () {
 		var button1 = new com.tns.tests.Button1();
 		var labelgetIMAGE_ID_PROP1 = button1.getIMAGE_ID_PROP();
 
-		//
 		var MyButton = com.tns.tests.Button1.extend({
 			getIMAGE_ID_PROP: function () {
 				return "overriden getIMAGE_ID_PROP method on button";
@@ -126,7 +125,6 @@ describe("Tests extended classes ", function () {
 		});
 		var button = new MyButton();
 		var labelgetIMAGE_ID_PROP = button.getIMAGE_ID_PROP();
-		//
 
 		var button2 = new com.tns.tests.Button1();
 		var labelgetIMAGE_ID_PROP2 = button2.getIMAGE_ID_PROP();

@@ -14,15 +14,17 @@ describe("instanceof operator tests", function () {
 		expect(actual).toBe(false);
 	});
 
-	it("should return false for ES6 classes", function () {
-		class Polygon {
-			sayName() {
-				return "polygon";
-			}
-		}
-		const actual = new Polygon() instanceof com.tns.tests.MyInterface1;
-		expect(actual).toBe(false);
-	});
+// Hermes does not support ES6 classes
+//
+//	it("should return false for ES6 classes", function () {
+//		class Polygon {
+//			sayName() {
+//				return "polygon";
+//			}
+//		}
+//		const actual = new Polygon() instanceof com.tns.tests.MyInterface1;
+//		expect(actual).toBe(false);
+//	});
 
 	it("should return false for null", function () {
 		const actual = null instanceof com.tns.tests.MyInterface1;

@@ -1806,6 +1806,7 @@ getJasmineRequireObj().Suite = function() {
     this.onStart(this);
 
     this.queueRunner({
+
       fns: allFns,
       onComplete: complete
     });

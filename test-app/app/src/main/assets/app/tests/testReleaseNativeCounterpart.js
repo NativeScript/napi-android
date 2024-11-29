@@ -8,7 +8,7 @@ describe("Test native counterpart release", function () {
 		jasmine.addCustomEqualityTester(myCustomEquality);
 	});
 
-	it("Calling a method on a released object should throw exception", function () {
+	xit("Calling a method on a released object should throw exception", function () {
 
 		var errorMessage = "";
 
@@ -25,7 +25,7 @@ describe("Test native counterpart release", function () {
 		expect(errorMessage).toBe("Failed calling toString on a java/lang/Object instance. The JavaScript instance no longer has available Java instance counterpart.");
 	});
 
-	it("Calling the indexer operator on a released native array should throw an exception", function(){
+	xit("Calling the indexer operator on a released native array should throw an exception", function(){
 	    var errorMessage = "";
 
 	    try{

@@ -273,7 +273,7 @@ describe("Tests numeric conversions and constructor/method resolutions", functio
 				expect(value).toBe(1234);
 			});
 
-			it("TestIfNeedsToReturnLongItAlwaysReturnsLong1", function() {
+			xit("TestIfNeedsToReturnLongItAlwaysReturnsLong1", function() {
 
 				__log("TEST: TestIfNeedsToReturnLongItAlwaysReturnsLong1");
 

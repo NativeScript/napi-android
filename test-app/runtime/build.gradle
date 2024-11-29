@@ -21,7 +21,7 @@ if (useCCache) {
 }
 
 
-def defaultNdkVersion = "23.2.8568313"
+def defaultNdkVersion = "26.1.10909125"
 
 def hasNdkVersion = project.hasProperty("ndkVersion")
 if (hasNdkVersion) {
@@ -48,13 +48,13 @@ if (!hasNdkDirectory) {
     NDK_PATH = ndkDirectory
 }
 
-if (NDK_PATH == null || NDK_PATH == "null" || NDK_PATH == "") {
-    if (!hasNdkVersion) {
+//if (NDK_PATH == null || NDK_PATH == "null" || NDK_PATH == "") {
+//    if (!hasNdkVersion) {
         NDK_PATH = "$System.env.ANDROID_HOME/ndk/${defaultNdkVersion}"
-    } else {
-        NDK_PATH = "$System.env.ANDROID_HOME/ndk/${ndkVersion}"
-    }
-}
+//    } else {
+//        NDK_PATH = "$System.env.ANDROID_HOME/ndk/${ndkVersion}"
+//    }
+//}
 
 println "Runtime using NDK_PATH: " + NDK_PATH
 
@@ -114,7 +114,10 @@ android {
 //                arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DANDROID_NDK_ROOT=${NDK_PATH}"
 
                 cppFlags "-std=c++14"
-                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}"
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}","-DUSE_MIMALLOC=1"
+
+                arguments.add("-DHERMES=1")
+//                arguments.add("-DQUICKJS=1");
             }
         }
 
@@ -141,22 +144,30 @@ android {
         }
     }
 
-}
+    buildFeatures {
+        prefab true
+    }
 
-allprojects {
-    gradle.projectsEvaluated {
-        tasks.withType(JavaCompile).tap {
-            configureEach {
-                options.compilerArgs << "-Xlint:all" << "-Werror"
-            }
-        }
+    packagingOptions {
+        exclude '**/libc++_shared.so'
+        exclude "**/libfbjni.so"
     }
 }
 
+//allprojects {
+//    gradle.projectsEvaluated {
+//        tasks.withType(JavaCompile).tap {
+//            configureEach {
+//                options.compilerArgs << "-Xlint:all" << "-Werror"
+//            }
+//        }
+//    }
+//}
+
 dependencies {
     // println "\t ~ [DEBUG][runtime] build.gradle - ns_default_junit_version = ${ns_default_junit_version}..."
-
     implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation 'com.facebook.fbjni:fbjni:0.3.0'
     testImplementation "junit:junit:${ns_default_junit_version}"
     testImplementation "org.mockito:mockito-core:${ns_default_mockito_core_version}"
 }

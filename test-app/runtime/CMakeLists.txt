@@ -11,7 +11,7 @@ project(NativeScriptAndroidRuntime)
 MESSAGE(STATUS "## ANDROID_NDK_ROOT: " ${ANDROID_NDK_ROOT})
 
 set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy -fno-rtti")
-
+set(MI_OVERRIDE OFF)
 # AOSP has switched to using LLD by default and the NDK will use it by default in the next release.
 # BFD and Gold will be removed once LLD has been through a release cycle with no major unresolved issues (estimated r21)
 # Note: lld does not currently work on Windows: https://github.com/android-ndk/ndk/issues/888
@@ -33,12 +33,10 @@ set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Wno-error -Wno-deprecated-declarations -
 
 # Command info: https://cmake.org/cmake/help/v3.4/command/include_directories.html
 include_directories(
-        # node api
-        src/main/cpp/napi
-        # quickjs engine
-        src/main/cpp/quickjs
         # zip
         src/main/cpp/zip/include
+        #mimalloc
+        src/main/cpp/mimalloc-dev/include
         # runtime
         src/main/cpp/runtime
         src/main/cpp/runtime/assetextractor
@@ -77,6 +75,45 @@ file(GLOB_RECURSE RUNTIME_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/**/*.cpp"
 )
 
+set(SOURCES ${RUNTIME_FILES})
+
+if (QUICKJS)
+    add_subdirectory(${PROJECT_SOURCE_DIR}/src/main/cpp/mimalloc-dev mimalloc)
+
+    set(SOURCES ${SOURCES}
+            # quickjs
+            src/main/cpp/quickjs/cutils.c
+            src/main/cpp/quickjs/libregexp.c
+            src/main/cpp/quickjs/libbf.c
+            src/main/cpp/quickjs/libunicode.c
+            src/main/cpp/quickjs/quickjs.c
+            # napi
+            src/main/cpp/napi/native_api.c
+    )
+    include_directories(
+            # node api
+            src/main/cpp/napi
+            # quickjs engine
+            src/main/cpp/quickjs
+            #util
+            src/main/cpp/napi-util)
+
+endif ()
+
+if (HERMES)
+    include_directories(
+         src/main/cpp/hermes
+         src/main/cpp/hermes/include
+         src/main/cpp/hermes/include/node-api
+         src/main/cpp/napi-util
+    )
+    set(SOURCES ${SOURCES}
+        src/main/cpp/hermes/jsr.cpp
+      )
+endif ()
+
+
+
 # Command info: https://cmake.org/cmake/help/v3.4/command/add_library.html
 # Creates(shared static) and names a library given relative sources
 # Gradle automatically packages shared libraries with your APK.
@@ -87,22 +124,13 @@ add_library(
         # Sets the library as a shared library.
         SHARED
 
-         # quickjs
-         src/main/cpp/quickjs/cutils.c
-         src/main/cpp/quickjs/libregexp.c
-         src/main/cpp/quickjs/libbf.c
-         src/main/cpp/quickjs/libunicode.c
-         src/main/cpp/quickjs/quickjs.c
-         # napi
-         src/main/cpp/napi/native_api.cpp
-         # runtime
-         ${RUNTIME_FILES}
+        ${SOURCES}
 )
 
 
 set_target_properties(
             NativeScript
-            PROPERTIES LINK_FLAGS -Wl,--allow-multiple-definition
+            PROPERTIES LINK_FLAGS  "-Wl,--allow-multiple-definition"
 )
 
 MESSAGE(STATUS "# General cmake Info")
@@ -116,6 +144,11 @@ MESSAGE(STATUS "# CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS})
 # Command info: https://cmake.org/cmake/help/v3.4/command/target_link_libraries.html
 # linking custom STL libraries to the runtime (NativeScript library)
 target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/${ANDROID_ABI}/libzip.a)
+
+if (HERMES)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/${ANDROID_ABI}/libhermes.so)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/${ANDROID_ABI}/libjsi.so)
+endif ()
 
 # if("${ANDROID_ABI}" MATCHES "armeabi-v7a$" OR "${ANDROID_ABI}" MATCHES "x86$")
 #     # On API Level 19 and lower we need to link with android_support
@@ -134,6 +167,25 @@ find_library(system-log log)
 find_library(system-z z)
 find_library(system-android android)
 
+find_package(fbjni REQUIRED CONFIG)
+
+if (USE_MIMALLOC AND QUICKJS)
+    add_compile_definitions(NativeScript, PRIVATE USE_MIMALLOC)
+endif ()
+
+if (HERMES)
+    add_compile_definitions(NativeScript, PRIVATE __HERMES__)
+endif ()
+
+
+if (QUICKJS)
+    add_compile_definitions(NativeScript, PRIVATE __QJS__)
+endif ()
+
 # Command info: https://cmake.org/cmake/help/v3.4/command/target_link_libraries.html
 # Specifies libraries CMake should link to your target library.
-target_link_libraries(NativeScript ${system-log} ${system-z} ${system-android})
+if (USE_MIMALLOC AND QUICKJS)
+    target_link_libraries(NativeScript ${system-log} ${system-z} ${system-android} mimalloc-static)
+else ()
+    target_link_libraries(NativeScript ${system-log} ${system-z} fbjni::fbjni ${system-android})
+endif ()

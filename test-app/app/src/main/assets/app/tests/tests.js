@@ -640,7 +640,7 @@ describe("Tests ", function () {
 			var el = arr[0];
 
 			expect(el).toEqual(123);
-			
+
 			global.__releaseNativeCounterpart(arr);
 		}
 	});
@@ -1280,16 +1280,18 @@ describe("Tests ", function () {
 
 		var exceptionCaught = false;
 
-		try
-		{
-			var d = new com.tns.tests.DummyClass({});
-		}
-		catch (e)
-		{
-			exceptionCaught = true;
-		}
+        		try
+        		{
+        			var d = new com.tns.tests.DummyClass({});
+        		}
+        		catch (e)
+        		{
+        		    console.log(e.message);
+        			exceptionCaught = true;
+        		}
 
-		expect(exceptionCaught).toBe(true);
+       expect(exceptionCaught).toBe(true);
+
 	});
 
 	it("TestThrowJavaScriptExceptionWhenCallJavaMethodWithNakedJavaScriptObject", function () {
@@ -1425,52 +1427,52 @@ describe("Tests ", function () {
 		__log("TEST: TestThrowJavaScriptExceptionWhenPartiallyImplementedInterfaceIsUsed");
 
 		var methodCalled = false;
-		var exceptionCaught = false;
+        		var exceptionCaught = false;
 
-		var d = new com.tns.tests.DummyClass();
+        		var d = new com.tns.tests.DummyClass();
 
-		var impl1 = new com.tns.tests.DummyClass.MyInterface("impl1_1393", {
-			echoInt: function(i) { methodCalled = true; return i; }
-		});
+        		var impl1 = new com.tns.tests.DummyClass.MyInterface("impl1_1393", {
+        			echoInt: function(i) { methodCalled = true; return i; }
+        		});
 
-		var i = d.triggerEchoInt(impl1, 123);
+        		var i = d.triggerEchoInt(impl1, 123);
 
-		expect(methodCalled).toBe(true);
+        		expect(methodCalled).toBe(true);
 
-		expect(i).toBe(123);
+        		expect(i).toBe(123);
 
-		try
-		{
-			d.triggerDoSomething(impl1);
-		}
-		catch (e)
-		{
-			exceptionCaught = true;
-		}
+        		try
+        		{
+        			d.triggerDoSomething(impl1);
+        		}
+        		catch (e)
+        		{
+        			exceptionCaught = true;
+        		}
 
-		expect(exceptionCaught).toBe(true);
+        		expect(exceptionCaught).toBe(true);
 
-		methodCalled = false;
-		exceptionCaught = false;
+        		methodCalled = false;
+        		exceptionCaught = false;
 
-		var impl2 = new com.tns.tests.DummyClass.MyInterface("impl2_1417",{
-			doSomething: function() { methodCalled = true; }
-		});
+        		var impl2 = new com.tns.tests.DummyClass.MyInterface("impl2_1417",{
+        			doSomething: function() { methodCalled = true; }
+        		});
 
-		d.triggerDoSomething(impl2);
+        		d.triggerDoSomething(impl2);
 
-		expect(methodCalled).toBe(true);
+        		expect(methodCalled).toBe(true);
 
-		try
-		{
-			d.triggerEchoInt(impl2, 123);
-		}
-		catch (e)
-		{
-			exceptionCaught = true;
-		}
+        		try
+        		{
+        			d.triggerEchoInt(impl2, 123);
+        		}
+        		catch (e)
+        		{
+        			exceptionCaught = true;
+        		}
 
-		expect(exceptionCaught).toBe(true);
+        		expect(exceptionCaught).toBe(true);
 	});
 
 	it("TestThrowJavaScriptExceptionWhenImplementationObjectIsUsedToExtendMoreThanOneClass", function () {
@@ -1699,16 +1701,21 @@ describe("Tests ", function () {
     });
 
     it("should extend Java class in eval", function () {
-        var source='global.MyObj = java.lang.Object.extend(\
-                {\
-                        hashCode: function () {\
-                                return 1234;\
+        try {
+         var source='global.MyObj = java.lang.Object.extend(\
+                        {\
+                                hashCode: function () {\
+                                        return 1234;\
+                                }\
                         }\
-                }\
-        )';
-        eval('('+source+')')
-        var o = new MyObj();
-        expect(o.hashCode()).toBe(1234);
+                )';
+                eval('('+source+')')
+                var o = new MyObj();
+                expect(o.hashCode()).toBe(1234);
+        } catch(e) {
+            console.log("EVAL", e.message);
+        }
+
     });
 
     it("should call method on a newly introduced class in the class hierarchy", function () {

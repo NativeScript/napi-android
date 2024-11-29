@@ -40,7 +40,17 @@ var TerminalReporter = require('../jasmine-reporters/terminal_reporter').Termina
     },
 
     it: function(desc, func) {
-      return env.it(desc, func);
+      if (func.length > 0) {
+        return env.it(desc, func);
+      } else {
+        return env.it(desc, function(done) {
+            func();
+            __ns__setTimeout(() => {
+                done();
+            }, 1)
+
+        })
+      }
     },
 
     xit: function(desc, func) {
@@ -123,7 +133,7 @@ var TerminalReporter = require('../jasmine-reporters/terminal_reporter').Termina
     verbosity: 5
   }));
   
-  env.addReporter(new JUnitXmlReporter());
+  // env.addReporter(new JUnitXmlReporter());
 
   env.specFilter = function(spec) {
     return true;
