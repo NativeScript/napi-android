@@ -227,14 +227,14 @@ extern "C" JNIEXPORT jboolean Java_com_tns_Runtime_notifyGc(JNIEnv* env, jobject
 extern "C" JNIEXPORT void Java_com_tns_Runtime_lock(JNIEnv* env, jobject obj, jint runtimeId) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime != nullptr) {
-//        runtime->Lock();
+       runtime->Lock();
     }
 }
 
 extern "C" JNIEXPORT void Java_com_tns_Runtime_unlock(JNIEnv* env, jobject obj, jint runtimeId) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime != nullptr) {
-//        runtime->Unlock();
+        runtime->Unlock();
     }
 }
 

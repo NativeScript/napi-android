@@ -31,7 +31,8 @@ const char *Console::LOG_TAG = "JS";
 std::map<napi_env, std::map<std::string, double>> Console::s_envToConsoleTimersMap;
 int Console::m_maxLogcatObjectSize;
 
-void Console::createConsole(napi_env env, const int maxLogcatObjectSize, const bool forceLog) {
+void Console::createConsole(napi_env env, ConsoleCallback callback, const int maxLogcatObjectSize, const bool forceLog) {
+    m_callback = callback;
     m_maxLogcatObjectSize = maxLogcatObjectSize;
 
     napi_value console;
@@ -158,7 +159,9 @@ napi_value Console::assertCallback(napi_env env, napi_callback_info info) {
 
             std::string log = assertionError.str();
             sendToADBLogcat(log, ANDROID_LOG_ERROR);
-            sendToDevToolsFrontEnd(env, log);
+#ifdef __V8__
+            sendToDevToolsFrontEnd(env, ConsoleAPIType::kAssert, info);
+#endif
         }
     }
     catch (NativeScriptException &e) {
@@ -182,7 +185,9 @@ napi_value Console::errorCallback(napi_env env, napi_callback_info info) {
         std::string log = "CONSOLE ERROR: ";
         log += buildLogString(env, info);
         sendToADBLogcat(log, ANDROID_LOG_ERROR);
-        sendToDevToolsFrontEnd(env, log);
+#ifdef __V8__
+        sendToDevToolsFrontEnd(env, ConsoleAPIType::kError, info);
+#endif
     }
     catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -211,7 +216,9 @@ napi_value Console::infoCallback(napi_env env, napi_callback_info info) {
         log += buildLogString(env, info);
 
         sendToADBLogcat(log, ANDROID_LOG_INFO);
-        sendToDevToolsFrontEnd(env, log);
+#ifdef __V8__
+        sendToDevToolsFrontEnd(env, ConsoleAPIType::kInfo, info);
+#endif
     }
     catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -239,7 +246,9 @@ napi_value Console::logCallback(napi_env env, napi_callback_info info) {
         log += buildLogString(env, info);
 
         sendToADBLogcat(log, ANDROID_LOG_INFO);
-        sendToDevToolsFrontEnd(env,  log);
+#ifdef __V8__
+        sendToDevToolsFrontEnd(env, ConsoleAPIType::kLog, info);
+#endif
     }
     catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -267,7 +276,9 @@ napi_value Console::warnCallback(napi_env env, napi_callback_info info) {
         log += buildLogString(env, info);
 
         sendToADBLogcat(log, ANDROID_LOG_WARN);
-        sendToDevToolsFrontEnd(env, log);
+#ifdef __V8__
+        sendToDevToolsFrontEnd(env, ConsoleAPIType::kWarning, info);
+#endif
     }
     catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -346,7 +357,9 @@ napi_value Console::dirCallback(napi_env env, napi_callback_info info) {
         std::string log = ss.str();
 
         sendToADBLogcat(log, ANDROID_LOG_INFO);
-        sendToDevToolsFrontEnd(env,  log);
+#ifdef __V8__
+        sendToDevToolsFrontEnd(env, ConsoleAPIType::kDir, info);
+#endif
     }
     catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -401,7 +414,9 @@ napi_value Console::traceCallback(napi_env env, napi_callback_info info) {
 
         std::string log = ss.str();
         __android_log_write(ANDROID_LOG_ERROR, LOG_TAG, log.c_str());
-        sendToDevToolsFrontEnd(env, log);
+#ifdef __V8__
+        sendToDevToolsFrontEnd(env, ConsoleAPIType::kTrace, info);
+#endif
     }
     catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -485,7 +500,9 @@ napi_value Console::timeEndCallback(napi_env env, napi_callback_info info) {
                     "No such label '" + label + "' for console.timeEnd()");
 
             __android_log_write(ANDROID_LOG_WARN, LOG_TAG, warning.c_str());
-            sendToDevToolsFrontEnd(env, warning);
+#ifdef __V8__
+            sendToDevToolsFrontEnd(env, ConsoleAPIType::kWarning, warning);
+#endif
 
             return nullptr;
         }
@@ -506,7 +523,9 @@ napi_value Console::timeEndCallback(napi_env env, napi_callback_info info) {
         std::string log = ss.str();
 
         __android_log_write(ANDROID_LOG_INFO, LOG_TAG, log.c_str());
-        sendToDevToolsFrontEnd(env, log);
+#ifdef __V8__
+        sendToDevToolsFrontEnd(env, ConsoleAPIType::kTimeEnd, log);
+#endif
     }
     catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -553,6 +572,33 @@ void Console::sendToADBLogcat(const std::string &message, android_LogPriority lo
     }
 }
 
-void Console::sendToDevToolsFrontEnd(napi_env env, const std::string &args) {
-    // Implementation for sending messages to DevTools front end using string arguments
+#ifdef __V8__
+int Console::sendToDevToolsFrontEnd(napi_env env, ConsoleAPIType method, napi_callback_info info) {
+    if (!m_callback) {
+        return 0;
+    }
+    NAPI_CALLBACK_BEGIN_VARGS()
+
+    v8::Local<v8::Value> *v8_args = reinterpret_cast<v8::Local<v8::Value>*>(const_cast<napi_value *>(argv.data()));
+
+    std::vector<v8::Local<v8::Value>> arg_vector;
+    unsigned nargs = argc;
+    arg_vector.reserve(nargs);
+    for (unsigned ix = 0; ix < nargs; ix++)
+        arg_vector.push_back(v8_args[ix]);
+
+    m_callback(env, method, arg_vector);
+    return 0;
 }
+
+void Console::sendToDevToolsFrontEnd(napi_env env, ConsoleAPIType method,  const std::string &message) {
+    if (!m_callback) {
+        return;
+    }
+
+    std::vector<v8::Local<v8::Value>> args{tns::ConvertToV8String(env->isolate, message)};
+    m_callback(env, method, args);
+}
+#endif
+
+ConsoleCallback Console::m_callback = nullptr;

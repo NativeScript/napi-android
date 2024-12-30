@@ -52,7 +52,7 @@ CastType NumericCasts::GetCastType(napi_env env, napi_value object) {
 
 napi_value NumericCasts::GetCastValue(napi_env env, napi_value object) {
     napi_value value;
-    napi_get_named_property(env, object, "value", &value);
+    napi_get_property(env, object, Constants::Get(env)->valueValue, &value);
     return value;
 }
 
@@ -232,7 +232,7 @@ NumericCasts::MarkJsObject(napi_env env, napi_value object, CastType castType, n
     napi_create_int32(env, static_cast<int>(castType), &type);
 
     napi_set_named_property(env, object, s_castMarker, type);
-    napi_set_named_property(env, object, "value", value);
+    napi_set_property(env, object, Constants::Get(env)->valueValue, value);
 
 //    DEBUG_WRITE("MarkJsObject: Marking js object with cast type: %d", castType);
 }

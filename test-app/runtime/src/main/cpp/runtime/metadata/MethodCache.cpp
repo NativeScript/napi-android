@@ -143,7 +143,7 @@ string MethodCache::GetType(napi_env env, napi_value value)
     {
 
         napi_value nullNode;
-        napi_get_named_property(env, value, PROP_KEY_NULL_NODE_NAME, &nullNode);
+        napi_get_property(env, value, Constants::Get(env)->nullNodeNameValue, &nullNode);
 
         if (!napi_util::is_null_or_undefined(env, nullNode))
         {

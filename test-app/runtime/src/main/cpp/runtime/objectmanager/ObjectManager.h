@@ -40,7 +40,7 @@ namespace tns {
         napi_value CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance,
                                    bool isArray = false);
 
-        napi_value GetOrCreateProxy(jint javaObjectID, napi_value instance, bool isArray = false);
+        napi_value GetOrCreateProxy(jint javaObjectID, napi_value instance);
 
         void Link(napi_value object, uint32_t javaObjectID, jclass clazz);
 
@@ -60,13 +60,13 @@ namespace tns {
         inline static void MarkObject(napi_env env, napi_value object) {
             napi_value marker;
             napi_get_boolean(env, true, &marker);
-            napi_set_named_property(env, object, PRIVATE_IS_NAPI, marker);
+            napi_set_property(env, object, Constants::Get(env)->privateIsNapiValue, marker);
         }
 
         inline static void MarkSuperCall(napi_env env, napi_value object) {
             napi_value marker;
             napi_get_boolean(env, true, &marker);
-            napi_set_named_property(env, object, PRIVATE_CALLSUPER, marker);
+            napi_set_property(env, object, Constants::Get(env)->privateCallSuperValue, marker);
         }
 
         void OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids);

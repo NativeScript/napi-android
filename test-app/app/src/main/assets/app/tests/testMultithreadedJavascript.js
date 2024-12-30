@@ -1,6 +1,8 @@
 describe("Test multithreaded javascript ", () => {
     it("Should execute callbacks on specified native thread", done => {
+
         const currentThreadId = java.lang.Thread.currentThread().getId();
+         console.log("TEST BEGIN!!",currentThreadId);
         new java.lang.Thread(new java.lang.Runnable({
             run() {
                 const threadId = java.lang.Thread.currentThread().getId();

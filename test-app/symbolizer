@@ -1,0 +1,41 @@
+#!/bin/bash
+
+ndkversion="26.1.10909125"
+libname="NativeScript"
+
+# default arch
+arch="arm64-v8a"
+
+POSITIONAL_ARGS=()
+
+if [ $# -eq 0 ]; then
+    echo "Pass an address as the last argument, use -a to provide architecture"
+    exit 0
+fi
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -a|--arch)
+      arch="$2"
+      shift # past argument
+      shift # past value
+      ;;
+    -*|--*)
+      echo "Unknown option $1"
+      exit 1
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1") # save positional arg
+      shift # past argument
+      ;;
+  esac
+done
+
+if [ ${#POSITIONAL_ARGS[@]} -eq 0 ]; then
+    echo "Pass an address as the last argument"
+    exit 1
+fi
+
+cd "$(dirname "$0")"
+
+$ANDROID_HOME/ndk/$ndkversion/toolchains/llvm/prebuilt/*/bin/llvm-symbolizer --obj=app/build/intermediates/merged_native_libs/debug/mergeDebugNativeLibs/out/lib/$arch/lib$libname.so ${POSITIONAL_ARGS[0]}

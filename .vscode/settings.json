@@ -75,6 +75,12 @@
         "tuple": "cpp",
         "typeindex": "cpp",
         "vector": "cpp",
-        "csignal": "cpp"
-    }
+        "csignal": "cpp",
+        "__memory": "cpp",
+        "stdlib.h": "c",
+        "assert.h": "c",
+        "js_native_api.h": "c",
+        "javascriptcore.h": "c"
+    },
+    "cmake.sourceDirectory": "/Volumes/DataDrive/Android/android-runtime/test-app/runtime"
 }

@@ -26,6 +26,14 @@
 #include "ManualInstrumentation.h"
 #include "GlobalHelpers.h"
 #include "Timers.h"
+#ifdef __JSC__
+#include "WeakRef.h"
+#endif
+
+#ifdef APPLICATION_IN_DEBUG
+// #include "NetworkDomainCallbackHandlers.h"
+#include "JsV8InspectorClient.h"
+#endif
 
 using namespace tns;
 using namespace std;
@@ -56,24 +64,23 @@ void Runtime::Init(JavaVM *vm) {
 Runtime *Runtime::Current() {
     if (!s_mainThreadInitialized) return nullptr;
     auto id = this_thread::get_id();
-    auto size = Runtime::thread_id_to_rt_cache.size();
     auto itFound = Runtime::thread_id_to_rt_cache.find(id);
 
     if (itFound != Runtime::thread_id_to_rt_cache.end()) {
         return itFound->second;
     }
-
-    itFound = Runtime::thread_id_to_rt_cache.find(s_main_thread_id);
-    if (itFound != Runtime::thread_id_to_rt_cache.end()) {
-        return itFound->second;
+    if (thread_id_to_rt_cache.size() == 1) {
+        itFound = Runtime::thread_id_to_rt_cache.find(s_main_thread_id);
+        if (itFound != Runtime::thread_id_to_rt_cache.end()) {
+            return itFound->second;
+        }
     }
-
 
     return nullptr;
 }
 
 Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
-        : m_id(id), m_lastUsedMemory(0) {
+        : m_id(id), m_lastUsedMemory(0),m_gcFunc(nullptr) {
     m_runtime = jEnv->NewGlobalRef(runtime);
     m_objectManager = new ObjectManager(m_runtime);
     m_loopTimer = new MessageLoopTimer();
@@ -81,8 +88,6 @@ Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
 
     auto tid = this_thread::get_id();
     Runtime::thread_id_to_rt_cache.emplace(tid, this);
-
-    auto size = Runtime::thread_id_to_rt_cache.size();
 
     if (GET_USED_MEMORY_METHOD_ID == nullptr) {
         auto RUNTIME_CLASS = jEnv->FindClass("com/tns/Runtime");
@@ -161,18 +166,24 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     js_create_runtime(&rt);
     js_create_napi_env(&env, rt);
 
+    JSEnter
+
     napi_open_handle_scope(env, &global_scope);
-
-    napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
     env_to_runtime_cache.emplace(env, this);
-
-    napi_set_instance_data(env, this, nullptr, nullptr);
 
     napi_value global;
     napi_get_global(env, &global);
 
-    Console::createConsole(env, maxLogcatObjectSize, forceLog);
+#ifdef __JSC__
+    tns::WeakRef::Init(env);
+#endif
+
+#ifdef APPLICATION_IN_DEBUG
+    Console::createConsole(env, JsV8InspectorClient::consoleLogCallback, maxLogcatObjectSize, forceLog);
+#else
+    Console::createConsole(env, nullptr, maxLogcatObjectSize, forceLog);
+#endif
+
 
     Timers::InitStatic(env, global);
 
@@ -290,9 +301,9 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 
     m_loopTimer->Init(env);
 
-    napi_close_handle_scope(env, handleScope);
-
     s_mainThreadInitialized = true;
+
+    JSLeave
 }
 
 int Runtime::GetAndroidVersion() {
@@ -338,6 +349,9 @@ Runtime::~Runtime() {
 }
 
 std::string Runtime::ReadFileText(const std::string &filePath) {
+#ifdef APPLICATION_IN_DEBUG
+    std::lock_guard<std::mutex> lock(m_fileWriteMutex);
+#endif
     return File::ReadText(filePath);
 }
 
@@ -359,39 +373,57 @@ bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
     return true;
 }
 
+
+void Runtime::AdjustAmountOfExternalAllocatedMemory() {
+    JEnv jEnv;
+    int64_t usedMemory = jEnv.CallLongMethod(m_runtime, GET_USED_MEMORY_METHOD_ID);
+    int64_t changeInBytes = usedMemory - m_lastUsedMemory;
+    int64_t externalMemory = 0;
+
+    if (changeInBytes != 0) {
+        js_adjust_external_memory(env, changeInBytes, &externalMemory);
+    }
+
+    DEBUG_WRITE("usedMemory=%" PRId64 " changeInBytes=%" PRId64 " externalMemory=%" PRId64, usedMemory, changeInBytes, externalMemory);
+
+    m_lastUsedMemory = usedMemory;
+}
+
 bool Runtime::TryCallGC() {
-//    napi_value gc;
-//    napi_value global;
-//    napi_get_global(env, &global);
-//    napi_get_named_property(env, global, "gc", &gc);
-//    napi_util::log_value(env, gc);
-//    napi_value result;
-//    napi_call_function(env, nullptr, gc, 0, nullptr, &result);
-//    napi_value ex;
-//    napi_get_and_clear_last_exception(env, &ex);
+    if (!m_gcFunc) {
+        napi_value gc;
+        napi_value global;
+        napi_get_global(env, &global);
+        napi_get_named_property(env, global, "gc", &gc);
+        m_gcFunc = napi_util::make_ref(env, gc);
+    }
+    napi_value result;
+    napi_call_function(env, nullptr, napi_util::get_ref_value(env, m_gcFunc), 0, nullptr, &result);
+    napi_value ex;
+    napi_get_and_clear_last_exception(env, &ex);
     return true;
 }
 
 void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
     JEnv jEnv(_jEnv);
     string filePath = ArgConverter::jstringToString(scriptFile);
-    napi_handle_scope handleScope;
-//    napi_open_handle_scope(env, &handleScope);
+    JSEnter
+
     m_module.Load(env, filePath);
-//    napi_close_handle_scope(env, handleScope);
+    JSLeave
 }
 
 void Runtime::RunModule(const char *moduleName) {
-    napi_handle_scope handleScope;
-//    napi_open_handle_scope(env, &handleScope);
+    JSEnter
     m_module.Load(env, moduleName);
-//    napi_close_handle_scope(env, handleScope);
+    JSLeave
 }
 
 void Runtime::RunWorker(jstring scriptFile) {
-    // TODO: Pete: Why do I crash here with a JNI error (accessing bad jni)
+    JSEnter
     string filePath = ArgConverter::jstringToString(scriptFile);
     m_module.LoadWorker(env, filePath);
+    JSLeave
 }
 
 jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
@@ -399,8 +431,7 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     auto filename = ArgConverter::jstringToString(scriptFile);
     auto src = ReadFileText(filename);
 
-//    napi_handle_scope handleScope;
-//    napi_open_handle_scope(env, &handleScope);
+    JSEnter
 
     napi_value soureCode;
     napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode);
@@ -413,7 +444,7 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
         napi_get_last_error_info(env, &info);
     }
 
-//    napi_close_handle_scope(env, handleScope);
+    JSLeave
 
     return nullptr;
 }
@@ -441,9 +472,9 @@ int Runtime::GetReader() {
 jobject
 Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstring methodName,
                             jint retType, jboolean isConstructor, jobjectArray packagedArgs) {
-//    napi_handle_scope handleScope;
-//    napi_open_handle_scope(env, &handleScope);
     JEnv jEnv(_jEnv);
+
+    JSEnter
 
     DEBUG_WRITE("CallJSMethodNative called javaObjectID=%d", javaObjectID);
 
@@ -472,7 +503,8 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
 
     int classReturnType = retType;
     jobject javaObject = ConvertJsValueToJavaObject(jEnv, jsResult, classReturnType);
-//    napi_close_handle_scope(env, handleScope);
+
+    JSLeave
 
     return javaObject;
 }
@@ -480,10 +512,11 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
 void
 Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, jint javaObjectID,
                                 jstring className) {
-//    napi_handle_scope handleScope;
-//    napi_open_handle_scope(env, &handleScope);
+
     DEBUG_WRITE("createJSInstanceNative called");
     JEnv jEnv(_jEnv);
+
+    JSEnter
 
     string existingClassName = ArgConverter::jstringToString(className);
 
@@ -515,7 +548,8 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     jclass clazz = jEnv.FindClass(jniName);
     m_objectManager->Link(jsInstance, javaObjectID, clazz);
-//    napi_close_handle_scope(env, handleScope);
+
+    JSLeave
 }
 
 jint Runtime::GenerateNewObjectId(JNIEnv *jEnv, jobject obj) {
@@ -526,6 +560,8 @@ jint Runtime::GenerateNewObjectId(JNIEnv *jEnv, jobject obj) {
 
 jobject Runtime::ConvertJsValueToJavaObject(JEnv &jEnv, napi_value value, int classReturnType) {
 
+    JSEnter
+
     JsArgToArrayConverter argConverter(env, value, false /*is implementation object*/,
                                        classReturnType);
     jobject jr = argConverter.GetConvertedArg();
@@ -533,6 +569,8 @@ jobject Runtime::ConvertJsValueToJavaObject(JEnv &jEnv, napi_value value, int cl
     if (jr != nullptr) {
         javaResult = jEnv.NewLocalRef(jr);
     }
+
+    JSLeave
 
     return javaResult;
 }
@@ -542,6 +580,8 @@ Runtime::PassExceptionToJsNative(JNIEnv *jEnv, jobject obj, jthrowable exception
                                  jstring fullStackTrace, jstring jsStackTrace,
                                  jboolean isDiscarded) {
     napi_env napiEnv = env;
+
+    JSEnter
 
     std::string errMsg = ArgConverter::jstringToString(message);
 
@@ -578,6 +618,8 @@ Runtime::PassExceptionToJsNative(JNIEnv *jEnv, jobject obj, jthrowable exception
 
     // Pass err to JS
     NativeScriptException::CallJsFuncWithErr(env, errObj, isDiscarded);
+
+    JSLeave
 }
 
 void
@@ -585,6 +627,8 @@ Runtime::PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_v
                                                       napi_value filename, int lineno) {
     JEnv jEnv;
     auto runtimeClass = jEnv.GetObjectClass(m_runtime);
+
+    JSEnter
 
     auto mId = jEnv.GetStaticMethodID(runtimeClass, "passUncaughtExceptionFromWorkerToMain",
                                       "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;I)V");
@@ -599,6 +643,8 @@ Runtime::PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_v
 
     jEnv.CallStaticVoidMethod(runtimeClass, mId, (jstring) jMsgLocal, (jstring) jfileNameLocal,
                               (jstring) stTrace, (jint) lineno);
+
+    JSLeave
 }
 
 void Runtime::SetManualInstrumentationMode(jstring mode) {
@@ -606,6 +652,18 @@ void Runtime::SetManualInstrumentationMode(jstring mode) {
     if (modeStr == "timeline") {
         tns::instrumentation::Frame::enable();
     }
+}
+
+void Runtime::Lock() {
+#ifdef APPLICATION_IN_DEBUG
+    m_fileWriteMutex.lock();
+#endif
+}
+
+void Runtime::Unlock() {
+#ifdef APPLICATION_IN_DEBUG
+    m_fileWriteMutex.unlock();
+#endif
 }
 
 JavaVM *Runtime::java_vm = nullptr;

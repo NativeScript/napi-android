@@ -62,20 +62,23 @@ void CallbackHandlers::Init(napi_env env) {
                                                          "()V");
     assert(ENABLE_VERBOSE_LOGGING_METHOD_ID != nullptr);
 
-     INIT_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "initWorker",
-                                                    "(Ljava/lang/String;Ljava/lang/String;I)V");
+    INIT_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "initWorker",
+                                                   "(Ljava/lang/String;Ljava/lang/String;I)V");
 
-     assert(INIT_WORKER_METHOD_ID != nullptr);
+    assert(INIT_WORKER_METHOD_ID != nullptr);
 
-    SEND_MESSAGE_TO_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "sendMessageFromMainToWorker",
-                                                        "(ILjava/lang/String;)V");
+    SEND_MESSAGE_TO_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS,
+                                                              "sendMessageFromMainToWorker",
+                                                              "(ILjava/lang/String;)V");
     assert(SEND_MESSAGE_TO_WORKER_METHOD_ID != nullptr);
 
-    SEND_MESSAGE_TO_MAIN_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "sendMessageFromWorkerToMain",
-                                                              "(Ljava/lang/String;)V");
+    SEND_MESSAGE_TO_MAIN_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS,
+                                                            "sendMessageFromWorkerToMain",
+                                                            "(Ljava/lang/String;)V");
     assert(SEND_MESSAGE_TO_MAIN_METHOD_ID != nullptr);
 
-    TERMINATE_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "workerObjectTerminate", "(I)V");
+    TERMINATE_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "workerObjectTerminate",
+                                                        "(I)V");
     assert(TERMINATE_WORKER_METHOD_ID != nullptr);
 
     WORKER_SCOPE_CLOSE_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "workerScopeClose", "()V");
@@ -494,7 +497,7 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
 
     jEnv.CallVoidMethod(runtime->GetJavaRuntime(), MAKE_INSTANCE_STRONG_ID, instance, javaObjectID);
 
-    AdjustAmountOfExternalAllocatedMemory(jEnv, env);
+    AdjustAmountOfExternalAllocatedMemory(env);
 
     JniLocalRef localInstance(instance);
     success = !localInstance.IsNull();
@@ -502,7 +505,7 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
     if (success) {
         jclass instanceClass = jEnv.FindClass(fullClassName);
         objectManager->SetJavaClass(jsObject, instanceClass);
-        *jsThisProxy = objectManager->GetOrCreateProxy(javaObjectID, jsObject, false);
+        *jsThisProxy = objectManager->GetOrCreateProxy(javaObjectID, jsObject);
     } else {
         DEBUG_WRITE_FORCE("RegisterInstance failed with null new instance class: %s",
                           fullClassName.c_str());
@@ -578,10 +581,10 @@ void CallbackHandlers::SetJavaField(napi_env env, napi_value target,
     fieldAccessor.SetJavaField(env, target, value, fieldData);
 }
 
-void CallbackHandlers::AdjustAmountOfExternalAllocatedMemory(JEnv &jEnv, napi_env env) {
+void CallbackHandlers::AdjustAmountOfExternalAllocatedMemory(napi_env env) {
     auto runtime = Runtime::GetRuntime(env);
-    // runtime->AdjustAmountOfExternalAllocatedMemory();
-    // runtime->TryCallGC();
+     runtime->AdjustAmountOfExternalAllocatedMemory();
+     runtime->TryCallGC();
 }
 
 napi_value CallbackHandlers::CreateJSWrapper(napi_env env, jint javaObjectID,
@@ -614,7 +617,7 @@ CallbackHandlers::GetImplementedInterfaces(napi_env env, JEnv &jEnv,
             napi_value element;
             napi_get_element(env, prop, j, &element);
 
-            if (napi_util::is_of_type(env, element, napi_function)) {
+            if (napi_util::is_object(env, element)) {
                 auto node = MetadataNode::GetTypeMetadataName(env, element);
 
                 node = Util::ReplaceAll(node, std::string("/"), std::string("."));
@@ -692,6 +695,9 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
 }
 
 napi_value CallbackHandlers::RunOnMainThreadCallback(napi_env env, napi_callback_info info) {
+
+    JSEnter
+
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -709,6 +715,8 @@ napi_value CallbackHandlers::RunOnMainThreadCallback(napi_env env, napi_callback
     auto size = sizeof(Callback);
     auto wrote = write(Runtime::GetWriter(), &value, size);
 
+    JSLeave
+
     return nullptr;
 }
 
@@ -724,8 +732,12 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data) 
         return 1;
     }
 
+
+
     napi_env env = it->second.env_;
     napi_ref callback_ref = it->second.callback_;
+
+    JSEnter
 
     napi_value cb = napi_util::get_ref_value(env, callback_ref);
 
@@ -740,6 +752,8 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data) 
     if (status != napi_ok) {
         napi_throw_error(env, nullptr, "Error calling JavaScript callback");
     }
+
+    JSLeave
 
     return 1;
 }
@@ -793,7 +807,8 @@ napi_value CallbackHandlers::TimeCallback(napi_env env, napi_callback_info info)
     return result;
 }
 
-napi_value CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info) {
+napi_value
+CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN_VARGS();
 
     if (argc != 1) {
@@ -944,16 +959,13 @@ vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index) 
 napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
                                           napi_value jsObject, const string &methodName,
                                           jobjectArray args) {
+
+
     JEnv jEnv(_jEnv);
     napi_value result;
     napi_value method;
 
     napi_get_named_property(env, jsObject, methodName.c_str(), &method);
-    napi_value jObjectId;
-    napi_get_named_property(env, jsObject, "javaObjectId", &jObjectId);
-
-    napi_valuetype t;
-    napi_typeof(env, jObjectId, &t);
 
     if (method == nullptr || !napi_util::is_of_type(env, method, napi_function)) {
         stringstream ss;
@@ -961,19 +973,36 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
         throw NativeScriptException(ss.str());
     } else {
         DEBUG_WRITE("Calling JS Method %s", methodName.c_str());
-        size_t argc;
-        napi_value *jsArgs = ArgConverter::ConvertJavaArgsToJsArgs(env, args, &argc);
 
         bool exceptionPending;
         napi_is_exception_pending(env, &exceptionPending);
 
-        napi_call_function(env, jsObject, method, argc, argc == 0 ? nullptr : jsArgs, &result);
-
+        int argc = jEnv.GetArrayLength(args) / 3;
+        if (argc > 0) {
+            napi_value* jsArgs = nullptr;
+            napi_value stack_args[8];
+            if (argc <= 8) {
+                jsArgs = stack_args;
+            } else {
 #ifdef USE_MIMALLOC
-        mi_free(jsArgs);
+                jsArgs = (napi_value *) mi_malloc(sizeof(napi_value) * argc);
 #else
-        free(jsArgs);
+                jsArgs = (napi_value *) malloc(sizeof(napi_value) * argc);
 #endif
+            }
+            ArgConverter::ConvertJavaArgsToJsArgs(env, args, nullptr, jsArgs);
+            napi_call_function(env, jsObject, method, argc, jsArgs, &result);
+
+            if (argc > 8) {
+#ifdef USE_MIMALLOC
+                mi_free(jsArgs);
+#else
+                free(jsArgs);
+#endif
+            }
+        } else {
+            napi_call_function(env, jsObject, method, 0, nullptr, &result);
+        }
 
         if (!exceptionPending) {
             napi_is_exception_pending(env, &exceptionPending);
@@ -1073,8 +1102,8 @@ void CallbackHandlers::PostCallback(napi_env env, napi_callback_info info,
 }
 
 napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info info) {
-
     if (android_get_device_api_level() >= 24) {
+        JSEnter
         InitChoreographer();
 
         size_t argc = 2;
@@ -1083,6 +1112,7 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
 
         if (argc < 1) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
+            JSLeave
             return nullptr;
         }
 
@@ -1090,6 +1120,7 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
         napi_typeof(env, args[0], &argType);
         if (argType != napi_function) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
+            JSLeave
             return nullptr;
         }
 
@@ -1113,6 +1144,7 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
                 if (shouldReschedule) {
                     PostCallback(env, info, &cb->second);
                 }
+                JSLeave
                 return nullptr;
             }
         }
@@ -1128,13 +1160,15 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
 
         val->second.markScheduled();
         PostCallback(env, info, &val->second);
-    }
 
+        JSLeave
+    }
     return nullptr;
 }
 
 napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_info info) {
     if (android_get_device_api_level() >= 24) {
+        JSEnter
         InitChoreographer();
 
         size_t argc = 1;
@@ -1143,6 +1177,7 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
 
         if (argc < 1) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
+            JSLeave
             return nullptr;
         }
 
@@ -1150,6 +1185,7 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
         napi_typeof(env, args[0], &argType);
         if (argType != napi_function) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
+            JSLeave
             return nullptr;
         }
 
@@ -1169,6 +1205,7 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
                 cb->second.markRemoved();
             }
         }
+        JSLeave
     }
     return nullptr;
 }
@@ -1307,7 +1344,8 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
         jstring jmsg = jEnv.NewStringUTF(msg.c_str());
         JniLocalRef jmsgRef(jmsg);
 
-        jEnv.CallStaticVoidMethod(RUNTIME_CLASS, SEND_MESSAGE_TO_WORKER_METHOD_ID, id, (jstring) jmsgRef);
+        jEnv.CallStaticVoidMethod(RUNTIME_CLASS, SEND_MESSAGE_TO_WORKER_METHOD_ID, id,
+                                  (jstring) jmsgRef);
 
         DEBUG_WRITE(
                 "MAIN: WorkerObjectPostMessageCallback called postMessage on Worker object(id=%d)",
@@ -1327,6 +1365,7 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
 }
 
 void CallbackHandlers::WorkerGlobalOnMessageCallback(napi_env env, jstring message) {
+    JSEnter
     try {
         napi_value globalObject;
         napi_get_global(env, &globalObject);
@@ -1359,16 +1398,20 @@ void CallbackHandlers::WorkerGlobalOnMessageCallback(napi_env env, jstring messa
             DEBUG_WRITE(
                     "WORKER: WorkerGlobalOnMessageCallback couldn't fire a worker's `onmessage` callback because it isn't implemented!");
         }
+        JSLeave
     } catch (NativeScriptException &ex) {
         ex.ReThrowToNapi(env);
+        JSLeave
     } catch (std::exception e) {
         std::stringstream ss;
         ss << "Error: c++ exception: " << e.what() << std::endl;
         NativeScriptException nsEx(ss.str());
         nsEx.ReThrowToNapi(env);
+        JSLeave
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToNapi(env);
+        JSLeave
     }
 }
 
@@ -1418,13 +1461,16 @@ CallbackHandlers::WorkerGlobalPostMessageCallback(napi_env env, napi_callback_in
 }
 
 void CallbackHandlers::WorkerObjectOnMessageCallback(napi_env env, jint workerId, jstring message) {
+    JSEnter
     try {
+
         auto workerFound = CallbackHandlers::id2WorkerMap.find(workerId);
 
         if (workerFound == CallbackHandlers::id2WorkerMap.end()) {
             DEBUG_WRITE(
                     "MAIN: WorkerObjectOnMessageCallback no worker instance was found with workerId=%d.",
                     workerId);
+            JSLeave
             return;
         }
 
@@ -1460,16 +1506,20 @@ void CallbackHandlers::WorkerObjectOnMessageCallback(napi_env env, jint workerId
                     "MAIN: WorkerObjectOnMessageCallback couldn't fire a worker(id=%d) object's `onmessage` callback because it isn't implemented.",
                     workerId);
         }
+        JSLeave
     } catch (NativeScriptException &ex) {
         ex.ReThrowToNapi(env);
+        JSLeave
     } catch (std::exception e) {
         std::stringstream ss;
         ss << "Error: c++ exception: " << e.what() << std::endl;
         NativeScriptException nsEx(ss.str());
         nsEx.ReThrowToNapi(env);
+        JSLeave
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToNapi(env);
+        JSLeave
     }
 }
 
@@ -1680,6 +1730,7 @@ void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value err
 void CallbackHandlers::CallWorkerObjectOnErrorHandle(napi_env env, jint workerId, jstring message,
                                                      jstring stackTrace, jstring filename,
                                                      jint lineno, jstring threadName) {
+    JSEnter
     try {
         auto workerFound = CallbackHandlers::id2WorkerMap.find(workerId);
 
@@ -1711,7 +1762,17 @@ void CallbackHandlers::CallWorkerObjectOnErrorHandle(napi_env env, jint workerId
             napi_value args[1] = {errEvent};
 
             napi_value result;
-            napi_call_function(env, worker, callback, 1, args, &result);
+            napi_status status = napi_call_function(env, worker, callback, 1, args, &result);
+            if (status != napi_ok) {
+                napi_value exception;
+                napi_get_and_clear_last_exception(env, &exception);
+                if (!napi_util::is_null_or_undefined(env, exception)) {
+                    throw NativeScriptException(env, exception,
+                                                "Error calling onerror on Worker Object");
+                } else {
+                    throw NativeScriptException("Error calling onerror on Worker Object");
+                }
+            }
 
             bool handled;
             napi_get_value_bool(env, result, &handled);
@@ -1731,20 +1792,25 @@ void CallbackHandlers::CallWorkerObjectOnErrorHandle(napi_env env, jint workerId
                 "Unhandled exception in '%s' thread. file: %s, line %d, message: %s\nStackTrace: %s",
                 strThreadname.c_str(), strFilename.c_str(), lineno, strMessage.c_str(),
                 strStackTrace.c_str());
+        JSLeave
     } catch (NativeScriptException &ex) {
         ex.ReThrowToNapi(env);
+        JSLeave
     } catch (std::exception e) {
         std::stringstream ss;
         ss << "Error: c++ exception: " << e.what() << std::endl;
         NativeScriptException nsEx(ss.str());
         nsEx.ReThrowToNapi(env);
+        JSLeave
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToNapi(env);
+        JSLeave
     }
 }
 
 void CallbackHandlers::ClearWorkerPersistent(napi_env env, int workerId) {
+    JSEnter
     DEBUG_WRITE("ClearWorkerPersistent called for workerId=%d", workerId);
 
     auto workerFound = CallbackHandlers::id2WorkerMap.find(workerId);
@@ -1760,10 +1826,12 @@ void CallbackHandlers::ClearWorkerPersistent(napi_env env, int workerId) {
     napi_delete_reference(env, workerPersistent);
 
     id2WorkerMap.erase(workerId);
+    JSLeave
 }
 
 void CallbackHandlers::TerminateWorkerThread(napi_env env) {
     try {
+        JSEnterScope
         Runtime::GetRuntime(env)->DestroyRuntime();
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);

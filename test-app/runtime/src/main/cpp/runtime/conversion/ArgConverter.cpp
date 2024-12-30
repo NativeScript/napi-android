@@ -122,15 +122,9 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
     return nullptr;
 }
 
-napi_value* ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t *length) {
+void ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t *length, napi_value* arr) {
     JEnv jenv;
     int argc = jenv.GetArrayLength(args) / 3;
-
-    #ifdef USE_MIMALLOC
-        napi_value* arr = argc == 0 ? nullptr : (napi_value *) mi_malloc(sizeof(napi_value) * argc);
-    #else
-        napi_value* arr = argc == 0 ? nullptr : (napi_value *) malloc(sizeof(napi_value) * argc);
-    #endif
 
     auto runtime = Runtime::GetRuntime(env);
     auto objectManager = runtime->GetObjectManager();
@@ -185,15 +179,18 @@ napi_value* ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray arg
             }
             case Type::Null:
                 napi_get_null(env, &jsArg);
+                napi_valuetype type;
+                napi_typeof(env, jsArg, &type);
                 break;
         }
 
         arr[i] = jsArg;
     }
 
-    *length = argc;
+    if (length != nullptr) {
+        *length = argc;
+    }
 
-    return arr;
 }
 
 napi_value ArgConverter::ConvertFromJavaLong(napi_env env, jlong value) {

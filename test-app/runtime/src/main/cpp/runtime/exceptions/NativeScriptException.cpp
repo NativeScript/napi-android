@@ -31,6 +31,8 @@ NativeScriptException::NativeScriptException(const string& message, const string
 NativeScriptException::NativeScriptException(napi_env env, napi_value error, const string& message)
     : m_javaException(JniLocalRef()) {
     m_javascriptException = nullptr;
+    napi_valuetype type;
+    napi_typeof(env, error, &type);
     napi_create_reference(env, error, 1, &m_javascriptException);
     m_message = GetErrorMessage(env, error, message);
     m_stackTrace = GetErrorStackTrace(env, error);
@@ -63,6 +65,7 @@ void NativeScriptException::ReThrowToNapi(napi_env env) {
 }
 
 void NativeScriptException::ReThrowToJava(napi_env env) {
+    JSEnter
     jthrowable ex = nullptr;
     JEnv jEnv;
 
@@ -106,6 +109,7 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
          ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_JSVALUE_CTOR_ID, (jstring)msg, (jstring)nullptr, (jlong)0));
     }
     jEnv.Throw(ex);
+    JSLeave
 }
 
 void NativeScriptException::Init() {
@@ -146,7 +150,7 @@ void NativeScriptException::CallJsFuncWithErr(napi_env env, napi_value errObj, b
     napi_value global;
     napi_get_global(env, &global);
 
-    napi_value handler;
+    napi_value handler = nullptr;
     if (isDiscarded) {
         napi_get_named_property(env, global, "__onDiscardedError", &handler);
     } else {

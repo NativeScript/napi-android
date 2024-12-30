@@ -78,7 +78,11 @@
 			var Extended = extend(thiz);
 			thiz.__container__ = true;
 			if (arguments.length > 1) {
-				thiz.__proto__ = new (Function.prototype.bind.apply(Extended, [null].concat(Array.prototype.slice.call(arguments, 1))));
+//			    if (typeof Extended !== "function") {
+//                    thiz.__proto__ = Reflect.construct(Extended, Array.prototype.slice.call(arguments, 1));
+//			    } else {
+			        thiz.__proto__ = new (Function.prototype.bind.apply(Extended, [null].concat(Array.prototype.slice.call(arguments, 1))));
+//			    }
 			}
 			else {
 				thiz.__proto__ = new Extended()

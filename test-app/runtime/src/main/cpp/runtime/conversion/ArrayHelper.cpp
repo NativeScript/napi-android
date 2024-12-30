@@ -91,7 +91,7 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
 
         string typeName = ArgConverter::ConvertToString(env, type);
         array = JniLocalRef(CreateArrayByClassName(typeName, len));
-    } else if (typeType == napi_function) {
+    } else if (typeType == napi_function || typeType == napi_object) {
         if (lengthType != napi_number) {
             Throw(env, "Expect integer value as a second argument.");
             return nullptr;

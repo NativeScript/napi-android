@@ -24,8 +24,6 @@ using namespace std;
 
 void MetadataNode::Init(napi_env env) {
     auto cache = GetMetadataNodeCache(env);
-    cache->MetadataKey = napi_util::make_ref(env, ArgConverter::convertToJsString(env,
-                                                                                  "tns::MetadataKey"));
 }
 
 napi_value MetadataNode::CreateArrayObjectConstructor(napi_env env) {
@@ -74,7 +72,7 @@ napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *ob
 
         napi_util::setPrototypeOf(env, extInstance, napi_util::get_prototype(env, extendedCtorFunc));
 
-        napi_set_named_property(env, extInstance, CONSTRUCTOR, extendedCtorFunc);
+        napi_set_property(env, extInstance, Constants::Get(env)->constructorValue, extendedCtorFunc);
 
         SetInstanceMetadata(env, extInstance, cacheData.node);
     }
@@ -84,7 +82,7 @@ napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *ob
 
 string MetadataNode::GetTypeMetadataName(napi_env env, napi_value value) {
     napi_value typeMetadataName;
-    napi_get_named_property(env, value, PRIVATE_TYPE_NAME, &typeMetadataName);
+    napi_get_property(env, value, Constants::Get(env)->privateTypeNameValue, &typeMetadataName);
 
     return napi_util::get_string_value(env, typeMetadataName);
 }
@@ -106,7 +104,7 @@ napi_value MetadataNode::CreateJSWrapper(napi_env env, ObjectManager *objectMana
     } else {
         obj = objectManager->GetEmptyObject();
         napi_value ctorFunc = GetConstructorFunction(env);
-        napi_set_named_property(env, obj, CONSTRUCTOR, ctorFunc);
+        napi_set_property(env, obj, Constants::Get(env)->constructorValue, ctorFunc);
         napi_util::setPrototypeOf(env, obj, napi_util::get_prototype(env, ctorFunc));
         SetInstanceMetadata(env, obj, this);
     }
@@ -238,7 +236,7 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 
     napi_value implementationObject;
 
-    napi_get_named_property(env, currentPrototype, CLASS_IMPLEMENTATION_OBJECT,
+    napi_get_property(env, currentPrototype, Constants::Get(env)->classImplementationObjectValue,
                             &implementationObject);
 
     if (implementationObject != nullptr && !napi_util::is_undefined(env, implementationObject)) {
@@ -247,15 +245,11 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 
     bool hasProperty;
 
-    napi_value prototypeImplObjectKey;
-    napi_create_string_utf8(env, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, NAPI_AUTO_LENGTH, &prototypeImplObjectKey);
-    napi_has_own_property(env, object, prototypeImplObjectKey, &hasProperty);
+    napi_has_own_property(env, object, Constants::Get(env)->isPrototypeImplementationObjectValue, &hasProperty);
 
     if (hasProperty) {
         bool maybeHasOwnProperty;
-        napi_value prototypeKey;
-        napi_create_string_utf8(env, PROTOTYPE, NAPI_AUTO_LENGTH, &prototypeKey);
-        napi_has_own_property(env, object, prototypeKey, &maybeHasOwnProperty);
+        napi_has_own_property(env, object, Constants::Get(env)->prototypeValue, &maybeHasOwnProperty);
 
         if (!maybeHasOwnProperty) {
             return nullptr;
@@ -297,7 +291,7 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
             return nullptr;
         } else {
             napi_value implObject;
-            napi_get_named_property(env, currentPrototype, CLASS_IMPLEMENTATION_OBJECT,
+            napi_get_property(env, currentPrototype, Constants::Get(env)->classImplementationObjectValue,
                                     &implObject);
 
             if (implObject != nullptr && !napi_util::is_undefined(env, implObject)) {
@@ -323,6 +317,9 @@ MetadataNode *MetadataNode::GetInstanceMetadata(napi_env env, napi_value object)
     void *node;
     napi_value external;
     napi_get_named_property(env, object, "#instance_metadata", &external);
+
+    if (napi_util::is_null_or_undefined(env, external)) return nullptr;
+
     napi_get_value_external(env, external, &node);
 //    napi_unwrap(env, object, &node);
     if (node == nullptr)
@@ -422,11 +419,12 @@ napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callbac
 
         ObjectManager::MarkSuperCall(env, jsThis);
 
+
         napi_util::setPrototypeOf(env, implementationObject, napi_util::getPrototypeOf(env, jsThis));
 
         napi_util::setPrototypeOf(env, jsThis, implementationObject);
 
-        napi_set_named_property(env, jsThis, CLASS_IMPLEMENTATION_OBJECT, implementationObject);
+        napi_set_property(env, jsThis, Constants::Get(env)->classImplementationObjectValue, implementationObject);
 
         ArgsWrapper argsWrapper(info, ArgType::Interface);
 
@@ -858,7 +856,10 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
         auto *methodInfo = static_cast<PackageGetterMethodData *>(data);
 
         if (methodInfo->value != nullptr) {
-            return napi_util::get_ref_value(env, methodInfo->value);
+            napi_value value = napi_util::get_ref_value(env, methodInfo->value);
+            if (!napi_util::is_null_or_undefined(env, value)) {
+                return value;
+            }
         }
 
         auto node = methodInfo->node;
@@ -867,10 +868,14 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
 
         auto child = GetChildMetadataForPackage(node, methodInfo->utf8name);
         auto foundChild = child.treeNode != nullptr;
-
+        napi_value cachedItem = nullptr;
         if (foundChild) {
             auto childNode = MetadataNode::GetOrCreateInternal(child.treeNode);
-            napi_value cachedItem = childNode->CreateWrapper(env);
+            auto cache = GetMetadataNodeCache(env);
+            if (methodInfo->value != nullptr) {
+                cache->CtorFuncCache.erase(childNode->m_treeNode);
+            }
+            cachedItem = childNode->CreateWrapper(env);
             methodInfo->value = napi_util::make_ref(env, cachedItem);
 
             uint8_t childNodeType = s_metadataReader.GetNodeType(child.treeNode);
@@ -893,7 +898,7 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
             }
         }
 
-        return napi_util::get_ref_value(env, methodInfo->value);
+        return cachedItem;
 
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -1216,9 +1221,10 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     }
 
     napi_value extendMethod;
-    napi_create_function(env, PROP_KEY_EXTEND, sizeof(PROP_KEY_EXTEND), ExtendMethodCallback, this,
+    napi_create_function(env, nullptr, 0, ExtendMethodCallback, this,
                          &extendMethod);
-    napi_set_named_property(env, constructor, PROP_KEY_EXTEND, extendMethod);
+    napi_set_property(env, extendMethod, Constants::Get(env)->nameValue, Constants::Get(env)->extendValue);
+    napi_set_property(env, constructor, Constants::Get(env)->classImplementationObjectValue, extendMethod);
 
     // get candidates from static fields metadata
     auto staticFieldCout = *reinterpret_cast<uint16_t *>(curPtr);
@@ -1227,18 +1233,19 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
         auto entry = MetadataReader::ReadStaticFieldEntry(&curPtr);
         auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
+        napi_value method;
         napi_util::define_property(env, constructor, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                    fieldInfo);
     }
 
 
-    napi_util::define_property(env, constructor, PROP_KEY_NULLOBJECT, nullptr,
+    napi_util::define_property_named(env, constructor, Constants::Get(env)->nullObjectValue, nullptr,
                                NullObjectAccessorGetterCallback, nullptr, this);
 
 
     std::string tname = s_metadataReader.ReadTypeName(treeNode);
-    napi_set_named_property(env, constructor, PRIVATE_TYPE_NAME,
+    napi_set_property(env, constructor, Constants::Get(env)->privateTypeNameValue,
                             ArgConverter::convertToJsString(env, tname));
 
     SetClassAccessor(env, constructor);
@@ -1343,7 +1350,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
 }
 
 void MetadataNode::SetClassAccessor(napi_env env, napi_value constructor) {
-    napi_util::define_property(env, constructor, PROP_KEY_CLASS, nullptr,
+    napi_util::define_property_named(env, constructor, Constants::Get(env)->classValue, nullptr,
                                ClassAccessorGetterCallback, nullptr, nullptr);
 }
 
@@ -1351,7 +1358,7 @@ napi_value MetadataNode::ClassAccessorGetterCallback(napi_env env, napi_callback
     NAPI_CALLBACK_BEGIN(0);
     try {
         napi_value name;
-        napi_get_named_property(env, jsThis, PRIVATE_TYPE_NAME, &name);
+        napi_get_property(env, jsThis, Constants::Get(env)->privateTypeNameValue, &name);
         const char *nameValue = napi_util::get_string_value(env, name);
         return CallbackHandlers::FindClass(env, nameValue);
     } catch (NativeScriptException &e) {
@@ -1440,6 +1447,9 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
             (baseTreeNode->offsetValue > 0)) {
             baseConstructor = GetConstructorFunctionInternal(env, baseTreeNode,
                                                              baseInstanceMethodsCallbackData);
+
+
+
             if (baseConstructor != nullptr) {
                 napi_util::napi_inherits(env, constructor, baseConstructor);
             }
@@ -1522,15 +1532,13 @@ napi_value MetadataNode::NullObjectAccessorGetterCallback(napi_env env, napi_cal
     try {
 
         bool value;
-        napi_value nullNodeKey;
-        napi_create_string_utf8(env, PROP_KEY_NULL_NODE_NAME, NAPI_AUTO_LENGTH, &nullNodeKey);
-        napi_has_own_property(env, jsThis, nullNodeKey, &value);
+        napi_has_own_property(env, jsThis, Constants::Get(env)->nullNodeNameValue, &value);
 
         if (!value) {
             auto node = reinterpret_cast<MetadataNode *>(data);
             napi_value external;
             napi_create_external(env, node, nullptr, nullptr, &external);
-            napi_set_named_property(env, jsThis, PROP_KEY_NULL_NODE_NAME, external);
+            napi_set_property(env, jsThis, Constants::Get(env)->nullNodeNameValue, external);
 
             napi_util::napi_set_function(env,
                                          jsThis,
@@ -1573,9 +1581,9 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
         if (!fieldMetadata.isStatic) {
             napi_value constructor;
             napi_value prototype;
-            napi_get_named_property(env, jsThis, "constructor", &constructor);
+            napi_get_property(env, jsThis, Constants::Get(env)->constructorValue, &constructor);
             if (!napi_util::is_null_or_undefined(env, constructor)) {
-                napi_get_named_property(env, constructor, "prototype", &prototype);
+                napi_get_property(env, constructor, Constants::Get(env)->prototypeValue, &prototype);
                 bool isHolder;
                 napi_strict_equals(env, prototype, jsThis, &isHolder);
                 if (isHolder) {
@@ -1794,11 +1802,11 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
         }
 
         napi_value implementationObjectName;
-        napi_get_named_property(env, implementationObject, CLASS_IMPLEMENTATION_OBJECT,
+        napi_get_property(env, implementationObject, Constants::Get(env)->classImplementationObjectValue,
                                 &implementationObjectName);
 
         if (napi_util::is_null_or_undefined(env, implementationObjectName)) {
-            napi_set_named_property(env, implementationObject, CLASS_IMPLEMENTATION_OBJECT,
+            napi_set_property(env, implementationObject, Constants::Get(env)->classImplementationObjectValue,
                                     ArgConverter::convertToJsString(env, fullExtendedName));
         } else {
             string usedClassName = ArgConverter::ConvertToString(env, implementationObjectName);
@@ -1823,8 +1831,8 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
         napi_util::setPrototypeOf(env, implementationObject,
                                   napi_util::get_prototype(env, baseClassCtorFunction));
 
-        napi_util::define_property(
-                env, implementationObject, PROP_KEY_SUPER, nullptr, SuperAccessorGetterCallback,
+        napi_util::define_property_named(
+                env, implementationObject, Constants::Get(env)->superValue, nullptr, SuperAccessorGetterCallback,
                 nullptr, nullptr);
 
         napi_util::setPrototypeOf(env, extendFuncPrototype, implementationObject);
@@ -1833,7 +1841,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
         SetClassAccessor(env, extendFuncCtor);
 
-        napi_set_named_property(env, extendFuncCtor, PRIVATE_TYPE_NAME,
+        napi_set_property(env, extendFuncCtor, Constants::Get(env)->privateTypeNameValue,
                                 ArgConverter::convertToJsString(env, fullExtendedName));
 
         s_name2NodeCache.emplace(fullExtendedName, node);
@@ -1867,15 +1875,15 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
     try {
 
         napi_value superValue;
-        napi_get_named_property(env, jsThis, PROP_KEY_SUPERVALUE, &superValue);
+        napi_get_property(env, jsThis, Constants::Get(env)->superValueValue, &superValue);
 
-        if (superValue == nullptr || napi_util::is_undefined(env, superValue)) {
+        if (napi_util::is_null_or_undefined(env, superValue)) {
             auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
             superValue = objectManager->GetEmptyObject();
             napi_delete_property(env, superValue,
-                                 ArgConverter::convertToJsString(env, PROP_KEY_TOSTRING), nullptr);
+                                 Constants::Get(env)->toStringValue, nullptr);
             napi_delete_property(env, superValue,
-                                 ArgConverter::convertToJsString(env, PROP_KEY_VALUEOF), nullptr);
+                                 Constants::Get(env)->valueOfValue, nullptr);
             ObjectManager::MarkSuperCall(env, superValue);
 
             napi_value superProto = napi_util::getPrototypeOf(env, napi_util::getPrototypeOf(env,
@@ -1883,7 +1891,7 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
                                                                                                      env,
                                                                                                      jsThis)));
             napi_util::setPrototypeOf(env, superValue, superProto);
-            napi_set_named_property(env, jsThis, PROP_KEY_SUPERVALUE, superValue);
+            napi_set_property(env, jsThis,  Constants::Get(env)->superValueValue, superValue);
             objectManager->CloneLink(jsThis, superValue);
             auto node = GetInstanceMetadata(env, jsThis);
             SetInstanceMetadata(env, superValue, node);
@@ -1910,7 +1918,6 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN_VARGS()
 
     try {
-
         MetadataEntry *entry = nullptr;
 
         auto callbackData = reinterpret_cast<MethodCallbackData *>(data);
@@ -1952,11 +1959,11 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
 
         if (!first.isStatic) {
             napi_value superValue;
-            napi_get_named_property(env, jsThis, PRIVATE_CALLSUPER, &superValue);
+            napi_get_property(env, jsThis,  Constants::Get(env)->privateCallSuperValue, &superValue);
             isSuper = napi_util::get_bool(env, superValue);
         }
 
-        if (argc == 0 && methodName == PROP_KEY_VALUEOF) {
+        if (argc == 0 && methodName == "valueOf") {
             return jsThis;
         } else {
             bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();

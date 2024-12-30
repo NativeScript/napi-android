@@ -239,7 +239,7 @@ android {
     }
 
     sourceSets.main {
-        jniLibs.srcDirs = ["$projectDir/libs/jni", "$projectDir/snapshot-build/build/ndk-build/libs"]
+        jniLibs.srcDirs = ["$projectDir/libs/jni", "$projectDir/snapshot-build/build/ndk-build/libs", "$projectDir/src/main/jniLibs"]
     }
 
     signingConfigs {

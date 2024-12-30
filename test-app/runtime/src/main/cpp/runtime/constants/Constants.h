@@ -2,32 +2,52 @@
 #define CONSTANTS_H_
 
 #include <string>
-
-#define  PROP_KEY_EXTEND "extend"
-#define PROP_KEY_NULLOBJECT "null"
-#define PROP_KEY_NULL_NODE_NAME "nullNode"
-#define  PROP_KEY_VALUEOF "valueOf"
-#define  PROP_KEY_CLASS "class"
-#define  PRIVATE_TYPE_NAME "#typename"
-#define  CLASS_IMPLEMENTATION_OBJECT "t::ClassImplementationObject"
-#define  PROP_KEY_SUPER "super"
-#define  PROP_KEY_SUPERVALUE "supervalue"
-#define  PRIVATE_JSINFO "#js_info"
-#define  PRIVATE_CALLSUPER "#supercall"
-#define  PRIVATE_IS_NAPI "#is_napi"
-#define  PROP_KEY_TOSTRING "toString"
-#define  PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT "__isPrototypeImplementationObject"
+#include <unordered_map>
+#include <js_native_api.h>
 
 class Constants {
-    public:
-        const static char CLASS_NAME_LOCATION_SEPARATOR = '_';
+public:
+    const static char CLASS_NAME_LOCATION_SEPARATOR = '_';
+    static std::string APP_ROOT_FOLDER_PATH;
+    static std::string V8_STARTUP_FLAGS;
 
-        static std::string APP_ROOT_FOLDER_PATH;
-        static std::string V8_STARTUP_FLAGS;
+    static napi_status Init(napi_env env);
 
-    private:
-        Constants() {
-        }
+    static Constants *Get(napi_env env);
+
+    static void DeInit(napi_env env);
+
+    napi_value extendValue;
+    napi_value nullObjectValue;
+    napi_value nullNodeNameValue;
+    napi_value valueOfValue;
+    napi_value classValue;
+    napi_value privateTypeNameValue;
+    napi_value classImplementationObjectValue;
+    napi_value superValue;
+    napi_value superValueValue;
+    napi_value privateJsInfoValue;
+    napi_value privateCallSuperValue;
+    napi_value privateIsNapiValue;
+    napi_value toStringValue;
+    napi_value isPrototypeImplementationObjectValue;
+    napi_value prototypeValue;
+    napi_value constructorValue;
+    napi_value nameValue;
+    napi_value objectValue;
+    napi_value numberValue;
+    napi_value isIntegerValue;
+    napi_value setPrototypeOf;
+    napi_value stringValue;
+    napi_value booleanValue;
+    napi_value protoValue;
+    napi_value valueValue;
+
+
+private:
+    Constants();
+
+    static std::unordered_map<napi_env, Constants *> s_constantsMap;
 };
 
 #endif /* CONSTANTS_H_ */

@@ -277,7 +277,7 @@ private:
     };
 
     struct MetadataNodeCache {
-        napi_ref MetadataKey;
+//        napi_ref MetadataKey;
 
         robin_hood::unordered_map<MetadataTreeNode *, CtorCacheData> CtorFuncCache;
 

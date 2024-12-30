@@ -36,6 +36,8 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import dalvik.annotation.optimization.FastNative;
+
 public class Runtime {
     private native void initNativeScript(int runtimeId, String filesPath, String nativeLibDir, boolean verboseLoggingEnabled, boolean isDebuggable, String packageName,
                                          Object[] v8Options, String callingDir, int maxLogcatObjectSize, boolean forceLog);
@@ -96,8 +98,6 @@ public class Runtime {
             runtime.passDiscardedExceptionToJs(ex, "");
         }
     }
-
-
 
     private boolean initialized;
 
@@ -219,11 +219,11 @@ public class Runtime {
                 }
 
                 classResolver = new ClassResolver(classStorageService);
-                currentRuntime.set(this);
 
                 runtimeCache.put(this.runtimeId, this);
 
                 gcListener = GcListener.getInstance(config.appConfig.getMemoryCheckInterval(), config.appConfig.getFreeMemoryRatio());
+                currentRuntime.set(this);
             } finally {
                 frame.close();
             }

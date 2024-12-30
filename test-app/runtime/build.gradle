@@ -1,5 +1,10 @@
 apply plugin: 'com.android.library'
 
+def jsEngine = "V8"
+if (project.hasProperty("engine")) {
+    jsEngine = engine;
+}
+
 def optimized = project.hasProperty("optimized")
 if (optimized) {
     println "Optimized build triggered."
@@ -19,7 +24,6 @@ def useCCache = project.hasProperty("useCCache")
 if (useCCache) {
     println "Use CCache build triggered."
 }
-
 
 def defaultNdkVersion = "26.1.10909125"
 
@@ -102,22 +106,29 @@ android {
                 if (optimized) {
                     arguments.add("-DOPTIMIZED_BUILD=true")
                 }
-//
-//                if (optimizedWithInspector) {
-//                    arguments.add("-DOPTIMIZED_WITH_INSPECTOR_BUILD=true")
-//                }
-//
-//                if (useCCache) {
-//                    arguments.add("-DUSE_CCACHE=true")
-//                }
-//
-//                arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DANDROID_NDK_ROOT=${NDK_PATH}"
 
-                cppFlags "-std=c++14"
-                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}","-DUSE_MIMALLOC=1"
+               if (optimizedWithInspector) {
+                   arguments.add("-DOPTIMIZED_WITH_INSPECTOR_BUILD=true")
+               }
 
-                arguments.add("-DHERMES=1")
-//                arguments.add("-DQUICKJS=1");
+               if (useCCache) {
+                   arguments.add("-DUSE_CCACHE=true")
+               }
+
+               if (jsEngine == "QUICKJS") {
+                    arguments.add("-DQUICKJS=1")
+                    arguments.add("-DUSE_MIMALLOC=1")
+                } else if (jsEngine == "HERMES") {
+                    arguments.add("-DHERMES=1")
+                } else if (jsEngine == "JSC") {
+                    arguments.add("-DJSC=1")
+                } else if (jsEngine == "V8") {
+                    arguments.add("-DV8=1")
+                }
+
+//              arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DANDROID_NDK_ROOT=${NDK_PATH}"
+                cppFlags "-std=c++17"
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}"
             }
         }
 
@@ -148,9 +159,36 @@ android {
         prefab true
     }
 
-    packagingOptions {
-        exclude '**/libc++_shared.so'
-        exclude "**/libfbjni.so"
+    if (jsEngine == "V8") {
+        packagingOptions {
+            exclude "**/libjsc.so"
+            exclude "**/libhermes.so"
+            exclude "**/libjsi.so"
+            exclude "**/libfbjni.so"
+        }
+    } else if (jsEngine == "HERMES") {
+        packagingOptions {
+            exclude "**/libjsc.so"
+            exclude "**/libv8.so"
+            exclude "**/libjsi.so"
+            exclude '**/libc++_shared.so'
+            exclude "**/libfbjni.so"
+        }
+    } else if (jsEngine == "JSC") {
+        packagingOptions {
+            exclude "**/libv8android.so"
+            exclude "**/libhermes.so"
+            exclude "**/libjsi.so"
+            exclude "**/libfbjni.so"
+        }
+    } else if (jsEngine == "QUICKJS") {
+        packagingOptions {
+            exclude "**/libv8.so"
+            exclude "**/libhermes.so"
+            exclude "**/libjsc.so"
+            exclude "**/libjsi.so"
+            exclude "**/libfbjni.so"
+        }
     }
 }
 
@@ -167,9 +205,11 @@ android {
 dependencies {
     // println "\t ~ [DEBUG][runtime] build.gradle - ns_default_junit_version = ${ns_default_junit_version}..."
     implementation fileTree(include: ['*.jar'], dir: 'libs')
-    implementation 'com.facebook.fbjni:fbjni:0.3.0'
     testImplementation "junit:junit:${ns_default_junit_version}"
     testImplementation "org.mockito:mockito-core:${ns_default_mockito_core_version}"
+    if (jsEngine == "HERMES") {
+        implementation 'com.facebook.fbjni:fbjni:0.3.0'
+    }
 }
 
 

@@ -4,7 +4,8 @@
             "name": "Android",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/**"
+                "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/**",
+                "${workspaceFolder}/test-app/runtime/src/main/cpp/jsc/include"
             ],
             "defines": [],
             "compilerPath": "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang-17",
@@ -13,7 +14,8 @@
             "intelliSenseMode":  "clang-x86",
             "browse": {
                 "path": [
-                    "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64"
+                    "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64",
+                    "${workspaceFolder}/test-app/runtime/src/main/cpp/jsc/include"
                 ],
                 "limitSymbolsToIncludedHeaders": false
             }

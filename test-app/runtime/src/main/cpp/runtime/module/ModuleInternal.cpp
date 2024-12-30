@@ -39,7 +39,7 @@ void ModuleInternal::DeInit() {
 }
 
 void ModuleInternal::Init(napi_env env, const std::string& baseDir) {
-    NAPI_PREAMBLE;
+    napi_status status;
     JEnv jenv;
 
     if (MODULE_CLASS == nullptr) {
@@ -346,10 +346,6 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     napi_value requireArgs[5] = { moduleObj, exportsObj, require, fileName, dirName };
 
     napi_set_named_property(env, moduleObj, "require", require);
-
-    napi_value moduleIdProp;
-    napi_create_string_utf8(env, "id", strlen("id"), &moduleIdProp);
-//    napi_property_attributes readOnlyFlags = napi_enumerable | napi_configurable;
     napi_util::define_property(env, moduleObj, "id", fileName);
 
     napi_value thiz;

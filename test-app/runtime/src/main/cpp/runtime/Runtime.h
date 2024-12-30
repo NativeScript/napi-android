@@ -14,10 +14,7 @@
 #include "ObjectManager.h"
 #include "ArrayBufferHelper.h"
 #include <thread>
-
-#ifdef __HERMES__
 #include "jsr.h"
-#endif
 
 namespace tns {
     class Runtime {
@@ -70,6 +67,9 @@ namespace tns {
             return m_mainLooper;
         }
 
+        void Lock();
+        void Unlock();
+
         static Runtime* Current();
 
         jobject ConvertJsValueToJavaObject(JEnv& env, napi_value value, int classReturnType);
@@ -79,6 +79,7 @@ namespace tns {
         void PassExceptionToJsNative(JNIEnv* env, jobject obj, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded);
         void PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_value stackTrace, napi_value filename, int lineno);
 
+        void AdjustAmountOfExternalAllocatedMemory();
     private:
         Runtime(JNIEnv* env, jobject runtime, int id);
         static napi_value GlobalAccessorCallback(napi_env env, napi_callback_info  info);
@@ -92,7 +93,7 @@ namespace tns {
 
         MessageLoopTimer* m_loopTimer;
         int64_t m_lastUsedMemory;
-        napi_value m_gcFunc;
+        napi_ref m_gcFunc;
         volatile bool m_runGC;
 
 
@@ -126,6 +127,10 @@ namespace tns {
 
         static Runtime* s_main_rt;
         static std::thread::id s_main_thread_id;
+
+#ifdef APPLICATION_IN_DEBUG
+        std::mutex m_fileWriteMutex;
+#endif
 
 
     };

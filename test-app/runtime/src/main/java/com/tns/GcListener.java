@@ -3,14 +3,10 @@ package com.tns;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
-
 class GCSubscriber {
-    HashMap<PhantomReference<Object>, Integer> referencesMap = new HashMap<>();
+    ConcurrentHashMap<PhantomReference<Object>, Integer> referencesMap = new ConcurrentHashMap<>();
     public final ReferenceQueue<Object> referenceQueue = new ReferenceQueue<>();
 }
 
@@ -24,18 +20,19 @@ public class GcListener {
     private static volatile GcListener instance;
 
     public void createPhantomReference(Runtime runtime, Object object, Integer objectId) {
-        GCSubscriber subscriber =  subscribers.get(runtime);
-        if (subscriber != null) {
-            HashMap<PhantomReference<Object>, Integer> refMap = subscriber.referencesMap;
-            if (!refMap.containsValue(objectId)) {
-                PhantomReference<Object> ref = new PhantomReference<>(object, subscriber.referenceQueue);
-                refMap.put(ref, objectId);
+            GCSubscriber subscriber =  instance.subscribers.get(runtime);
+            if (subscriber != null) {
+                ConcurrentHashMap<PhantomReference<Object>, Integer> refMap = subscriber.referencesMap;
+                if (!refMap.containsValue(objectId)) {
+                    PhantomReference<Object> ref = new PhantomReference<>(object, subscriber.referenceQueue);
+                    refMap.put(ref, objectId);
+                }
+
+                if (runtime.getLogger().isEnabled()) {
+                    runtime.getLogger().write("GC", "Added object to watch list with id: " + String.valueOf(objectId));
+                }
             }
 
-            if (runtime.getLogger().isEnabled()) {
-                runtime.getLogger().write("GC", "Added object to watch list with id: " + String.valueOf(objectId));
-            }
-        }
     }
 
     private class GcMonitor implements Runnable {
@@ -45,35 +42,35 @@ public class GcListener {
         public void run() {
             while (true) {
                 try {
-                    if (subscribers.isEmpty()) break;
-                    for (Runtime runtime : subscribers.keySet()) {
-                        GCSubscriber subscriber = subscribers.get(runtime);
-                        if (subscriber != null) {
-                            PhantomReference<?> ref;
-                            ArrayList<Integer> collectedObjectIds = new ArrayList<>();
-                            while ((ref = (PhantomReference<?>) subscriber.referenceQueue.poll()) != null) {
-                                Integer id = subscriber.referencesMap.get(ref);
-                                subscriber.referencesMap.remove(ref);
-                                collectedObjectIds.add(id);
-                                if (runtime.getLogger().isEnabled()) {
-                                    runtime.getLogger().write("GC", "Collected object for gc: " + String.valueOf(id));
+                        if (subscribers.isEmpty()) break;
+                        for (Runtime runtime : subscribers.keySet()) {
+                            GCSubscriber subscriber = subscribers.get(runtime);
+                            if (subscriber != null) {
+                                PhantomReference<?> ref;
+                                ArrayList<Integer> collectedObjectIds = new ArrayList<>();
+                                while ((ref = (PhantomReference<?>) subscriber.referenceQueue.poll()) != null) {
+                                    Integer id = subscriber.referencesMap.get(ref);
+                                    subscriber.referencesMap.remove(ref);
+                                    collectedObjectIds.add(id);
+                                    if (runtime.getLogger().isEnabled()) {
+                                        runtime.getLogger().write("GC", "Collected object for gc: " + String.valueOf(id));
+                                    }
                                 }
-                            }
 
-                            if (!collectedObjectIds.isEmpty()) {
-                                int[] objIds = new int[collectedObjectIds.size()];
-                                for (int i =0; i < objIds.length; i++) {
-                                    objIds[i] = collectedObjectIds.get(i);
-                                }
-                                runtime.notifyGc(objIds);
-                                if (runtime.getLogger().isEnabled()) {
-                                    runtime.getLogger().write("GC", "GC triggered for " + String.valueOf(objIds.length) + "objects");
-                                    runtime.getLogger().write("NS.GCListener","Objects referenced after GC: " + subscriber.referencesMap.size());
+                                if (!collectedObjectIds.isEmpty()) {
+                                    int[] objIds = new int[collectedObjectIds.size()];
+                                    for (int i =0; i < objIds.length; i++) {
+                                        objIds[i] = collectedObjectIds.get(i);
+                                    }
+                                    runtime.notifyGc(objIds);
+                                    if (runtime.getLogger().isEnabled()) {
+                                        runtime.getLogger().write("GC", "GC triggered for " + String.valueOf(objIds.length) + " objects");
+                                        runtime.getLogger().write("NS.GCListener","Objects referenced after GC: " + subscriber.referencesMap.size());
+                                    }
                                 }
                             }
                         }
-                    }
-                    Thread.sleep(100);
+                    Thread.sleep(500);
                 } catch (InterruptedException e) {
                     if (com.tns.Runtime.isDebuggable()) {
                         e.printStackTrace();
@@ -176,7 +173,7 @@ public class GcListener {
         synchronized (instance) {
 //            ManualInstrumentation.Frame frame = ManualInstrumentation.start("GcListener.notifyGc");
             try {
-                for (Runtime runtime : subscribers.keySet()) {
+                for (Runtime runtime : instance.subscribers.keySet()) {
                     runtime.notifyGc();
                 }
             } finally {

@@ -85,7 +85,16 @@ std::string tns::JsonStringifyObject(napi_env env, napi_value value, bool handle
         napi_value args[2];
         args[0] = value;
         args[1] = handleCircularReferences ? napi_util::get_true(env) : napi_util::get_false(env);
-        napi_call_function(env, napi_util::global(env), smartJSONStringifyFunction, 1, args, &resultValue);
+        napi_status status = napi_call_function(env, napi_util::global(env), smartJSONStringifyFunction, 2, args, &resultValue);
+        if (status != napi_ok) {
+            napi_value exception;
+            napi_get_and_clear_last_exception(env, &exception);
+            if (!napi_util::is_null_or_undefined(env, exception)) {
+                throw NativeScriptException(env, exception, "Error converting object to json");
+            } else {
+                throw NativeScriptException("Error converting object to json");
+            }
+        }
         result = ArgConverter::ConvertToString(env, resultValue);
     }
 
@@ -104,7 +113,16 @@ napi_value tns::JsonParseString(napi_env env, const std::string& value) {
     napi_value args[1];
     args[0] = ArgConverter::convertToJsString(env, value);
     napi_value result;
-    napi_call_function(env, json, parse, 1, args, &result);
+    napi_status status = napi_call_function(env, json, parse, 1, args, &result);
+    if (status != napi_ok) {
+        napi_value exception;
+        napi_get_and_clear_last_exception(env, &exception);
+        if (!napi_util::is_null_or_undefined(env, exception)) {
+            throw NativeScriptException(env, exception, "Error converting json string to object");
+        } else {
+            throw NativeScriptException("Error converting json string to object");
+        }
+    }
     return result;
 }
 
@@ -114,22 +132,21 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
     if (error != nullptr) {
         napi_get_named_property(env, error, "stack", &stack);
     } else {
-#ifdef __QJS__
+#ifndef __HERMES__
         napi_value err;
         napi_value msg;
-        napi_create_string_utf8(env, "Test error", 0, &msg);
+        napi_create_string_utf8(env, "Error", 0, &msg);
         napi_value ex;
         napi_get_and_clear_last_exception(env, &ex);
         napi_create_error(env, nullptr, msg, &err);
         napi_get_named_property(env, err, "stack", &stack);
-#elif __HERMES__
+#else
         napi_value global;
         napi_get_global(env, &global);
         napi_value getErrorStack;
         napi_get_named_property(env, global, "getErrorStack", &getErrorStack);
         napi_call_function(env, global, getErrorStack, 0, nullptr, &stack);
 #endif
-
     }
 
     if (napi_util::is_null_or_undefined(env, stack)) return frames;
@@ -146,8 +163,11 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
             if (error == nullptr && count < 3) continue;
 #endif
 
-
+#ifdef __JSC__
+        regex frameRegex(R"((.*):(\d+):(\d+))");
+#else
         regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
+#endif
         smatch match;
         if (regex_search(frame, match, frameRegex)) {
             current++;

@@ -223,7 +223,7 @@ namespace tns {
         CallbackHandlers() {
         }
 
-        static void AdjustAmountOfExternalAllocatedMemory(JEnv &jEnv, napi_env napiEnv);
+        static void AdjustAmountOfExternalAllocatedMemory(napi_env napiEnv);
 
         /*
          * Helper method that creates a java string array for sending strings over JNI
