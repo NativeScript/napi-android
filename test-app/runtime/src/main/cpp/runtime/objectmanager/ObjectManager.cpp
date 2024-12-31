@@ -60,7 +60,7 @@ void ObjectManager::Init(napi_env env) {
                       0,
                       nullptr, &jsObjectCtor);
 
-    napi_set_property(env, napi_util::get_prototype(env, jsObjectCtor), Constants::Get(env)->privateIsNapiValue(env),
+    napi_set_named_property(env, napi_util::get_prototype(env, jsObjectCtor), PRIVATE_IS_NAPI,
                             napi_util::get_true(env));
     m_jsObjectCtor = napi_util::make_ref(env, jsObjectCtor, 1);
 
@@ -259,14 +259,14 @@ ObjectManager::JSInstanceInfo *ObjectManager::GetJSInstanceInfo(napi_value objec
 ObjectManager::JSInstanceInfo *
 ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
     napi_value jsInfo;
-    napi_get_property(m_env, object, Constants::Get(m_env)->privateJsInfoValue(m_env), &jsInfo);
+    napi_get_named_property(m_env, object, PRIVATE_JSINFO, &jsInfo);
 
     if (napi_util::is_null_or_undefined(m_env, jsInfo)) {
         napi_value proto = napi_util::get__proto__(m_env, object);
         //Typescript object layout has an object instance as child of the actual registered instance. checking for that
         if (!napi_util::is_null_or_undefined(m_env, proto)) {
             if (IsRuntimeJsObject(proto)) {
-                napi_get_property(m_env, proto, Constants::Get(m_env)->privateJsInfoValue(m_env), &jsInfo);
+                napi_get_named_property(m_env, proto, PRIVATE_JSINFO, &jsInfo);
             }
         }
     }
@@ -283,7 +283,7 @@ ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
 bool ObjectManager::IsRuntimeJsObject(napi_value object) {
     bool result;
 
-    napi_has_property(m_env, object, Constants::Get(m_env)->privateIsNapiValue(m_env), &result);
+    napi_has_named_property(m_env, object, PRIVATE_IS_NAPI, &result);
 
     return result;
 }
@@ -383,7 +383,7 @@ void ObjectManager::Link(napi_value object, uint32_t javaObjectID, jclass clazz)
 
     napi_value jsInfo;
     napi_create_external(m_env, jsInstanceInfo, JSObjectFinalizerCallback, state, &jsInfo);
-    napi_set_property(m_env, object, Constants::Get(m_env)->privateJsInfoValue(m_env), jsInfo);
+    napi_set_named_property(m_env, object, PRIVATE_JSINFO, jsInfo);
     m_idToObject.emplace(javaObjectID, objectHandle);
 }
 
@@ -394,8 +394,8 @@ bool ObjectManager::CloneLink(napi_value src, napi_value dest) {
 
     if (success) {
         napi_value external;
-        napi_get_property(m_env, src, Constants::Get(m_env)->privateJsInfoValue(m_env), &external);
-        napi_set_property(m_env, dest, Constants::Get(m_env)->privateJsInfoValue(m_env), external);
+        napi_get_named_property(m_env, src, PRIVATE_JSINFO, &external);
+        napi_set_named_property(m_env, dest, PRIVATE_JSINFO, external);
     }
 
     return success;

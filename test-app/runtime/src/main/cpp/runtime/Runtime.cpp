@@ -174,8 +174,6 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     napi_handle_scope handleScope;
     napi_open_handle_scope(env, &handleScope);
 
-    Constants::Init(env);
-
     env_to_runtime_cache.emplace(env, this);
 
     napi_value global;
@@ -335,7 +333,6 @@ ObjectManager *Runtime::GetObjectManager() const {
 }
 
 Runtime::~Runtime() {
-    Constants::DeInit(this->env);
     delete this->m_objectManager;
     delete this->m_loopTimer;
 
@@ -389,7 +386,7 @@ void Runtime::AdjustAmountOfExternalAllocatedMemory() {
     int64_t externalMemory = 0;
 
     if (changeInBytes != 0) {
-//        js_adjust_external_memory(env, changeInBytes, &externalMemory);
+       js_adjust_external_memory(env, changeInBytes, &externalMemory);
     }
 
     DEBUG_WRITE("usedMemory=%" PRId64 " changeInBytes=%" PRId64 " externalMemory=%" PRId64, usedMemory, changeInBytes, externalMemory);
@@ -398,17 +395,16 @@ void Runtime::AdjustAmountOfExternalAllocatedMemory() {
 }
 
 bool Runtime::TryCallGC() {
+    napi_value global;
+    napi_get_global(env, &global);
     if (!m_gcFunc) {
         napi_value gc;
-        napi_value global;
-        napi_get_global(env, &global);
         napi_get_named_property(env, global, "gc", &gc);
-        m_gcFunc = napi_util::make_ref(env, gc);
+        if (napi_util::is_null_or_undefined(env, gc)) return true;
+        napi_create_reference(env, gc, 1, &m_gcFunc);
     }
     napi_value result;
-    napi_call_function(env, nullptr, napi_util::get_ref_value(env, m_gcFunc), 0, nullptr, &result);
-    napi_value ex;
-    napi_get_and_clear_last_exception(env, &ex);
+    napi_call_function(env, global, napi_util::get_ref_value(env, m_gcFunc), 0, nullptr, &result);
     return true;
 }
 
@@ -416,7 +412,6 @@ void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
     JEnv jEnv(_jEnv);
     string filePath = ArgConverter::jstringToString(scriptFile);
     JSEnter
-
     m_module.Load(env, filePath);
     JSLeave
 }

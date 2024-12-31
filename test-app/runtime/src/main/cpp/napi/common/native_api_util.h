@@ -3,8 +3,9 @@
 
 #include "js_native_api.h"
 #include <dlfcn.h>
-#include "Constants.h"
 #include <sstream>
+
+#define NAPI_EXPORT __attribute__((visibility("default")))
 
 #ifndef NAPI_PREAMBLE
 #define NAPI_PREAMBLE napi_status status;
@@ -119,12 +120,12 @@ namespace napi_util {
 
     inline napi_value get__proto__(napi_env env, napi_value object) {
         napi_value proto;
-        napi_get_property(env, object, Constants::Get(env)->protoValue(env), &proto);
+        napi_get_named_property(env, object, "__proto__", &proto);
         return proto;
     }
 
     inline void set__proto__(napi_env env, napi_value object, napi_value __proto__) {
-        napi_set_property(env, object, Constants::Get(env)->protoValue(env), __proto__);
+        napi_set_named_property(env, object, "__proto__", __proto__);
     }
 
     inline napi_value getPrototypeOf(napi_env env, napi_value object) {
@@ -135,12 +136,12 @@ namespace napi_util {
 
     inline napi_value get_prototype(napi_env env, napi_value object) {
         napi_value prototype;
-        napi_get_property(env, object, Constants::Get(env)->prototypeValue(env), &prototype);
+        napi_get_named_property(env, object, "prototype", &prototype);
         return prototype;
     }
 
     inline void set_prototype(napi_env env, napi_value object, napi_value prototype) {
-        napi_set_property(env, object, Constants::Get(env)->prototypeValue(env), prototype);
+        napi_set_named_property(env, object, "prototype", prototype);
     }
 
     inline char *get_string_value(napi_env env, napi_value str, size_t size = 0) {
@@ -151,23 +152,6 @@ namespace napi_util {
         char *buffer = new char[str_size + 1];
         napi_get_value_string_utf8(env, str, buffer, str_size + 1, nullptr);
         return buffer;
-    }
-
-    inline napi_status define_property_named(napi_env env, napi_value object, napi_value propertyName,
-                                       napi_value value = nullptr, napi_callback getter = nullptr,
-                                       napi_callback setter = nullptr, void *data = nullptr) {
-        napi_property_descriptor desc = {
-                nullptr, // utf8name
-                propertyName,      // name
-                nullptr,      // method
-                getter,       // getter
-                setter,       // setter
-                value,        // value
-                napi_default, // attributes
-                data          // data
-        };
-
-        return napi_define_properties(env, object, 1, &desc);
     }
 
     inline napi_status define_property(napi_env env, napi_value object, const char *propertyName,
@@ -233,14 +217,14 @@ namespace napi_util {
         napi_value numberCtor;
         napi_value global;
         napi_get_global(env, &global);
-        napi_get_property(env, global, Constants::Get(env)->numberValue(env), &numberCtor);
+        napi_get_named_property(env, global, "Number", &numberCtor);
         napi_instanceof(env, value, numberCtor, &result);
         return result;
     }
 
     inline napi_value valueOf(napi_env env, napi_value value) {
         napi_value valueOf, result;
-        napi_get_property(env, value, Constants::Get(env)->valueOfValue(env), &valueOf);
+        napi_get_named_property(env, value, "valueOf", &valueOf);
         napi_call_function(env, value, valueOf, 0, nullptr, &result);
         return result;
     }
@@ -250,7 +234,7 @@ namespace napi_util {
         napi_value stringCtor;
         napi_value global;
         napi_get_global(env, &global);
-        napi_get_property(env, global, Constants::Get(env)->stringValue(env), &stringCtor);
+        napi_get_named_property(env, global, "String", &stringCtor);
         napi_instanceof(env, value, stringCtor, &result);
         return result;
     }
@@ -260,7 +244,7 @@ namespace napi_util {
         napi_value booleanCtor;
         napi_value global;
         napi_get_global(env, &global);
-        napi_get_property(env, global, Constants::Get(env)->booleanValue(env), &booleanCtor);
+        napi_get_named_property(env, global, "Boolean", &booleanCtor);
         napi_instanceof(env, value, booleanCtor, &result);
         return result;
     }
@@ -337,11 +321,11 @@ namespace napi_util {
 #else
         napi_value global, number, is_int, result;
         napi_get_global(env, &global);
-        napi_get_property(env, global, Constants::Get(env)->numberValue(env), &number);
-        napi_get_property(env, number, Constants::Get(env)->isIntegerValue(env), &is_int);
+        napi_get_named_property(env, global, "Number", &number);
+        napi_get_named_property(env, number, "isInteger", &is_int);
         napi_call_function(env, number, is_int, 1, &value, &result);
 
-        return !napi_util::get_bool(env, result);
+        return napi_util::get_bool(env, result) == false;
 #endif
     }
 
@@ -449,10 +433,10 @@ namespace napi_util {
         napi_value argv[2];
 
         napi_get_global(env, &global);
-        napi_get_property(env, global, Constants::Get(env)->objectValue(env), &global_object);
-        napi_get_property(env, global_object, Constants::Get(env)->setPrototypeOfValue(env), &set_proto);
-        napi_get_property(env, ctor, Constants::Get(env)->prototypeValue(env), &ctor_proto_prop);
-        napi_get_property(env, super_ctor, Constants::Get(env)->prototypeValue(env), &super_ctor_proto_prop);
+        napi_get_named_property(env, global, OBJECT, &global_object);
+        napi_get_named_property(env, global_object, SET_PROTOTYPE_OF, &set_proto);
+        napi_get_named_property(env, ctor, PROTOTYPE, &ctor_proto_prop);
+        napi_get_named_property(env, super_ctor, PROTOTYPE, &super_ctor_proto_prop);
 
         bool exception;
 

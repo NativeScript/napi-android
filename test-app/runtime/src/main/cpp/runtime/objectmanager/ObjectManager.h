@@ -60,13 +60,13 @@ namespace tns {
         inline static void MarkObject(napi_env env, napi_value object) {
             napi_value marker;
             napi_get_boolean(env, true, &marker);
-            napi_set_property(env, object, Constants::Get(env)->privateIsNapiValue(env), marker);
+            napi_set_named_property(env, object, PRIVATE_IS_NAPI, marker);
         }
 
         inline static void MarkSuperCall(napi_env env, napi_value object) {
             napi_value marker;
             napi_get_boolean(env, true, &marker);
-            napi_set_property(env, object, Constants::Get(env)->privateCallSuperValue(env), marker);
+            napi_set_named_property(env, object, PRIVATE_CALLSUPER, marker);
         }
 
         void OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids);
