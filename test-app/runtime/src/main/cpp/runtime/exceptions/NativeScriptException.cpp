@@ -62,6 +62,8 @@ void NativeScriptException::ReThrowToNapi(napi_env env) {
     }
 
     napi_throw(env, errObj);
+
+//    JSLeave
 }
 
 void NativeScriptException::ReThrowToJava(napi_env env) {
@@ -198,7 +200,8 @@ napi_value NativeScriptException::GetJavaExceptionFromEnv(napi_env env, const Jn
 
     napi_value msg = ArgConverter::convertToJsString(env, errMsg);
     napi_value errObj;
-    napi_create_error(env, nullptr, msg, &errObj);
+    napi_value code = ArgConverter::convertToJsString(env, "0", 1);
+    napi_create_error(env, code, msg, &errObj);
 
     jint javaObjectID = objectManager->GetOrCreateObjectId((jobject)exc);
     auto nativeExceptionObject = objectManager->GetJsObjectByJavaObject(javaObjectID);

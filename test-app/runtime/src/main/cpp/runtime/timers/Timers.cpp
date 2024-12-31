@@ -279,6 +279,7 @@ int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
 
     auto it = thiz->timerMap_.find(timerId);
     if (it != thiz->timerMap_.end()) {
+        JSEnter
         auto task = it->second;
         // task is no longer in queue to be executed
         task->queued_ = false;
@@ -291,6 +292,7 @@ int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
             task->startTime_ = task->dueTime_;
             thiz->addTask(task);
         }
+
 
         napi_value cb = napi_util::get_ref_value(env, task->callback_);
         size_t argc = task->args_ == nullptr ? 0 : task->args_->size();
@@ -317,6 +319,8 @@ int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
             }
             napi_delete_reference(env, task->thisArg);
         }
+
+        JSLeave
 
         thiz->nesting = 0;
     }
