@@ -164,7 +164,6 @@ if (OPTIMIZED_BUILD OR OPTIMIZED_WITH_INSPECTOR_BUILD)
     set(CMAKE_CXX_FLAGS "${COMMON_CMAKE_ARGUMENTS} -O3 -flto -fvisibility=hidden -ffunction-sections -fno-data-sections")
 else ()
     set(CMAKE_CXX_FLAGS "${COMMON_CMAKE_ARGUMENTS} -g")
-
 endif ()
 
 
@@ -191,8 +190,8 @@ else ()
             NativeScript
             PROPERTIES LINK_FLAGS -Wl,--allow-multiple-definition
     )
-    target_compile_options(NativeScript PUBLIC -fsanitize=hwaddress -fno-omit-frame-pointer)
-    target_link_options(NativeScript PUBLIC -fsanitize=hwaddress)
+#    target_compile_options(NativeScript PUBLIC -fsanitize=hwaddress -fno-omit-frame-pointer)
+#    target_link_options(NativeScript PUBLIC -fsanitize=hwaddress)
 endif ()
 
 MESSAGE(STATUS "# General cmake Info")

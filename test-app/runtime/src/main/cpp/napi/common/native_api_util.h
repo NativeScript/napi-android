@@ -135,12 +135,12 @@ namespace napi_util {
 
     inline napi_value get_prototype(napi_env env, napi_value object) {
         napi_value prototype;
-        napi_get_property(env, object, Constants::Get(env)->privateJsInfoValue, &prototype);
+        napi_get_property(env, object, Constants::Get(env)->prototypeValue, &prototype);
         return prototype;
     }
 
     inline void set_prototype(napi_env env, napi_value object, napi_value prototype) {
-        napi_set_property(env, object, Constants::Get(env)->privateJsInfoValue, prototype);
+        napi_set_property(env, object, Constants::Get(env)->prototypeValue, prototype);
     }
 
     inline char *get_string_value(napi_env env, napi_value str, size_t size = 0) {

@@ -48,8 +48,8 @@ napi_status Constants::Init(napi_env env) {
         napi_create_string_utf8(env, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, NAPI_AUTO_LENGTH, &instance->isPrototypeImplementationObjectValue);
         napi_create_string_utf8(env, PROP_KEY_PROTOTYPE, NAPI_AUTO_LENGTH, &instance->prototypeValue);
         napi_create_string_utf8(env, PROP_KEY_CONSTRUCTOR, NAPI_AUTO_LENGTH, &instance->constructorValue);
-        napi_create_string_utf8(env, "name", NAPI_AUTO_LENGTH, &instance->nameValue);
 
+        napi_create_string_utf8(env, "name", NAPI_AUTO_LENGTH, &instance->nameValue);
         napi_create_string_utf8(env, "Object", NAPI_AUTO_LENGTH, &instance->objectValue);
         napi_create_string_utf8(env, "Number", NAPI_AUTO_LENGTH, &instance->numberValue);
         napi_create_string_utf8(env, "isInteger", NAPI_AUTO_LENGTH, &instance->isIntegerValue);

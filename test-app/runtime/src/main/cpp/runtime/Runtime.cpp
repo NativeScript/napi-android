@@ -165,10 +165,17 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 
     js_create_runtime(&rt);
     js_create_napi_env(&env, rt);
-
-    JSEnter
-
+#ifdef __V8__
+    v8::Locker locker(env->isolate);
+    v8::Isolate::Scope isolate_scope(env->isolate);
+    v8::Context::Scope context_scope(env->context());
+#endif
     napi_open_handle_scope(env, &global_scope);
+    Constants::Init(env);
+
+    napi_handle_scope handleScope;
+    napi_open_handle_scope(env, &handleScope);
+
     env_to_runtime_cache.emplace(env, this);
 
     napi_value global;
@@ -183,7 +190,6 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 #else
     Console::createConsole(env, nullptr, maxLogcatObjectSize, forceLog);
 #endif
-
 
     Timers::InitStatic(env, global);
 
@@ -221,6 +227,7 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     CallbackHandlers::Init(env);
 
     ArgConverter::Init(env);
+
 
     m_objectManager->Init(env);
 
@@ -328,6 +335,7 @@ ObjectManager *Runtime::GetObjectManager() const {
 }
 
 Runtime::~Runtime() {
+    Constants::DeInit(this->env);
     delete this->m_objectManager;
     delete this->m_loopTimer;
 
@@ -381,7 +389,7 @@ void Runtime::AdjustAmountOfExternalAllocatedMemory() {
     int64_t externalMemory = 0;
 
     if (changeInBytes != 0) {
-        js_adjust_external_memory(env, changeInBytes, &externalMemory);
+//        js_adjust_external_memory(env, changeInBytes, &externalMemory);
     }
 
     DEBUG_WRITE("usedMemory=%" PRId64 " changeInBytes=%" PRId64 " externalMemory=%" PRId64, usedMemory, changeInBytes, externalMemory);

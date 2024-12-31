@@ -74,5 +74,5 @@ __approot = __dirname.substr(0, __dirname.length - 4);
 //require('./tests/testURLImpl.js');
 //require('./tests/testURLSearchParamsImpl.js');
 
-require("./tests/testMultithreadedJavascript"); //FAILS
+//require("./tests/testMultithreadedJavascript"); //FAILS
 

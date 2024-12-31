@@ -1224,7 +1224,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     napi_create_function(env, nullptr, 0, ExtendMethodCallback, this,
                          &extendMethod);
     napi_set_property(env, extendMethod, Constants::Get(env)->nameValue, Constants::Get(env)->extendValue);
-    napi_set_property(env, constructor, Constants::Get(env)->classImplementationObjectValue, extendMethod);
+    napi_set_property(env, constructor, Constants::Get(env)->extendValue, extendMethod);
 
     // get candidates from static fields metadata
     auto staticFieldCout = *reinterpret_cast<uint16_t *>(curPtr);
