@@ -5,6 +5,10 @@
 #include <unordered_map>
 #include <js_native_api.h>
 
+#define PROP(name) \
+    napi_ref name##ValueRef; \
+    napi_value name##Value(napi_env env);
+
 class Constants {
 public:
     const static char CLASS_NAME_LOCATION_SEPARATOR = '_';
@@ -12,37 +16,34 @@ public:
     static std::string V8_STARTUP_FLAGS;
 
     static napi_status Init(napi_env env);
-
     static Constants *Get(napi_env env);
-
     static void DeInit(napi_env env);
 
-    napi_value extendValue;
-    napi_value nullObjectValue;
-    napi_value nullNodeNameValue;
-    napi_value valueOfValue;
-    napi_value classValue;
-    napi_value privateTypeNameValue;
-    napi_value classImplementationObjectValue;
-    napi_value superValue;
-    napi_value superValueValue;
-    napi_value privateJsInfoValue;
-    napi_value privateCallSuperValue;
-    napi_value privateIsNapiValue;
-    napi_value toStringValue;
-    napi_value isPrototypeImplementationObjectValue;
-    napi_value prototypeValue;
-    napi_value constructorValue;
-    napi_value nameValue;
-    napi_value objectValue;
-    napi_value numberValue;
-    napi_value isIntegerValue;
-    napi_value setPrototypeOf;
-    napi_value stringValue;
-    napi_value booleanValue;
-    napi_value protoValue;
-    napi_value valueValue;
-
+    PROP(extend)
+    PROP(nullObject)
+    PROP(nullNodeName)
+    PROP(valueOf)
+    PROP(cls)
+    PROP(privateTypeName)
+    PROP(classImplementationObject)
+    PROP(super)
+    PROP(superValue)
+    PROP(privateJsInfo)
+    PROP(privateCallSuper)
+    PROP(privateIsNapi)
+    PROP(toString)
+    PROP(isPrototypeImplementationObject)
+    PROP(prototype)
+    PROP(constructor)
+    PROP(name)
+    PROP(object)
+    PROP(number)
+    PROP(isInteger)
+    PROP(setPrototypeOf)
+    PROP(string)
+    PROP(boolean)
+    PROP(proto)
+    PROP(value)
 
 private:
     Constants();

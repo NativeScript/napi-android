@@ -301,7 +301,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         }
 
                         napi_value nullNode;
-                        napi_get_property(env, arg, Constants::Get(env)->nullNodeNameValue, &nullNode);
+                        napi_get_property(env, arg, Constants::Get(env)->nullNodeNameValue(env), &nullNode);
                         if (!napi_util::is_null_or_undefined(env, nullNode)) {
                             SetConvertedObject(index, nullptr);
                             success = true;

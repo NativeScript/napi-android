@@ -33,8 +33,8 @@ void ArgConverter::Init(napi_env env) {
                          &toStringFunc);
 
 
-    napi_set_property(env, longNumberPrototype, Constants::Get(env)->valueOfValue, valueOfFunc);
-    napi_set_property(env, longNumberPrototype, Constants::Get(env)->toStringValue, toStringFunc);
+    napi_set_property(env, longNumberPrototype, Constants::Get(env)->valueOfValue(env), valueOfFunc);
+    napi_set_property(env, longNumberPrototype, Constants::Get(env)->toStringValue(env), toStringFunc);
 
     cache->LongNumberCtorFunc = napi_util::make_ref(env, longNumberCtorFunc, 1);
     napi_value nanValue;
@@ -45,7 +45,7 @@ void ArgConverter::Init(napi_env env) {
     napi_get_global(env, &global);
 
     napi_value numCtor;
-    napi_get_property(env, global, Constants::Get(env)->numberValue, &numCtor);
+    napi_get_property(env, global, Constants::Get(env)->numberValue(env), &numCtor);
 
     napi_value nanObject;
     napi_new_instance(env, numCtor, 1, &nanValue, &nanObject);
@@ -78,7 +78,7 @@ napi_value ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, 
         napi_get_cb_info(env, info, nullptr, nullptr, &thisArg, nullptr);
 
         napi_value value;
-        napi_get_property(env, thisArg, Constants::Get(env)->valueValue, &value);
+        napi_get_property(env, thisArg, Constants::Get(env)->valueValue(env), &value);
 
         return value;
     } catch (NativeScriptException &e) {
@@ -105,7 +105,7 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
 
         NumericCasts::MarkAsLong(env, jsThis, argv[0]);
 
-        napi_set_property(env, jsThis, Constants::Get(env)->prototypeValue, napi_util::get_ref_value(env, cache->NanNumberObject));
+        napi_set_property(env, jsThis, Constants::Get(env)->prototypeValue(env), napi_util::get_ref_value(env, cache->NanNumberObject));
         return jsThis;
 
     } catch (NativeScriptException &e) {
@@ -216,7 +216,7 @@ napi_value ArgConverter::ConvertFromJavaLong(napi_env env, jlong value) {
 
 int64_t ArgConverter::ConvertToJavaLong(napi_env env, napi_value value) {
     napi_value valueProp;
-    napi_get_property(env, value, Constants::Get(env)->valueValue, &valueProp);
+    napi_get_property(env, value, Constants::Get(env)->valueValue(env), &valueProp);
 
     size_t str_len;
     napi_get_value_string_utf8(env, valueProp, nullptr, 0, &str_len);

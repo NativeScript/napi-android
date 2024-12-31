@@ -17,52 +17,111 @@
 #define  PROP_KEY_PROTOTYPE "prototype"
 #define  PROP_KEY_CONSTRUCTOR "constructor"
 
+#define DEFINE_PROP(env, propStr, fieldName)            \
+do {                                                   \
+    napi_value localVal = nullptr;                     \
+    napi_create_string_utf8(env, propStr, NAPI_AUTO_LENGTH, &localVal); \
+    napi_create_reference(env, localVal, 1, &fieldName); \
+} while(0)
+
+#define PROP_GETTER(propName)                                      \
+napi_value Constants::propName##Value(napi_env env) {                     \
+    napi_value val = nullptr;                                      \
+    napi_get_reference_value(env, propName##ValueRef, &val);            \
+    return val;                                                    \
+}
+
 std::unordered_map<napi_env, Constants*> Constants::s_constantsMap;
 std::string Constants::APP_ROOT_FOLDER_PATH;
 std::string Constants::V8_STARTUP_FLAGS;
 
 Constants::Constants()
-    : extendValue(nullptr), nullObjectValue(nullptr), nullNodeNameValue(nullptr),
-      valueOfValue(nullptr), classValue(nullptr), privateTypeNameValue(nullptr),
-      classImplementationObjectValue(nullptr), superValue(nullptr), superValueValue(nullptr),
-      privateJsInfoValue(nullptr), privateCallSuperValue(nullptr), privateIsNapiValue(nullptr),
-      toStringValue(nullptr), isPrototypeImplementationObjectValue(nullptr) {}
+    : extendValueRef(nullptr),
+      nullObjectValueRef(nullptr),
+      nullNodeNameValueRef(nullptr),
+      valueOfValueRef(nullptr),
+      clsValueRef(nullptr),
+      privateTypeNameValueRef(nullptr),
+      classImplementationObjectValueRef(nullptr),
+      superValueRef(nullptr),
+      superValueValueRef(nullptr),
+      privateJsInfoValueRef(nullptr),
+      privateCallSuperValueRef(nullptr),
+      privateIsNapiValueRef(nullptr),
+      toStringValueRef(nullptr),
+      isPrototypeImplementationObjectValueRef(nullptr),
+      prototypeValueRef(nullptr),
+      constructorValueRef(nullptr),
+      nameValueRef(nullptr),
+      objectValueRef(nullptr),
+      numberValueRef(nullptr),
+      isIntegerValueRef(nullptr),
+      setPrototypeOfValueRef(nullptr),
+      stringValueRef(nullptr),
+      booleanValueRef(nullptr),
+      protoValueRef(nullptr),
+      valueValueRef(nullptr) {}
 
 napi_status Constants::Init(napi_env env) {
     if (s_constantsMap.find(env) == s_constantsMap.end()) {
         auto* instance = new Constants();
 
-        napi_create_string_utf8(env, PROP_KEY_EXTEND, NAPI_AUTO_LENGTH, &instance->extendValue);
-        napi_create_string_utf8(env, PROP_KEY_NULLOBJECT, NAPI_AUTO_LENGTH, &instance->nullObjectValue);
-        napi_create_string_utf8(env, PROP_KEY_NULL_NODE_NAME, NAPI_AUTO_LENGTH, &instance->nullNodeNameValue);
-        napi_create_string_utf8(env, PROP_KEY_VALUEOF, NAPI_AUTO_LENGTH, &instance->valueOfValue);
-        napi_create_string_utf8(env, PROP_KEY_CLASS, NAPI_AUTO_LENGTH, &instance->classValue);
-        napi_create_string_utf8(env, PRIVATE_TYPE_NAME, NAPI_AUTO_LENGTH, &instance->privateTypeNameValue);
-        napi_create_string_utf8(env, CLASS_IMPLEMENTATION_OBJECT, NAPI_AUTO_LENGTH, &instance->classImplementationObjectValue);
-        napi_create_string_utf8(env, PROP_KEY_SUPER, NAPI_AUTO_LENGTH, &instance->superValue);
-        napi_create_string_utf8(env, PROP_KEY_SUPERVALUE, NAPI_AUTO_LENGTH, &instance->superValueValue);
-        napi_create_string_utf8(env, PRIVATE_JSINFO, NAPI_AUTO_LENGTH, &instance->privateJsInfoValue);
-        napi_create_string_utf8(env, PRIVATE_CALLSUPER, NAPI_AUTO_LENGTH, &instance->privateCallSuperValue);
-        napi_create_string_utf8(env, PRIVATE_IS_NAPI, NAPI_AUTO_LENGTH, &instance->privateIsNapiValue);
-        napi_create_string_utf8(env, PROP_KEY_TOSTRING, NAPI_AUTO_LENGTH, &instance->toStringValue);
-        napi_create_string_utf8(env, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, NAPI_AUTO_LENGTH, &instance->isPrototypeImplementationObjectValue);
-        napi_create_string_utf8(env, PROP_KEY_PROTOTYPE, NAPI_AUTO_LENGTH, &instance->prototypeValue);
-        napi_create_string_utf8(env, PROP_KEY_CONSTRUCTOR, NAPI_AUTO_LENGTH, &instance->constructorValue);
-
-        napi_create_string_utf8(env, "name", NAPI_AUTO_LENGTH, &instance->nameValue);
-        napi_create_string_utf8(env, "Object", NAPI_AUTO_LENGTH, &instance->objectValue);
-        napi_create_string_utf8(env, "Number", NAPI_AUTO_LENGTH, &instance->numberValue);
-        napi_create_string_utf8(env, "isInteger", NAPI_AUTO_LENGTH, &instance->isIntegerValue);
-        napi_create_string_utf8(env, "String", NAPI_AUTO_LENGTH, &instance->stringValue);
-        napi_create_string_utf8(env, "Boolean", NAPI_AUTO_LENGTH, &instance->booleanValue);
-        napi_create_string_utf8(env, "setPrototypeOf", NAPI_AUTO_LENGTH, &instance->setPrototypeOf);
-        napi_create_string_utf8(env, "__proto__", NAPI_AUTO_LENGTH, &instance->protoValue);
-        napi_create_string_utf8(env, "value", NAPI_AUTO_LENGTH, &instance->valueValue);
+        DEFINE_PROP(env, PROP_KEY_EXTEND, instance->extendValueRef);
+        DEFINE_PROP(env, PROP_KEY_NULLOBJECT, instance->nullObjectValueRef);
+        DEFINE_PROP(env, PROP_KEY_NULL_NODE_NAME, instance->nullNodeNameValueRef);
+        DEFINE_PROP(env, PROP_KEY_VALUEOF, instance->valueOfValueRef);
+        DEFINE_PROP(env, PROP_KEY_CLASS, instance->clsValueRef);
+        DEFINE_PROP(env, PRIVATE_TYPE_NAME, instance->privateTypeNameValueRef);
+        DEFINE_PROP(env, CLASS_IMPLEMENTATION_OBJECT, instance->classImplementationObjectValueRef);
+        DEFINE_PROP(env, PROP_KEY_SUPER, instance->superValueRef);
+        DEFINE_PROP(env, PROP_KEY_SUPERVALUE, instance->superValueValueRef);
+        DEFINE_PROP(env, PRIVATE_JSINFO, instance->privateJsInfoValueRef);
+        DEFINE_PROP(env, PRIVATE_CALLSUPER, instance->privateCallSuperValueRef);
+        DEFINE_PROP(env, PRIVATE_IS_NAPI, instance->privateIsNapiValueRef);
+        DEFINE_PROP(env, PROP_KEY_TOSTRING, instance->toStringValueRef);
+        DEFINE_PROP(env, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, instance->isPrototypeImplementationObjectValueRef);
+        DEFINE_PROP(env, PROP_KEY_PROTOTYPE, instance->prototypeValueRef);
+        DEFINE_PROP(env, PROP_KEY_CONSTRUCTOR, instance->constructorValueRef);
+        DEFINE_PROP(env, "name", instance->nameValueRef);
+        DEFINE_PROP(env, "Object", instance->objectValueRef);
+        DEFINE_PROP(env, "Number", instance->numberValueRef);
+        DEFINE_PROP(env, "isInteger", instance->isIntegerValueRef);
+        DEFINE_PROP(env, "setPrototypeOf", instance->setPrototypeOfValueRef);
+        DEFINE_PROP(env, "String", instance->stringValueRef);
+        DEFINE_PROP(env, "Boolean", instance->booleanValueRef);
+        DEFINE_PROP(env, "__proto__", instance->protoValueRef);
+        DEFINE_PROP(env, "value", instance->valueValueRef);
 
         s_constantsMap[env] = instance;
     }
     return napi_ok;
 }
+
+PROP_GETTER(extend)
+PROP_GETTER(nullObject)
+PROP_GETTER(nullNodeName)
+PROP_GETTER(valueOf)
+PROP_GETTER(cls)
+PROP_GETTER(privateTypeName)
+PROP_GETTER(classImplementationObject)
+PROP_GETTER(super)
+PROP_GETTER(superValue)
+PROP_GETTER(privateJsInfo)
+PROP_GETTER(privateCallSuper)
+PROP_GETTER(privateIsNapi)
+PROP_GETTER(toString)
+PROP_GETTER(isPrototypeImplementationObject)
+PROP_GETTER(prototype)
+PROP_GETTER(constructor)
+PROP_GETTER(name)
+PROP_GETTER(object)
+PROP_GETTER(number)
+PROP_GETTER(isInteger)
+PROP_GETTER(setPrototypeOf)
+PROP_GETTER(string)
+PROP_GETTER(boolean)
+PROP_GETTER(proto)
+PROP_GETTER(value)
 
 Constants* Constants::Get(napi_env env) {
     auto it = s_constantsMap.find(env);

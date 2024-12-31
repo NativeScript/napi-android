@@ -322,7 +322,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 }
 
                 napi_value privateValue;
-                napi_get_property(env, jsObj, Constants::Get(env)->nullNodeNameValue, &privateValue);
+                napi_get_property(env, jsObj, Constants::Get(env)->nullNodeNameValue(env), &privateValue);
 
                 if (!napi_util::is_null_or_undefined(env, privateValue)) {
                     void* data;

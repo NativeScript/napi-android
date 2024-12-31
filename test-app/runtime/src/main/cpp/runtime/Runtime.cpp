@@ -171,10 +171,10 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     v8::Context::Scope context_scope(env->context());
 #endif
     napi_open_handle_scope(env, &global_scope);
-    Constants::Init(env);
-
     napi_handle_scope handleScope;
     napi_open_handle_scope(env, &handleScope);
+
+    Constants::Init(env);
 
     env_to_runtime_cache.emplace(env, this);
 

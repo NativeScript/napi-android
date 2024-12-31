@@ -732,8 +732,6 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data) 
         return 1;
     }
 
-
-
     napi_env env = it->second.env_;
     napi_ref callback_ref = it->second.callback_;
 
@@ -959,8 +957,6 @@ vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index) 
 napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
                                           napi_value jsObject, const string &methodName,
                                           jobjectArray args) {
-
-
     JEnv jEnv(_jEnv);
     napi_value result;
     napi_value method;
