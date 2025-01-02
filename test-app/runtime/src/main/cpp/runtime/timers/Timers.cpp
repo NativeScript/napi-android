@@ -279,7 +279,7 @@ int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
 
     auto it = thiz->timerMap_.find(timerId);
     if (it != thiz->timerMap_.end()) {
-        JSEnter
+        NapiScope scope(env);
         auto task = it->second;
         // task is no longer in queue to be executed
         task->queued_ = false;
@@ -320,7 +320,6 @@ int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
             napi_delete_reference(env, task->thisArg);
         }
 
-        JSLeave
 
         thiz->nesting = 0;
     }

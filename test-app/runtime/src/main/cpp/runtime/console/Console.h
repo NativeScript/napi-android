@@ -6,14 +6,14 @@
 #define CONSOLE_H
 
 #include <js_native_api.h>
+#include "jsr.h"
 #include <string>
 #include <vector>
 #include <ArgConverter.h>
 #include <android/log.h>
 
-#ifdef APPLICATION_IN_DEBUG
-// #include "NetworkDomainCallbackHandlers.h"
-#include "JsV8InspectorClient.h"
+#ifdef __V8__
+#include <src/inspector/v8-console-message.h>
 #endif
 
 #ifdef __V8__
@@ -48,8 +48,8 @@ namespace tns {
 
         static void sendToADBLogcat(const std::string& log, android_LogPriority logPriority);
 #ifdef __V8__
-        static int sendToDevToolsFrontEnd(napi_env env, ConsoleAPIType method, napi_callback_info info);
-        static void sendToDevToolsFrontEnd(napi_env env, ConsoleAPIType method, const std::string& args);
+        static int sendToDevToolsFrontEnd(napi_env env, v8_inspector::ConsoleAPIType method, napi_callback_info info);
+        static void sendToDevToolsFrontEnd(napi_env env, v8_inspector::ConsoleAPIType method, const std::string& args);
 #endif
     };
 

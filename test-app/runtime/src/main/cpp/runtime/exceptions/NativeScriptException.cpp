@@ -67,7 +67,7 @@ void NativeScriptException::ReThrowToNapi(napi_env env) {
 }
 
 void NativeScriptException::ReThrowToJava(napi_env env) {
-    JSEnter
+    NapiScope scope(env);
     jthrowable ex = nullptr;
     JEnv jEnv;
 
@@ -111,7 +111,6 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
          ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_JSVALUE_CTOR_ID, (jstring)msg, (jstring)nullptr, (jlong)0));
     }
     jEnv.Throw(ex);
-    JSLeave
 }
 
 void NativeScriptException::Init() {

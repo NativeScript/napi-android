@@ -166,6 +166,7 @@ extern "C" JNIEXPORT jobject Java_com_tns_Runtime_callJSMethodNative(JNIEnv* _en
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToJava( runtime->GetNapiEnv());
     }
+
     return result;
 }
 
@@ -175,6 +176,7 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_createJSInstanceNative(JNIEnv* _e
     if (runtime == nullptr) {
         return;
     }
+
 
     try {
         runtime->CreateJSInstanceNative(_env, obj, javaObject, javaObjectID, className);
@@ -189,6 +191,7 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_createJSInstanceNative(JNIEnv* _e
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToJava( runtime->GetNapiEnv());
     }
+
 }
 
 extern "C" JNIEXPORT jint Java_com_tns_Runtime_generateNewObjectId(JNIEnv* env, jobject obj, jint runtimeId) {
@@ -214,13 +217,15 @@ extern "C" JNIEXPORT jint Java_com_tns_Runtime_generateNewObjectId(JNIEnv* env, 
     return 0;
 }
 
-extern "C" JNIEXPORT jboolean Java_com_tns_Runtime_notifyGc(JNIEnv* env, jobject obj, jint runtimeId, jintArray object_ids) {
+extern "C" JNIEXPORT jboolean Java_com_tns_Runtime_notifyGc(JNIEnv* jEnv, jobject obj, jint runtimeId, jintArray object_ids) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime == nullptr) {
         return JNI_FALSE;
     }
+    auto env = runtime->GetNapiEnv();
 
-    jboolean success = runtime->NotifyGC(env, obj, object_ids) ? JNI_TRUE : JNI_FALSE;
+    runtime->NotifyGC(jEnv, obj, object_ids);
+
     return true;
 }
 
@@ -238,14 +243,16 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_unlock(JNIEnv* env, jobject obj, 
     }
 }
 
-extern "C" JNIEXPORT void Java_com_tns_Runtime_passExceptionToJsNative(JNIEnv* env, jobject obj, jint runtimeId, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded) {
+extern "C" JNIEXPORT void Java_com_tns_Runtime_passExceptionToJsNative(JNIEnv* jEnv, jobject obj, jint runtimeId, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime == nullptr) {
         return;
     }
 
+    auto env = runtime->GetNapiEnv();
+
     try {
-        runtime->PassExceptionToJsNative(env, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded);
+        runtime->PassExceptionToJsNative(jEnv, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded);
     } catch (NativeScriptException& e) {
         e.ReThrowToJava(runtime->GetNapiEnv());
     } catch (std::exception e) {
@@ -257,6 +264,7 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_passExceptionToJsNative(JNIEnv* e
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToJava(runtime->GetNapiEnv());
     }
+
 }
 
 extern "C" JNIEXPORT jint Java_com_tns_Runtime_getPointerSize(JNIEnv* env, jclass obj) {

@@ -11,6 +11,7 @@ JSR::JSR() {
     threadSafeRuntime = facebook::hermes::makeThreadSafeHermesRuntime(config);
     rt = (facebook::hermes::HermesRuntime *)&threadSafeRuntime->getUnsafeRuntime();
 }
+std::unordered_map<napi_env, JSR*> JSR::env_to_jsr_cache;
 
 napi_status js_create_runtime(napi_runtime* runtime) {
     if (runtime == nullptr) return napi_invalid_arg;
@@ -22,23 +23,35 @@ napi_status js_create_runtime(napi_runtime* runtime) {
     return napi_ok;
 }
 
-napi_status jsr_lock_runtime(napi_runtime runtime) {
-    runtime->hermes->threadSafeRuntime->lock();
+napi_status js_lock_env(napi_env env) {
+    auto itFound = JSR::env_to_jsr_cache.find(env);
+    if (itFound == JSR::env_to_jsr_cache.end()) {
+        return napi_invalid_arg;
+    }
+
+    itFound->second->lock();
+
     return napi_ok;
 }
 
-napi_status jsr_unlock_runtime(napi_runtime runtime) {
-    runtime->hermes->threadSafeRuntime->unlock();
+napi_status js_unlock_env(napi_env env) {
+    auto itFound = JSR::env_to_jsr_cache.find(env);
+    if (itFound == JSR::env_to_jsr_cache.end()) {
+        return napi_invalid_arg;
+    }
+
+    itFound->second->unlock();
+
     return napi_ok;
 }
-
 napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
+    JSR::env_to_jsr_cache.insert(std::make_pair(*env, runtime->hermes));
+
     return runtime->hermes->rt->createNapiEnv( env);
 }
 
 napi_status js_free_napi_env(napi_env env) {
-//    return jsr_env_unref(env);
       return napi_ok;
 }
 
@@ -64,3 +77,19 @@ napi_status js_execute_pending_jobs(napi_env env) {
     bool result;
     return jsr_drain_microtasks(env, 0, &result);
 }
+
+napi_status js_get_engine_ptr(napi_env env, int64_t *engine_ptr) {
+    return napi_ok;
+}
+
+napi_status js_adjust_external_memory(napi_env env, int64_t changeInBytes, int64_t* externalMemory) {
+    return napi_ok;
+}
+
+napi_status js_cache_script(napi_env env, const char *source, const char *file) {
+    return napi_ok;
+}
+napi_status js_run_cached_script(napi_env env, const char * file, napi_value script, void* cache, napi_value *result) {
+    return napi_ok;
+}
+

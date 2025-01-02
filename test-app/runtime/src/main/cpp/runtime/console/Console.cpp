@@ -26,6 +26,7 @@ using namespace tns;
 #include <android/log.h>
 
 using namespace std;
+using namespace v8_inspector;
 
 const char *Console::LOG_TAG = "JS";
 std::map<napi_env, std::map<std::string, double>> Console::s_envToConsoleTimersMap;

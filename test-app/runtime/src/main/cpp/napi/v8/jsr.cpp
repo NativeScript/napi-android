@@ -26,10 +26,33 @@ JSR::JSR(): isolate(nullptr) {
 }
 v8::Platform* JSR::platform = nullptr;
 bool JSR::s_mainThreadInitialized = false;
+std::unordered_map<napi_env, JSR*> JSR::env_to_jsr_cache;
 
 napi_status js_create_runtime(napi_runtime *runtime) {
     if (!runtime) return napi_invalid_arg;
     *runtime = (napi_runtime) new JSR();
+
+    return napi_ok;
+}
+
+napi_status js_lock_env(napi_env env) {
+    auto itFound = JSR::env_to_jsr_cache.find(env);
+    if (itFound == JSR::env_to_jsr_cache.end()) {
+        return napi_invalid_arg;
+    }
+
+    itFound->second->lock();
+
+    return napi_ok;
+}
+
+napi_status js_unlock_env(napi_env env) {
+    auto itFound = JSR::env_to_jsr_cache.find(env);
+    if (itFound == JSR::env_to_jsr_cache.end()) {
+        return napi_invalid_arg;
+    }
+
+    itFound->second->unlock();
 
     return napi_ok;
 }
@@ -43,7 +66,7 @@ napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     v8::Local<v8::Context> context = v8::Context::New(jsr->isolate);
     v8::Context::Scope contextScope(context);
     *env = new NapiEnvironment(context, NAPI_VERSION);
-
+    JSR::env_to_jsr_cache.insert(std::make_pair(*env, jsr));
     return napi_ok;
 }
 
