@@ -38,7 +38,7 @@
 using namespace tns;
 using namespace std;
 
-bool tns::LogEnabled = true;
+bool tns::LogEnabled = false;
 
 void Runtime::Init(JavaVM *vm) {
     __android_log_print(ANDROID_LOG_INFO, "TNS.Runtime",

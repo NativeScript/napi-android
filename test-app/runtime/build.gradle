@@ -1,5 +1,6 @@
 apply plugin: 'com.android.library'
 
+// can be: "V8", "JSC", "HERMES", "QUICKJS"
 def jsEngine = "V8"
 if (project.hasProperty("engine")) {
     jsEngine = engine;
