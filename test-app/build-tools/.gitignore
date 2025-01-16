@@ -8,3 +8,4 @@ mdg-output-dir.txt
 mdg-java-dependencies.txt
 sbg-input-output-dirs.txt
 mdg-java-out.txt
+node_modules
