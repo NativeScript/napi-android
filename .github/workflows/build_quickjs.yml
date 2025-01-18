@@ -1,4 +1,4 @@
-name: Android CI
+name: Build with QuickJS
 
 on: workflow_dispatch
   
@@ -20,27 +20,15 @@ jobs:
   
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-        
-      - name: Build with V8
-        run: ./gradlew -Pengine=V8
-      
+
       - name: Build with QUICKJS
         run: ./gradlew -Pengine=QUICKJS
-      
-      - name: Build with JSC
-        run: ./gradlew -Pengine=JSC
-        
-      - name: Build with HERMES
-        run: ./gradlew -Pengine=HERMES
         
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release
           path: |
-            ./dist_v8
-            ./dist_jsc
-            ./dist_hermes
             ./dist_quickjs
 
     
