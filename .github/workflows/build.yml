@@ -21,8 +21,9 @@ jobs:
         cache: gradle
 
     - name: Install dependencies
-    - working-directory: test-app/build-tools/jsparser
-    - run: npm install
+      run: |
+        cd test-app/build-tools/jsparser
+        npm install
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
