@@ -73,7 +73,7 @@ namespace tns {
 
         void ReleaseNativeObject(napi_env env, napi_value object);
 
-        void ReleaseObjectNow(int javaObjectId);
+        inline static void ReleaseObjectNow(napi_env env, int javaObjectId);
 
     private:
         static napi_value JSObjectConstructorCallback(napi_env env, napi_callback_info info);

@@ -8,8 +8,7 @@
 #include "hermes/hermes.h"
 #include "hermes/hermes_api.h"
 #include "jsi/threadsafe.h"
-
-typedef struct NapiRuntime *napi_runtime;
+#include "jsr_common.h"
 
 class JSR {
 public:
@@ -26,23 +25,6 @@ public:
 
     static std::unordered_map<napi_env, JSR *> env_to_jsr_cache;
 };
-
-napi_status js_create_runtime(napi_runtime* runtime);
-napi_status js_lock_env(napi_env env);
-napi_status js_unlock_env(napi_env env);
-napi_status js_create_napi_env(napi_env* env, napi_runtime runtime);
-napi_status js_free_napi_env(napi_env env);
-napi_status js_free_runtime(napi_runtime runtime);
-napi_status js_execute_script(napi_env env,
-                              napi_value script,
-                              const char *file,
-                              napi_value *result);
-
-napi_status js_execute_pending_jobs(napi_env env);
-napi_status js_get_engine_ptr(napi_env env, int64_t *engine_ptr);
-napi_status js_adjust_external_memory(napi_env env, int64_t changeInBytes, int64_t* externalMemory);
-napi_status js_cache_script(napi_env env, const char *source, const char *file);
-napi_status js_run_cached_script(napi_env env, const char * file, napi_value script, void* cache, napi_value *result);
 
 class NapiScope {
 public:
@@ -64,7 +46,5 @@ private:
 };
 
 #define JSEnterScope
-#define JSEnter
-#define JSLeave
 
 #endif //TEST_APP_JSR_H

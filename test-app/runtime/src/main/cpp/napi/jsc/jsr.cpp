@@ -28,6 +28,10 @@ napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
 
 }
 
+napi_status js_set_runtime_flags(const char* flags) {
+    return napi_ok;
+}
+
 napi_status js_lock_env(napi_env env) {
     return napi_ok;
 }

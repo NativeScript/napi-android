@@ -6,7 +6,7 @@ import android.util.Log;
 public final class LogcatLogger implements Logger {
     private final static String DEFAULT_LOG_TAG = "TNS.Java";
 
-    private boolean enabled = true;
+    private boolean enabled = false;
 
     public LogcatLogger(Context context) {
         this.initLogging(context);
@@ -33,11 +33,9 @@ public final class LogcatLogger implements Logger {
     }
 
     private void initLogging(Context context) {
-        // setEnabled(true);
        boolean isDebuggableApp = Util.isDebuggableApp(context);
        if (isDebuggableApp) {
            String verboseLoggingProp = Util.readSystemProperty("nativescript.verbose.logging");
-
            if (Util.isPositive(verboseLoggingProp)) {
                setEnabled(true);
            }

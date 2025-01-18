@@ -28,7 +28,6 @@ napi_status js_lock_env(napi_env env) {
     if (itFound == JSR::env_to_jsr_cache.end()) {
         return napi_invalid_arg;
     }
-
     itFound->second->lock();
 
     return napi_ok;
@@ -39,7 +38,6 @@ napi_status js_unlock_env(napi_env env) {
     if (itFound == JSR::env_to_jsr_cache.end()) {
         return napi_invalid_arg;
     }
-
     itFound->second->unlock();
 
     return napi_ok;
@@ -49,6 +47,10 @@ napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     JSR::env_to_jsr_cache.insert(std::make_pair(*env, runtime->hermes));
 
     return runtime->hermes->rt->createNapiEnv( env);
+}
+
+napi_status js_set_runtime_flags(const char* flags) {
+    return napi_ok;
 }
 
 napi_status js_free_napi_env(napi_env env) {

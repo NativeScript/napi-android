@@ -1,10 +1,13 @@
 apply plugin: 'com.android.library'
 
 // can be: "V8", "JSC", "HERMES", "QUICKJS"
-def jsEngine = "V8"
-if (project.hasProperty("engine")) {
-    jsEngine = engine;
+def jsEngine = "HERMES"
+def hasEngine = project.hasProperty("engine")
+if (hasEngine) {
+    jsEngine = engine
 }
+
+printf("Compiling NativeScript with %s.\n", jsEngine)
 
 def optimized = project.hasProperty("optimized")
 if (optimized) {
@@ -171,16 +174,14 @@ android {
         packagingOptions {
             exclude "**/libjsc.so"
             exclude "**/libv8.so"
-            exclude "**/libjsi.so"
             exclude '**/libc++_shared.so'
-            exclude "**/libfbjni.so"
+            exclude '**/libfbjni.so'
         }
     } else if (jsEngine == "JSC") {
         packagingOptions {
             exclude "**/libv8android.so"
             exclude "**/libhermes.so"
             exclude "**/libjsi.so"
-            exclude "**/libfbjni.so"
         }
     } else if (jsEngine == "QUICKJS") {
         packagingOptions {
@@ -188,7 +189,6 @@ android {
             exclude "**/libhermes.so"
             exclude "**/libjsc.so"
             exclude "**/libjsi.so"
-            exclude "**/libfbjni.so"
         }
     }
 }

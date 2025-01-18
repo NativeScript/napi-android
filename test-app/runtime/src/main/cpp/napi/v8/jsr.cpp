@@ -3,7 +3,7 @@
 #include <libgen.h>
 #include <dlfcn.h>
 #include <sys/stat.h>
-#include <time.h>
+#include <ctime>
 #include <utime.h>
 
 using namespace v8;
@@ -18,7 +18,6 @@ JSR::JSR(): isolate(nullptr) {
     if (!JSR::s_mainThreadInitialized) {
         JSR::platform = v8::platform::NewDefaultPlatform().release();
         v8::V8::InitializePlatform(JSR::platform);
-        V8::SetFlagsFromString("--expose_gc");
         v8::V8::Initialize();
         JSR::s_mainThreadInitialized = true;
     }
@@ -32,6 +31,11 @@ napi_status js_create_runtime(napi_runtime *runtime) {
     if (!runtime) return napi_invalid_arg;
     *runtime = (napi_runtime) new JSR();
 
+    return napi_ok;
+}
+
+napi_status js_set_runtime_flags(const char* flags) {
+    V8::V8::SetFlagsFromString(flags);
     return napi_ok;
 }
 
@@ -61,12 +65,11 @@ napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
     JSR* jsr = (JSR*) runtime;
     v8::Locker locker(jsr->isolate);
-    v8::Isolate::Scope isolate_scope{jsr->isolate};
     v8::HandleScope handle_scope(jsr->isolate);
     v8::Local<v8::Context> context = v8::Context::New(jsr->isolate);
-    v8::Context::Scope contextScope(context);
-    *env = new NapiEnvironment(context, NAPI_VERSION);
+    *env = new NapiEnvironment(context, NAPI_VERSION_EXPERIMENTAL);
     JSR::env_to_jsr_cache.insert(std::make_pair(*env, jsr));
+
     return napi_ok;
 }
 
@@ -78,9 +81,7 @@ napi_status js_free_napi_env(napi_env env) {
 
 napi_status js_free_runtime(napi_runtime runtime) {
     JSR* jsr = (JSR*) runtime;
-    jsr->isolate->Dispose();
-    v8::V8::Dispose();
-    v8::V8::DisposePlatform();
+//    jsr->isolate->Dispose();
     delete jsr;
     return napi_ok;
 }
@@ -94,6 +95,7 @@ napi_status js_execute_script(napi_env env,
 }
 
 napi_status js_execute_pending_jobs(napi_env env) {
+    env->isolate->PerformMicrotaskCheckpoint();
     return napi_ok;
 }
 

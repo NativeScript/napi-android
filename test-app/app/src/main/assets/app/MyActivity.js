@@ -27,9 +27,8 @@ var MyActivity = (function (_super) {
     _super.apply(this, arguments);
   }
   MyActivity.prototype.onCreate = function (bundle) {
-    console.log("BUNDLE", typeof bundle);
     _super.prototype.onCreate.call(this, bundle);
-    // require('./tests/testsWithContext').run(this);
+//    require('./tests/testsWithContext').run(this);
     //run jasmine
 
 //    execute();
@@ -59,9 +58,7 @@ var MyActivity = (function (_super) {
     button.setOnClickListener(
       new android.view.View.OnClickListener("AppClickListener", {
         onClick: function () {
-          const now = performance.now();
           button.setBackgroundColor(colors[taps % colors.length]);
-          console.log(performance.now() - now);
           taps++;
         },
       })

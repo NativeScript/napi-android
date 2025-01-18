@@ -15,6 +15,10 @@ napi_status js_create_napi_env(napi_env *env, napi_runtime runtime) {
     return status;
 }
 
+napi_status js_set_runtime_flags(const char* flags) {
+    return napi_ok;
+}
+
 napi_status js_lock_env(napi_env env) {
     auto itFound = JSR::env_to_jsr_cache.find(env);
     if (itFound == JSR::env_to_jsr_cache.end()) {

@@ -40,17 +40,18 @@ var TerminalReporter = require('../jasmine-reporters/terminal_reporter').Termina
     },
 
     it: function(desc, func) {
-      if (func.length > 0) {
-        return env.it(desc, func);
-      } else {
-        return env.it(desc, function(done) {
-            func();
-            __ns__setTimeout(() => {
-                done();
-            }, 1)
-
-        })
-      }
+       return env.it(desc, func);
+//      if (func.length > 0) {
+//        return env.it(desc, func);
+//      } else {
+//        return env.it(desc, function(done) {
+//            func();
+//            __ns__setTimeout(() => {
+//                done();
+//            }, 1)
+//
+//        })
+//      }
     },
 
     xit: function(desc, func) {

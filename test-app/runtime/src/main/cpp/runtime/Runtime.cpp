@@ -157,12 +157,19 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     auto packageNameStr = ArgConverter::jstringToString(packageName);
     auto callingDirStr = ArgConverter::jstringToString(callingDir);
 
+
     Constants::APP_ROOT_FOLDER_PATH = filesRoot + "/app/";
 
     DEBUG_WRITE("Initializing NativeScript NAPI Runtime");
 
+    auto flags = ArgConverter::jstringToString(JniLocalRef(_env->GetObjectArrayElement(args, 0)));
+
+    JniLocalRef cacheCode(_env->GetObjectArrayElement(args, 1));
+    Constants::CACHE_COMPILED_CODE = (bool) cacheCode;
+
     JniLocalRef profilerOutputDir(_env->GetObjectArrayElement(args, 2));
 
+    js_set_runtime_flags(flags.c_str());
     js_create_runtime(&rt);
     js_create_napi_env(&env, rt);
 #ifdef __V8__

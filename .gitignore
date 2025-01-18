@@ -14,3 +14,7 @@
 .cxx
 local.properties
 dist
+dist_v8
+dist_quickjs
+dist_hermes
+dist_jsc
