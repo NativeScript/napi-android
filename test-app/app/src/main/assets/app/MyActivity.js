@@ -31,7 +31,7 @@ var MyActivity = (function (_super) {
 //    require('./tests/testsWithContext').run(this);
     //run jasmine
 
-//    execute();
+    //execute();
     var layout = new android.widget.LinearLayout(this);
     layout.setOrientation(1);
     this.setContentView(layout);

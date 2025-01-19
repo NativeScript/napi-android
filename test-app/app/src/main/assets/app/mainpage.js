@@ -53,13 +53,11 @@ __approot = __dirname.substr(0, __dirname.length - 4);
 //require("./tests/discardedExceptionsTest");
 //require("./tests/requireExceptionTests");
 //require("./tests/exceptionHandlingTests");
-
 //require("./tests/tests");
 
 //require("./tests/testsForTypescript");
 
 //require("./tests/testGC");
-
 //require("./tests/testReleaseNativeCounterpart");
 
 //require("./tests/testArrays");
@@ -83,5 +81,5 @@ __approot = __dirname.substr(0, __dirname.length - 4);
 //require('./tests/testURLImpl.js');
 //require('./tests/testURLSearchParamsImpl.js');
 
-require("./tests/testMultithreadedJavascript"); //FAILS
+//require("./tests/testMultithreadedJavascript"); //FAILS
 

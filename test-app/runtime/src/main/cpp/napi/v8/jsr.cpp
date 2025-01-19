@@ -183,3 +183,10 @@ napi_status js_run_cached_script(napi_env env, const char * file, napi_value scr
 
     return napi_ok;
 }
+
+napi_status js_get_runtime_version(napi_env env, napi_value* version) {
+
+    napi_create_string_utf8(env, "V8", NAPI_AUTO_LENGTH, version);
+
+    return napi_ok;
+}

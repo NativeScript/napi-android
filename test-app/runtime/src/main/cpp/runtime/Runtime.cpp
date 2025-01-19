@@ -209,9 +209,16 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     napi_util::napi_set_function(env, global, "__disableVerboseLogging",
                                  CallbackHandlers::DisableVerboseLoggingMethodCallback);
     napi_util::napi_set_function(env, global, "__exit", CallbackHandlers::ExitMethodCallback);
+
     napi_value rt_version;
-    napi_create_int32(env, 1, &rt_version);
+    napi_create_string_utf8(env, NATIVE_SCRIPT_RUNTIME_VERSION, NAPI_AUTO_LENGTH, &rt_version);
     napi_set_named_property(env, global, "__runtimeVersion", rt_version);
+
+    napi_value engine;
+    js_get_runtime_version(env, &engine);
+    napi_set_named_property(env, global, "__engine", engine);
+
+
     napi_util::napi_set_function(env, global, "__time", CallbackHandlers::TimeCallback);
     napi_util::napi_set_function(env, global, "__releaseNativeCounterpart",
                                  CallbackHandlers::ReleaseNativeCounterpartCallback);
@@ -317,6 +324,8 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     s_mainThreadInitialized = true;
 
     napi_close_handle_scope(env, handleScope);
+
+    DEBUG_WRITE("%s", "NativeScript Runtime Loaded!");
 }
 
 int Runtime::GetAndroidVersion() {
@@ -441,16 +450,24 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     auto filename = ArgConverter::jstringToString(scriptFile);
     auto src = ReadFileText(filename);
 
-
     napi_value soureCode;
     napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode);
 
     napi_value result;
     status = js_execute_script(env, soureCode, filename.c_str(), &result);
 
-    if (status != napi_ok) {
-        const napi_extended_error_info *info;
-        napi_get_last_error_info(env, &info);
+    bool pendingException;
+    napi_is_exception_pending(env, &pendingException);
+    if (status != napi_ok || pendingException) {
+        napi_value error = nullptr;
+        if (pendingException) {
+            napi_get_and_clear_last_exception(env, &error);
+        }
+        if (error) {
+            throw NativeScriptException(env, error, "Error running script " + filename);
+        } else {
+            throw NativeScriptException("Error running script " + filename);
+        }
     }
 
     return nullptr;

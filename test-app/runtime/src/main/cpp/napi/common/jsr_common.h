@@ -26,4 +26,6 @@ napi_status js_adjust_external_memory(napi_env env, int64_t changeInBytes, int64
 napi_status js_cache_script(napi_env env, const char *source, const char *file);
 napi_status js_run_cached_script(napi_env env, const char * file, napi_value script, void* cache, napi_value *result);
 
+napi_status js_get_runtime_version(napi_env env, napi_value* version);
+
 #endif //TEST_APP_JSR_COMMON_H

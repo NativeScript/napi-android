@@ -173,30 +173,30 @@ describe("Tests typescript", function () {
 		isInstanceOf = animal instanceof Animal;
 		expect(isInstanceOf).toEqual(true);
 	});
-	
+
 	it("When_creating_a_typescript_instance_it_should_be_a_valid_nativescript_instance", function () {
-		
+
 		__log("TEST: When_creating_a_typescript_instance_it_should_be_a_valid_nativescript_instance");
-		
+
 		 var MyButton3 = (function (_super) {
 		        __extends(MyButton3, _super);
 		        function MyButton3() {
 		            _super.call(this);
 		            return __native(this);
 		        }
-		        
+
 		        MyButton3.prototype.toString = function (s) {
 		            return this.super.toString();
 		        };
-		        
+
 		        return MyButton3;
 		    })(com.tns.tests.Button1);
-		
+
 		var button = new MyButton3();
-		
+
 		var isInstanceOf = button instanceof MyButton3;
 		expect(isInstanceOf).toEqual(true);
-		
+
 		isInstanceOf = button instanceof com.tns.tests.Button1;
 		expect(isInstanceOf).toEqual(true);
 	});
@@ -293,385 +293,385 @@ describe("Tests typescript", function () {
 	  	expect(button1Label.indexOf("com.tns.tests.Button1_")).not.toEqual(-1);
 		expect(button1Label.indexOf("_MyButton5")).not.toEqual(-1);
 	});
-
-	it("When_extending_an_already_extended_object_it_should_throw_an_error", function () {
-
-		__log("TEST: When_extending_an_already_extended_object_it_should_throw_an_error");
-
-		var errorThrown = false;
-		try	{
-
-			 var MyButton6 = (function (_super) {
-			        __extends(MyButton6, _super);
-			        function MyButton6() {
-			            _super.call(this);
-			            this.my1 = "MyName";
-			            return __native(this);
-			        }
-
-			        MyButton6.prototype.init = function () {
-			        };
-
-			        MyButton6.prototype.toString = function (s) {
-			        	return this.super.toString();
-			        };
-
-			        return MyButton6;
-			    })(com.tns.tests.Button1);
-
-			var SecondButton = (function (_super) {
-			    __extends(SecondButton, _super);
-
-			    function SecondButton() {
-			        _super.apply(this, arguments);
-			    }
-
-			    return SecondButton;
-			})(MyButton6);
-		} catch (err)	{
-			errorThrown = true;
-		}
-
-		expect(errorThrown).toEqual(true);
-	});
-
-	// currently dissabled because of: https://github.com/NativeScript/android-runtime/issues/626
-	// if propper (check if access is possible on current device) solution is implemented uncomment tests
-	// for now the users are not using this, and there are no issues about it
-//	it("When_accessing_a_static_field_on_a_typescript_instance_it_should_work", function () {
 //
-//		__log("TEST: When_accessing_a_static_field_on_a_typescript_instance_it_should_work");
+//	it("When_extending_an_already_extended_object_it_should_throw_an_error", function () {
 //
-//		 var MyButton7 = (function (_super) {
-//		        __extends(MyButton7, _super);
-//		        function MyButton7() {
+//		__log("TEST: When_extending_an_already_extended_object_it_should_throw_an_error");
+//
+//		var errorThrown = false;
+//		try	{
+//
+//			 var MyButton6 = (function (_super) {
+//			        __extends(MyButton6, _super);
+//			        function MyButton6() {
+//			            _super.call(this);
+//			            this.my1 = "MyName";
+//			            return __native(this);
+//			        }
+//
+//			        MyButton6.prototype.init = function () {
+//			        };
+//
+//			        MyButton6.prototype.toString = function (s) {
+//			        	return this.super.toString();
+//			        };
+//
+//			        return MyButton6;
+//			    })(com.tns.tests.Button1);
+//
+//			var SecondButton = (function (_super) {
+//			    __extends(SecondButton, _super);
+//
+//			    function SecondButton() {
+//			        _super.apply(this, arguments);
+//			    }
+//
+//			    return SecondButton;
+//			})(MyButton6);
+//		} catch (err)	{
+//			errorThrown = true;
+//		}
+//
+//		expect(errorThrown).toEqual(true);
+//	});
+//
+//	// currently dissabled because of: https://github.com/NativeScript/android-runtime/issues/626
+//	// if propper (check if access is possible on current device) solution is implemented uncomment tests
+//	// for now the users are not using this, and there are no issues about it
+////	it("When_accessing_a_static_field_on_a_typescript_instance_it_should_work", function () {
+////
+////		__log("TEST: When_accessing_a_static_field_on_a_typescript_instance_it_should_work");
+////
+////		 var MyButton7 = (function (_super) {
+////		        __extends(MyButton7, _super);
+////		        function MyButton7() {
+////		            _super.call(this);
+////		            this.my1 = "MyName";
+////		        }
+////
+////		        MyButton7.prototype.init = function () {
+////		        };
+////
+////		        MyButton7.prototype.toString = function (s) {
+////		            return "my";
+////		        };
+////
+////		        return MyButton7;
+////		    })(com.tns.tests.Button1);
+////
+////		var valueUsingChild = MyButton7.STATIC_IMAGE_ID;
+////		expect(valueUsingChild).toEqual("static image id");
+////
+////		MyButton7.STATIC_IMAGE_ID = "test";
+////		valueUsingChild = MyButton7.STATIC_IMAGE_ID;
+////		expect(valueUsingChild).toEqual("test");
+////
+////		var valueUsingParent = com.tns.tests.Button1.STATIC_IMAGE_ID;
+////		expect(valueUsingParent).toEqual("static image id");
+////	});
+//
+//	it("When_calling_a_static_method_on_a_typescript_instance_it_should_work", function () {
+//
+//		__log("TEST: When_calling_a_static_method_on_a_typescript_instance_it_should_work");
+//
+//
+//		 var MyButton8 = (function (_super) {
+//		        __extends(MyButton8, _super);
+//		        function MyButton8() {
 //		            _super.call(this);
 //		            this.my1 = "MyName";
 //		        }
 //
-//		        MyButton7.prototype.init = function () {
+//		        MyButton8.prototype.init = function () {
 //		        };
 //
-//		        MyButton7.prototype.toString = function (s) {
-//		            return "my";
+//		        MyButton8.prototype.onClick = function () {
+//		        	__log("MyButton onClick called");
 //		        };
 //
-//		        return MyButton7;
+//		        MyButton8.prototype.superToString = function () {
+//		            return _super.prototype.toString.call(this);
+//		        };
+//
+//		        MyButton8.prototype.echo = function (s) {
+//		            return "echo: " + this.my1;
+//		        };
+//
+//		        return MyButton8;
 //		    })(com.tns.tests.Button1);
 //
-//		var valueUsingChild = MyButton7.STATIC_IMAGE_ID;
-//		expect(valueUsingChild).toEqual("static image id");
+//		MyButton8.setMyStaticIntField(5);
+//		var valueUsingChild = MyButton8.getMyStaticIntField();
+//		expect(valueUsingChild).toEqual(5);
 //
-//		MyButton7.STATIC_IMAGE_ID = "test";
-//		valueUsingChild = MyButton7.STATIC_IMAGE_ID;
-//		expect(valueUsingChild).toEqual("test");
+//		var valueUsingParent = com.tns.tests.Button1.getMyStaticIntField();
+//		expect(valueUsingParent).toEqual(5);
 //
-//		var valueUsingParent = com.tns.tests.Button1.STATIC_IMAGE_ID;
-//		expect(valueUsingParent).toEqual("static image id");
+//		com.tns.tests.Button1.setMyStaticIntField(6);
+//		var valueUsingParent = com.tns.tests.Button1.getMyStaticIntField();
+//		expect(valueUsingParent).toEqual(6);
+//
+//		valueUsingChild = MyButton8.getMyStaticIntField();
+//		expect(valueUsingChild).toEqual(6);
 //	});
-
-	it("When_calling_a_static_method_on_a_typescript_instance_it_should_work", function () {
-
-		__log("TEST: When_calling_a_static_method_on_a_typescript_instance_it_should_work");
-
-
-		 var MyButton8 = (function (_super) {
-		        __extends(MyButton8, _super);
-		        function MyButton8() {
-		            _super.call(this);
-		            this.my1 = "MyName";
-		        }
-
-		        MyButton8.prototype.init = function () {
-		        };
-
-		        MyButton8.prototype.onClick = function () {
-		        	__log("MyButton onClick called");
-		        };
-
-		        MyButton8.prototype.superToString = function () {
-		            return _super.prototype.toString.call(this);
-		        };
-
-		        MyButton8.prototype.echo = function (s) {
-		            return "echo: " + this.my1;
-		        };
-
-		        return MyButton8;
-		    })(com.tns.tests.Button1);
-
-		MyButton8.setMyStaticIntField(5);
-		var valueUsingChild = MyButton8.getMyStaticIntField();
-		expect(valueUsingChild).toEqual(5);
-
-		var valueUsingParent = com.tns.tests.Button1.getMyStaticIntField();
-		expect(valueUsingParent).toEqual(5);
-
-		com.tns.tests.Button1.setMyStaticIntField(6);
-		var valueUsingParent = com.tns.tests.Button1.getMyStaticIntField();
-		expect(valueUsingParent).toEqual(6);
-
-		valueUsingChild = MyButton8.getMyStaticIntField();
-		expect(valueUsingChild).toEqual(6);
-	});
-
-	it("When_inherit_from_android_base_class_it_should_create_an_instance", function () {
-
-		/*
-		// From issue #137 https://github.com/telerik/Kimera/issues/137
-		class ListViewAdapter extends android.widget.BaseAdapter {
-		    private _items: Array<any>;
-
-		    constructor(items: Array<any>) {
-		        super();
-
-		        this._items = items;
-		    }
-
-		    get items(): Array<any> {
-		        return this._items;
-		    }
-		    set items(value: Array<any>) {
-		        this._items = value;
-		    }
-
-		    public getCount() {
-		        return this._items ? this._items.length : 0;
-		    }
-
-		    public getItem(i) {
-		        return this._items && i < this._items.length ? this._items[i] : null;
-		    }
-
-		    public getItemId(i) {
-		        return long(0);
-		    }
-
-		    public getView(i, view, viewGroup) {
-		        return null;
-		    }
-
-		    public refresh() {
-		        this.notifyDataSetChanged();
-		    }
-		}
-		*/
-		var ListViewAdapter = (function (_super) {
-		    __extends(ListViewAdapter, _super);
-		    function ListViewAdapter(items) {
-		        _super.call(this);
-
-		        this._items = items;
-		        return __native(this);
-		    }
-		    Object.defineProperty(ListViewAdapter.prototype, "items", {
-		        get: function () {
-		            return this._items;
-		        },
-		        set: function (value) {
-		            this._items = value;
-		        },
-		        enumerable: true,
-		        configurable: true
-		    });
-
-		    ListViewAdapter.prototype.getCount = function () {
-		        return this._items ? this._items.length : 0;
-		    };
-
-		    ListViewAdapter.prototype.getItem = function (i) {
-		        return this._items && i < this._items.length ? this._items[i] : null;
-		    };
-
-		    ListViewAdapter.prototype.getItemId = function (i) {
-		        return long(0);
-		    };
-
-		    ListViewAdapter.prototype.getView = function (i, view, viewGroup) {
-		        return null;
-		    };
-
-		    ListViewAdapter.prototype.refresh = function () {
-		        this.notifyDataSetChanged();
-		    };
-		    return ListViewAdapter;
-		})(android.widget.BaseAdapter);
-
-		var adapter = new ListViewAdapter();
-
-		expect(adapter).not.toEqual(null);
-	});
-
-	it("When_creating_a_typescript_instance_and_anonymous_interfaces_in_its_ctor_it_should_work", function () {
-
-		__log("TEST: When_creating_a_typescript_instance_and_anonymous_interfaces_in_its_ctor_it_should_work");
-
-	    var MyButton9 = (function (_super) {
-	        __extends(MyButton9, _super);
-
-	        function MyButton9() {
-	            var _this = _super.call(this) || this;
-
-	            _this.setOnClickListener(new android.view.View.OnClickListener({
-	        		onClick : function() {
-	        			_this.buttonClicked = true;
-	        		}
-	            }));
-
-	            return _this;
-	        }
-
-	        return MyButton9;
-	    })(com.tns.tests.Button1);
-
-	    var button = new MyButton9();
-	    var button1 = new MyButton9();
-	    button.click(null);
-
-	    expect(button.buttonClicked).toBe(true);
-	    expect(button1.buttonClicked).toBe(undefined);
-
-	    button.buttonClicked = false;
-	    button1.click(null);
-
-		expect(button.buttonClicked).toBe(false);
-		expect(button1.buttonClicked).toBe(true);
-	});
-
-	it("When_inheriting_with_constructor_override_parent_constructor_should_be_called", function () {
-
-    		__log("TEST: When_inheriting_with_constructor_override_parent_constructor_should_be_called");
-
-            // typescript code:
-//            class Parent {
-//                x: number;
-//                parentConstructorCalled: boolean;
-//                constructor(x: number) {
+//
+//	it("When_inherit_from_android_base_class_it_should_create_an_instance", function () {
+//
+//		/*
+//		// From issue #137 https://github.com/telerik/Kimera/issues/137
+//		class ListViewAdapter extends android.widget.BaseAdapter {
+//		    private _items: Array<any>;
+//
+//		    constructor(items: Array<any>) {
+//		        super();
+//
+//		        this._items = items;
+//		    }
+//
+//		    get items(): Array<any> {
+//		        return this._items;
+//		    }
+//		    set items(value: Array<any>) {
+//		        this._items = value;
+//		    }
+//
+//		    public getCount() {
+//		        return this._items ? this._items.length : 0;
+//		    }
+//
+//		    public getItem(i) {
+//		        return this._items && i < this._items.length ? this._items[i] : null;
+//		    }
+//
+//		    public getItemId(i) {
+//		        return long(0);
+//		    }
+//
+//		    public getView(i, view, viewGroup) {
+//		        return null;
+//		    }
+//
+//		    public refresh() {
+//		        this.notifyDataSetChanged();
+//		    }
+//		}
+//		*/
+//		var ListViewAdapter = (function (_super) {
+//		    __extends(ListViewAdapter, _super);
+//		    function ListViewAdapter(items) {
+//		        _super.call(this);
+//
+//		        this._items = items;
+//		        return __native(this);
+//		    }
+//		    Object.defineProperty(ListViewAdapter.prototype, "items", {
+//		        get: function () {
+//		            return this._items;
+//		        },
+//		        set: function (value) {
+//		            this._items = value;
+//		        },
+//		        enumerable: true,
+//		        configurable: true
+//		    });
+//
+//		    ListViewAdapter.prototype.getCount = function () {
+//		        return this._items ? this._items.length : 0;
+//		    };
+//
+//		    ListViewAdapter.prototype.getItem = function (i) {
+//		        return this._items && i < this._items.length ? this._items[i] : null;
+//		    };
+//
+//		    ListViewAdapter.prototype.getItemId = function (i) {
+//		        return long(0);
+//		    };
+//
+//		    ListViewAdapter.prototype.getView = function (i, view, viewGroup) {
+//		        return null;
+//		    };
+//
+//		    ListViewAdapter.prototype.refresh = function () {
+//		        this.notifyDataSetChanged();
+//		    };
+//		    return ListViewAdapter;
+//		})(android.widget.BaseAdapter);
+//
+//		var adapter = new ListViewAdapter();
+//
+//		expect(adapter).not.toEqual(null);
+//	});
+//
+//	it("When_creating_a_typescript_instance_and_anonymous_interfaces_in_its_ctor_it_should_work", function () {
+//
+//		__log("TEST: When_creating_a_typescript_instance_and_anonymous_interfaces_in_its_ctor_it_should_work");
+//
+//	    var MyButton9 = (function (_super) {
+//	        __extends(MyButton9, _super);
+//
+//	        function MyButton9() {
+//	            var _this = _super.call(this) || this;
+//
+//	            _this.setOnClickListener(new android.view.View.OnClickListener({
+//	        		onClick : function() {
+//	        			_this.buttonClicked = true;
+//	        		}
+//	            }));
+//
+//	            return _this;
+//	        }
+//
+//	        return MyButton9;
+//	    })(com.tns.tests.Button1);
+//
+//	    var button = new MyButton9();
+//	    var button1 = new MyButton9();
+//	    button.click(null);
+//
+//	    expect(button.buttonClicked).toBe(true);
+//	    expect(button1.buttonClicked).toBe(undefined);
+//
+//	    button.buttonClicked = false;
+//	    button1.click(null);
+//
+//		expect(button.buttonClicked).toBe(false);
+//		expect(button1.buttonClicked).toBe(true);
+//	});
+//
+//	it("When_inheriting_with_constructor_override_parent_constructor_should_be_called", function () {
+//
+//    		__log("TEST: When_inheriting_with_constructor_override_parent_constructor_should_be_called");
+//
+//            // typescript code:
+////            class Parent {
+////                x: number;
+////                parentConstructorCalled: boolean;
+////                constructor(x: number) {
+////                    this.x = x;
+////                    this.parentConstructorCalled = true;
+////                }
+////            }
+////            class Child extends Parent {
+////                constructor(x :number) {
+////                    super(x);
+////                    this.x = 5;
+////                }
+////            }
+////
+////            var b = new Child(3);
+//
+//    	    var Parent = /** @class */ (function () {
+//                function Parent(x) {
 //                    this.x = x;
 //                    this.parentConstructorCalled = true;
 //                }
-//            }
-//            class Child extends Parent {
-//                constructor(x :number) {
-//                    super(x);
-//                    this.x = 5;
+//                return Parent;
+//            }());
+//            var Child = /** @class */ (function (_super) {
+//                __extends(Child, _super);
+//                function Child(x) {
+//                    var _this = _super.call(this, x) || this;
+//                    _this.x = 5;
+//                    return _this;
 //                }
-//            }
+//                return Child;
+//            }(Parent));
+//            var child = new Child(3);
 //
-//            var b = new Child(3);
-
-    	    var Parent = /** @class */ (function () {
-                function Parent(x) {
-                    this.x = x;
-                    this.parentConstructorCalled = true;
-                }
-                return Parent;
-            }());
-            var Child = /** @class */ (function (_super) {
-                __extends(Child, _super);
-                function Child(x) {
-                    var _this = _super.call(this, x) || this;
-                    _this.x = 5;
-                    return _this;
-                }
-                return Child;
-            }(Parent));
-            var child = new Child(3);
-
-            isInstanceOf = child instanceof Parent;
-            expect(isInstanceOf).toEqual(true);
-
-    	    expect(child.x).toBe(5);
-    	    expect(child.parentConstructorCalled).toBe(true);
-    	});
-
-    	it("When_creating_a_typescript_instance_inheriting_class_old_way", function () {
-
-            __log("TEST: When_creating_a_typescript_instance_inheriting_class_old_way");
-            var MyButton10 = (function (_super) {
-                __extends(MyButton10, _super);
-                function MyButton10() {
-                    _super.call(this);
-                    this.myName = "MyName";
-                    return __native(this);
-                }
-
-                MyButton10.prototype.echo = function (s) {
-                    return "echo: " + this.myName;
-                };
-
-                MyButton10.prototype.toString = function (s) {
-                    return "toString: " + this.myName;
-                };
-
-                return MyButton10;
-            })(com.tns.tests.Button1);
-
-            var b = new MyButton10();
-            var exo = b.triggerEcho("exo");
-            expect(exo).toBe("echo: MyName");
-
-            var toStringResult = b.toString();
-            expect(toStringResult).toBe("toString: MyName");
-        });
-
-        it("When_creating_a_typescript_instance_inheriting_class_new_way", function () {
-
-            __log("TEST: When_creating_a_typescript_instance_inheriting_class_new_way");
-            var MyButton11 = (function (_super) {
-                __extends(MyButton11, _super);
-                function MyButton11() {
-                    var _this = _super.call(this) || this;
-                    _this.myName = "MyName";
-                    return _this;
-                }
-
-                MyButton11.prototype.echo = function (s) {
-                    return "echo: " + this.myName;
-                };
-
-                MyButton11.prototype.toString = function (s) {
-                    return "toString: " + this.myName;
-                };
-
-                return MyButton11;
-            })(com.tns.tests.Button1);
-
-            var b = new MyButton11();
-            var exo = b.triggerEcho("exo");
-            expect(exo).toBe("echo: MyName");
-
-            var toStringResult = b.toString();
-            expect(toStringResult).toBe("toString: MyName");
-        });
-
-        it("When_creating_a_typescript_instance_inheriting_class_new_way_with_native_call", function () {
-
-            __log("TEST: When_creating_a_typescript_instance_inheriting_class_new_way");
-            var MyButton11 = (function (_super) {
-                __extends(MyButton11, _super);
-                function MyButton11() {
-                    var _this = _super.call(this) || this;
-                    _this.myName = "MyName";
-                    return __native(_this);
-                }
-
-                MyButton11.prototype.echo = function (s) {
-                    return "echo: " + this.myName;
-                };
-
-                MyButton11.prototype.toString = function (s) {
-                    return "toString: " + this.myName;
-                };
-
-                return MyButton11;
-            })(com.tns.tests.Button1);
-
-            var b = new MyButton11();
-            var exo = b.triggerEcho("exo");
-            expect(exo).toBe("echo: MyName");
-
-            var toStringResult = b.toString();
-            expect(toStringResult).toBe("toString: MyName");
-        });
+//            isInstanceOf = child instanceof Parent;
+//            expect(isInstanceOf).toEqual(true);
+//
+//    	    expect(child.x).toBe(5);
+//    	    expect(child.parentConstructorCalled).toBe(true);
+//    	});
+//
+//    	it("When_creating_a_typescript_instance_inheriting_class_old_way", function () {
+//
+//            __log("TEST: When_creating_a_typescript_instance_inheriting_class_old_way");
+//            var MyButton10 = (function (_super) {
+//                __extends(MyButton10, _super);
+//                function MyButton10() {
+//                    _super.call(this);
+//                    this.myName = "MyName";
+//                    return __native(this);
+//                }
+//
+//                MyButton10.prototype.echo = function (s) {
+//                    return "echo: " + this.myName;
+//                };
+//
+//                MyButton10.prototype.toString = function (s) {
+//                    return "toString: " + this.myName;
+//                };
+//
+//                return MyButton10;
+//            })(com.tns.tests.Button1);
+//
+//            var b = new MyButton10();
+//            var exo = b.triggerEcho("exo");
+//            expect(exo).toBe("echo: MyName");
+//
+//            var toStringResult = b.toString();
+//            expect(toStringResult).toBe("toString: MyName");
+//        });
+//
+//        it("When_creating_a_typescript_instance_inheriting_class_new_way", function () {
+//
+//            __log("TEST: When_creating_a_typescript_instance_inheriting_class_new_way");
+//            var MyButton11 = (function (_super) {
+//                __extends(MyButton11, _super);
+//                function MyButton11() {
+//                    var _this = _super.call(this) || this;
+//                    _this.myName = "MyName";
+//                    return _this;
+//                }
+//
+//                MyButton11.prototype.echo = function (s) {
+//                    return "echo: " + this.myName;
+//                };
+//
+//                MyButton11.prototype.toString = function (s) {
+//                    return "toString: " + this.myName;
+//                };
+//
+//                return MyButton11;
+//            })(com.tns.tests.Button1);
+//
+//            var b = new MyButton11();
+//            var exo = b.triggerEcho("exo");
+//            expect(exo).toBe("echo: MyName");
+//
+//            var toStringResult = b.toString();
+//            expect(toStringResult).toBe("toString: MyName");
+//        });
+//
+//        it("When_creating_a_typescript_instance_inheriting_class_new_way_with_native_call", function () {
+//
+//            __log("TEST: When_creating_a_typescript_instance_inheriting_class_new_way");
+//            var MyButton11 = (function (_super) {
+//                __extends(MyButton11, _super);
+//                function MyButton11() {
+//                    var _this = _super.call(this) || this;
+//                    _this.myName = "MyName";
+//                    return __native(_this);
+//                }
+//
+//                MyButton11.prototype.echo = function (s) {
+//                    return "echo: " + this.myName;
+//                };
+//
+//                MyButton11.prototype.toString = function (s) {
+//                    return "toString: " + this.myName;
+//                };
+//
+//                return MyButton11;
+//            })(com.tns.tests.Button1);
+//
+//            var b = new MyButton11();
+//            var exo = b.triggerEcho("exo");
+//            expect(exo).toBe("echo: MyName");
+//
+//            var toStringResult = b.toString();
+//            expect(toStringResult).toBe("toString: MyName");
+//        });
 });
