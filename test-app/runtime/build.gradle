@@ -56,13 +56,13 @@ if (!hasNdkDirectory) {
     NDK_PATH = ndkDirectory
 }
 
-//if (NDK_PATH == null || NDK_PATH == "null" || NDK_PATH == "") {
-//    if (!hasNdkVersion) {
+if (NDK_PATH == null || NDK_PATH == "null" || NDK_PATH == "") {
+   if (!hasNdkVersion) {
         NDK_PATH = "$System.env.ANDROID_HOME/ndk/${defaultNdkVersion}"
-//    } else {
-//        NDK_PATH = "$System.env.ANDROID_HOME/ndk/${ndkVersion}"
-//    }
-//}
+   } else {
+       NDK_PATH = "$System.env.ANDROID_HOME/ndk/${ndkVersion}"
+   }
+}
 
 println "Runtime using NDK_PATH: " + NDK_PATH
 
@@ -168,7 +168,7 @@ android {
             exclude "**/libjsc.so"
             exclude "**/libhermes.so"
             exclude "**/libjsi.so"
-            exclude "**/libfbjni.so"
+            exclude '**/libc++_shared.so'
         }
     } else if (jsEngine == "HERMES") {
         packagingOptions {
@@ -182,6 +182,7 @@ android {
             exclude "**/libv8android.so"
             exclude "**/libhermes.so"
             exclude "**/libjsi.so"
+            exclude '**/libc++_shared.so'
         }
     } else if (jsEngine == "QUICKJS") {
         packagingOptions {
@@ -189,6 +190,7 @@ android {
             exclude "**/libhermes.so"
             exclude "**/libjsc.so"
             exclude "**/libjsi.so"
+            exclude '**/libc++_shared.so'
         }
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@nativescript/android",
-  "description": "NativeScript for Android using v8",
+  "description": "NativeScript for Android using Node-API",
   "version": "8.8.5",
   "repository": {
     "type": "git",
@@ -10,7 +10,6 @@
     "**/*"
   ],
   "version_info": {
-    "v8": "10.3.22.0",
     "gradle": "8.4",
     "gradleAndroid": "8.3.2",
     "ndk": "r23c",
