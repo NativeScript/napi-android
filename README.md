@@ -1,4 +1,4 @@
-# Android Runtime for NativeScript
+# Node-API Android Runtime for NativeScript
 [![Build Status](https://travis-ci.org/NativeScript/android-runtime.svg?branch=master)](https://travis-ci.org/NativeScript/android-runtime)
 
 Contains the source code for the NativeScript's Android Runtime. [NativeScript](https://www.nativescript.org/) is a framework which enables developers to write truly native mobile applications for Android and iOS using JavaScript and CSS. Each mobile platform has its own ecosystem and offers completely different development tools and language(s) - Java for Android and Objective C (Swift) for iOS. In order to translate JavaScript code to the corresponding native APIs some kind of proxy mechanism is needed. This is exactly what the "Runtime" parts of NativeScript are responsible for. The Android Runtime may be thought of as "The Bridge" between the JavaScript and Android worlds. A NativeScript application for Android is a standard native package (apk) which besides the JavaScript files embed the runtime as well.
@@ -77,14 +77,15 @@ Note: You might need to run the Android Studio from the command line in order to
   Windows: 
 
   ```Shell
-  gradlew
+  gradlew -Pengine=V8
   ```
 
   Mac/Linux:
 
   ```Shell
-  ./gradlew
+  ./gradlew -Pengine=V8
   ```
+You can pass in `QUICKJS`, `HERMES`, `JSC` or `V8` to compile the runtime with the respective JS engine.
 
 * The build process includes building of the runtime package (both optimized and with unstripped v8 symbol table), as well as all supplementary tools used for the android builds: metadata-generator, binding-generator, metadata-generator, static-binding-generator
 * The result of the build will be in the dist folder.

@@ -333,6 +333,10 @@ dependencies {
         outLogger.withStyle(Style.SuccessHeader).println "\t + using android X library androidx.appcompat:appcompat:$androidXAppCompatVersion"
     }
 
+    if (ns_engine == "HERMES") {
+        implementation 'com.facebook.fbjni:fbjni:0.3.0'
+    }
+
     def androidXMaterialVersion = "${ns_default_androidx_material_version}"
     if (project.hasProperty("androidXMaterial")) {
         androidXMaterialVersion = androidXMaterial

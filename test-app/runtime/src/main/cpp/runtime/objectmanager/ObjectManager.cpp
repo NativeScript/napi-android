@@ -64,32 +64,6 @@ void ObjectManager::Init(napi_env env) {
                             napi_util::get_true(env));
     m_jsObjectCtor = napi_util::make_ref(env, jsObjectCtor, 1);
 
-//#ifdef __QJS__
-//    js_runtime_after_gc_callback(env, [](napi_env env, void *data, void *hint) {
-//        auto *objectManager = reinterpret_cast<ObjectManager *>(data);
-//        if (!objectManager->m_weakObjectIds.empty()) {
-//            JEnv jEnv;
-//            std::for_each(objectManager->m_weakObjectIds.begin(),
-//                          objectManager->m_weakObjectIds.end(), [&](int id) {
-//                        auto itFound = objectManager->m_markedAsWeakIds.find(id);
-//                        if (itFound == objectManager->m_markedAsWeakIds.end()) {
-//                            objectManager->m_buff.Write(id);
-//                            objectManager->m_markedAsWeakIds.emplace(id);
-//                        }
-//                    });
-//            if (objectManager->m_buff.Size()) {
-//                int length = objectManager->m_buff.Size();
-//                jboolean keepAsWeak = JNI_TRUE;
-//                jEnv.CallVoidMethod(objectManager->m_javaRuntimeObject,
-//                                    objectManager->MAKE_INSTANCE_WEAK_BATCH_METHOD_ID,
-//                                    (jobject) objectManager->m_buff, length, keepAsWeak);
-//                objectManager->m_buff.Reset();
-//            }
-//        }
-//        DEBUG_WRITE("%s", "GC completed");
-//    }, this);
-//#endif
-
     static const char *proxyFunctionScript = R"((function () {
 
 	const arrayHandler = (target, prop) => {
@@ -225,6 +199,9 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
     }
 
     auto data = new JSObjectProxyData(this, javaObjectID);
+
+    napi_value obj;
+    napi_create_object(m_env, &obj);
 
     napi_value external;
     napi_create_external(m_env, data, JSObjectProxyFinalizerCallback, nullptr, &external);
@@ -431,15 +408,15 @@ void ObjectManager::JSObjectProxyFinalizerCallback(napi_env env, void *finalizeD
                                                    void *finalizeHint) {
     auto state = reinterpret_cast<JSObjectProxyData *>(finalizeData);
     if (state == nullptr) return;
-    ObjectManager *objectManager = state->thisPtr;
+    DEBUG_WRITE("JS Proxy finalizer called for object id: %d", state->javaObjectId);
+
 //#ifdef __HERMES__
-    objectManager->ReleaseObjectNow(state->javaObjectId);
+    ReleaseObjectNow(env, state->javaObjectId);
 //#endif
 //#ifdef __QJS__
 //    objectManager->m_weakObjectIds.emplace(state->javaObjectId);
 //#endif
 
-    DEBUG_WRITE("JS Proxy finalizer called for object id: %d", state->javaObjectId);
     delete state;
 }
 
@@ -484,15 +461,16 @@ napi_value ObjectManager::JSObjectConstructorCallback(napi_env env, napi_callbac
     return jsThis;
 }
 
-void ObjectManager::ReleaseObjectNow(int javaObjectId) {
+void ObjectManager::ReleaseObjectNow(napi_env env, int javaObjectId) {
     if (javaObjectId < 0) return;
+    ObjectManager* objMgr = Runtime::GetRuntime(env)->GetObjectManager();
 //    auto itFound = this->m_markedAsWeakIds.find(javaObjectId);
 //    if (itFound == this->m_markedAsWeakIds.end()) {
-        auto itFound = this->m_weakObjectIds.find(javaObjectId);
-        if (itFound == this->m_weakObjectIds.end()) {
-            this->m_weakObjectIds.emplace(javaObjectId);
+        auto itFound = objMgr->m_weakObjectIds.find(javaObjectId);
+        if (itFound == objMgr->m_weakObjectIds.end()) {
+            objMgr->m_weakObjectIds.emplace(javaObjectId);
             JEnv jEnv;
-            jEnv.CallVoidMethod(this->m_javaRuntimeObject, this->MAKE_INSTANCE_WEAK_METHOD_ID,
+            jEnv.CallVoidMethod(objMgr->m_javaRuntimeObject, objMgr->MAKE_INSTANCE_WEAK_METHOD_ID,
                                 javaObjectId);
         }
 //        this->m_markedAsWeakIds.emplace(javaObjectId);
@@ -518,7 +496,7 @@ void ObjectManager::ReleaseNativeObject(napi_env env, napi_value object) {
         return;
     }
 
-    this->ReleaseObjectNow(javaObjectId);
+    ReleaseObjectNow(env, javaObjectId);
 }
 
 void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {

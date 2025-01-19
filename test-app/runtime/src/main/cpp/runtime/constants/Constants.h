@@ -23,7 +23,7 @@ class Constants {
         const static char CLASS_NAME_LOCATION_SEPARATOR = '_';
 
         static std::string APP_ROOT_FOLDER_PATH;
-        static std::string V8_STARTUP_FLAGS;
+        static bool CACHE_COMPILED_CODE;
 
     private:
         Constants() {

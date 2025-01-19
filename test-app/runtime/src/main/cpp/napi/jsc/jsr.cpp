@@ -28,6 +28,10 @@ napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
 
 }
 
+napi_status js_set_runtime_flags(const char* flags) {
+    return napi_ok;
+}
+
 napi_status js_lock_env(napi_env env) {
     return napi_ok;
 }
@@ -75,5 +79,12 @@ napi_status js_cache_script(napi_env env, const char *source, const char *file) 
 
 napi_status js_run_cached_script(napi_env env, const char *file, napi_value script, void *cache,
                                  napi_value *result) {
+    return napi_ok;
+}
+
+
+napi_status js_get_runtime_version(napi_env env, napi_value* version) {
+    napi_create_string_utf8(env, "JSC", NAPI_AUTO_LENGTH, version);
+
     return napi_ok;
 }

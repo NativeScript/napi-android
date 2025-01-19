@@ -206,7 +206,6 @@ typedef struct ExternalBufferInfo {
  */
 
 static inline void js_enter(napi_env env) {
-    qjs_update_stack_top(env);
     env->js_enter_state++;
 }
 

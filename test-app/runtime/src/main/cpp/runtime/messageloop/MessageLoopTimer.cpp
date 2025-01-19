@@ -13,7 +13,6 @@ static const int SLEEP_INTERVAL_MS = 100;
 
 void MessageLoopTimer::Init(napi_env env) {
     this->RegisterStartStopFunctions(env);
-
 }
 
 void MessageLoopTimer::RegisterStartStopFunctions(napi_env env) {
@@ -73,6 +72,7 @@ napi_value MessageLoopTimer::StopCallback(napi_env env, napi_callback_info info)
     void * data;
     napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
     auto self = static_cast<MessageLoopTimer *>(data);
+
 
     if (!self->m_isRunning) {
         return nullptr;

@@ -17,7 +17,7 @@ __approot = __dirname.substr(0, __dirname.length - 4);
 
 
 // PASSING TESTS
-//require("./tests/testMetadata")
+//require("./tests/testMetadata");
 //require("./tests/testWeakRef");
 //require("./tests/testMethodResolution");
 //require("./tests/testMethodResolutionWithNulls");
@@ -54,15 +54,22 @@ __approot = __dirname.substr(0, __dirname.length - 4);
 //require("./tests/requireExceptionTests");
 //require("./tests/exceptionHandlingTests");
 //require("./tests/tests");
+
 //require("./tests/testsForTypescript");
+
 //require("./tests/testGC");
 //require("./tests/testReleaseNativeCounterpart");
+
 //require("./tests/testArrays");
+
 //require("./tests/testJniReferenceLeak");
+
 //var shared = require("./shared");
 //shared.runRequireTests();
 //shared.runRuntimeTests();
+
 //shared.runWorkerTests();
+
 //require("./tests/dispatchCallbacksOnUiThreadTests");
 //require("./tests/testsMemoryManagement");
 

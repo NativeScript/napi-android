@@ -1,5 +1,7 @@
 package com.tns;
 
+import android.util.Log;
+
 import java.lang.ref.PhantomReference;
 import java.lang.ref.ReferenceQueue;
 import java.util.ArrayList;
@@ -42,7 +44,6 @@ public class GcListener {
         public void run() {
             while (true) {
                 try {
-                        if (subscribers.isEmpty()) break;
                         for (Runtime runtime : subscribers.keySet()) {
                             GCSubscriber subscriber = subscribers.get(runtime);
                             if (subscriber != null) {
@@ -70,7 +71,7 @@ public class GcListener {
                                 }
                             }
                         }
-                    Thread.sleep(500);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     if (com.tns.Runtime.isDebuggable()) {
                         e.printStackTrace();

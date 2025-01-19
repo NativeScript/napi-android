@@ -56,7 +56,7 @@ void ModuleInternal::Init(napi_env env, const std::string& baseDir) {
     (function () {
         return function require_factory(requireInternal, dirName) {
 		return function require(modulePath) {
-			if(typeof global.__requireOverride !== "undefined") {
+            if(typeof global.__requireOverride !== "undefined") {
 				var result = global.__requireOverride(modulePath, dirName);
 				if(result) {
 					return result;
@@ -357,15 +357,17 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
 
     napi_value callResult;
     napi_status status = napi_call_function(env, thiz, moduleFunc, 5, requireArgs, &callResult);
-    if (status != napi_ok) {
-        napi_value exception;
-        napi_get_and_clear_last_exception(env, &exception);
-        if (exception) {
-            throw NativeScriptException(env, exception, "Error calling module function: ");
-        } else {
-            throw NativeScriptException("Error calling module function: " + modulePath);
-        }
-    }
+    bool pendingException;
+    napi_is_exception_pending(env, &pendingException);
+     if (status != napi_ok || pendingException) {
+         napi_value exception;
+         napi_get_and_clear_last_exception(env, &exception);
+         if (exception) {
+             throw NativeScriptException(env, exception, "Error calling module function: ");
+         } else {
+             throw NativeScriptException("Error calling module function: " + modulePath);
+         }
+     }
 
     tempModule.SaveToCache();
     result = moduleObj;

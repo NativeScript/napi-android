@@ -78,11 +78,11 @@
 			var Extended = extend(thiz);
 			thiz.__container__ = true;
 			if (arguments.length > 1) {
-//			    if (typeof Extended !== "function") {
-//                    thiz.__proto__ = Reflect.construct(Extended, Array.prototype.slice.call(arguments, 1));
-//			    } else {
+			    if (typeof Extended !== "function") {
+                    thiz.__proto__ = Reflect.construct(Extended, Array.prototype.slice.call(arguments, 1));
+			    } else {
 			        thiz.__proto__ = new (Function.prototype.bind.apply(Extended, [null].concat(Array.prototype.slice.call(arguments, 1))));
-//			    }
+			    }
 			}
 			else {
 				thiz.__proto__ = new Extended()
@@ -177,6 +177,11 @@
 		global.JavaProxy = JavaProxy;
 	}
 	global.Interfaces = Interfaces;
+
+	if (global.WeakRef && !global.WeakRef.prototype.get) {
+		global.WeakRef.prototype.get = global.WeakRef.prototype.deref;
+	}
+	
 })();
 globalThis.getErrorStack = (err) => {
     if (err) return err.stack;

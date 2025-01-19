@@ -29,7 +29,8 @@ void MetadataNode::Init(napi_env env) {
 napi_value MetadataNode::CreateArrayObjectConstructor(napi_env env) {
     auto it = s_arrayObjects.find(env);
     if (it != s_arrayObjects.end()) {
-        return napi_util::get_ref_value(env, it->second);
+        auto value = napi_util::get_ref_value(env, it->second);
+        if (!napi_util::is_null_or_undefined(env, value)) return value;
     }
 
     auto node = GetOrCreate("java/lang/Object");
@@ -1393,7 +1394,8 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
         instanceMethodsCallbackData = itFound->second.instanceMethodCallbacks;
         if (itFound->second.constructorFunction == nullptr)
             return nullptr;
-        return napi_util::get_ref_value(env, itFound->second.constructorFunction);
+        auto value = napi_util::get_ref_value(env, itFound->second.constructorFunction);
+        if (!napi_util::is_null_or_undefined(env, value)) return value;
     }
 
     auto node = GetOrCreateInternal(treeNode);
@@ -1506,7 +1508,8 @@ napi_value MetadataNode::SetInnerTypeCallback(napi_env env, napi_callback_info i
         auto cache = GetMetadataNodeCache(env);
         auto itFound = cache->CtorFuncCache.find(curChild);
         if (itFound != cache->CtorFuncCache.end()) {
-            return napi_util::get_ref_value(env, itFound->second.constructorFunction);
+            auto value = napi_util::get_ref_value(env, itFound->second.constructorFunction);
+            if (!napi_util::is_null_or_undefined(env, value)) return value;
         }
         napi_value constructor = childNode->GetConstructorFunction(env);
         return constructor;
@@ -1803,7 +1806,8 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
         auto cachedData = GetCachedExtendedClassData(env, fullExtendedName);
         if (cachedData.extendedCtorFunction != nullptr) {
-            return napi_util::get_ref_value(env, cachedData.extendedCtorFunction);
+            auto value =  napi_util::get_ref_value(env, cachedData.extendedCtorFunction);
+            if (!napi_util::is_null_or_undefined(env, value)) return value;
         }
 
         napi_value implementationObjectName;
@@ -1895,6 +1899,7 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
                                                                                              napi_util::getPrototypeOf(
                                                                                                      env,
                                                                                                      jsThis)));
+
             napi_util::setPrototypeOf(env, superValue, superProto);
             napi_set_named_property(env, jsThis, PROP_KEY_SUPERVALUE, superValue);
             objectManager->CloneLink(jsThis, superValue);
