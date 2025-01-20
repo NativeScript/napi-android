@@ -314,7 +314,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             SetConvertedObject(index, obj.Move(), obj.IsGlobal());
                         } else {
                             if (napi_util::is_number_object(env, arg)) {
-                                success = ConvertJavaScriptNumber(env, arg, index);
+                                success = ConvertJavaScriptNumber(env, arg, index, true);
                                 break;
                             } else if (napi_util::is_string_object(env, arg)) {
                                 napi_value stringValue = napi_util::valueOf(env, arg);
@@ -336,7 +336,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                 }
             }
         } else if (argType == napi_number) {
-            success = ConvertJavaScriptNumber(env, arg, index);
+            success = ConvertJavaScriptNumber(env, arg, index, false);
 
             if (!success) {
                 sprintf(buff, "Cannot convert number to %s at index %d", typeSignature.c_str(),
@@ -381,7 +381,7 @@ void JsArgConverter::SetConvertedObject(int index, jobject obj, bool isGlobal) {
     }
 }
 
-bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, int index) {
+bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, int index, bool isNumberObject = false) {
     bool success = true;
 
     jvalue value = {0};
@@ -393,7 +393,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
     switch (typePrefix) {
         case 'B': { // byte
             int32_t intValue;
-            if (napi_util::is_number_object(env, jsValue)) {
+            if (isNumberObject) {
                 napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
             } else {
                 napi_get_value_int32(env, jsValue, &intValue);
@@ -403,7 +403,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         }
         case 'S': { // short
             int intValue;
-            if (napi_util::is_number_object(env, jsValue)) {
+            if (isNumberObject) {
                 napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
             } else {
                 napi_get_value_int32(env, jsValue, &intValue);
@@ -413,7 +413,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         }
         case 'I': { // int
             int intValue;
-            if (napi_util::is_number_object(env, jsValue)) {
+            if (isNumberObject) {
                 napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
             } else {
                 napi_get_value_int32(env, jsValue, &intValue);
@@ -423,7 +423,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         }
         case 'J': { // long
             int64_t intValue;
-            if (napi_util::is_number_object(env, jsValue)) {
+            if (isNumberObject) {
                 napi_get_value_int64(env,  napi_util::valueOf(env, jsValue), &intValue);
             } else {
                 napi_get_value_int64(env, jsValue, &intValue);
@@ -433,7 +433,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         }
         case 'F': { // float
             double doubleValue;
-            if (napi_util::is_number_object(env, jsValue)) {
+            if (isNumberObject) {
                 napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue);
             } else {
                 napi_get_value_double(env, jsValue, &doubleValue);
@@ -443,7 +443,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         }
         case 'D': { // double
             double doubleValue;
-            if (napi_util::is_number_object(env, jsValue)) {
+            if (isNumberObject) {
                 napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue);
             } else {
                 napi_get_value_double(env, jsValue, &doubleValue);

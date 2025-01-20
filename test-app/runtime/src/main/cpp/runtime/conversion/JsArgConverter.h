@@ -56,7 +56,7 @@ namespace tns {
 
         bool ConvertJavaScriptArray(napi_env env, napi_value jsArr, int index);
 
-        bool ConvertJavaScriptNumber(napi_env env, napi_value jsValue, int index);
+        bool ConvertJavaScriptNumber(napi_env env, napi_value jsValue, int index, bool isNumberObject);
 
         bool ConvertJavaScriptBoolean(napi_env env, napi_value jsValue, int index);
 

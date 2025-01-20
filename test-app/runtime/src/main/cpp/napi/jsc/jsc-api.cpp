@@ -1610,7 +1610,14 @@ napi_status napi_get_value_int32(napi_env env, napi_value value, int32_t* result
     CHECK_ARG(env, result);
 
     JSValueRef exception{};
-    *result = static_cast<int32_t>(JSValueToNumber(env->context, ToJSValue(value), &exception));
+    double number = JSValueToNumber(env->context, ToJSValue(value), &exception);
+
+    if (number > INT_MAX) {
+        *result = -1;
+    } else {
+        *result = static_cast<int32_t>(number);
+    }
+
     CHECK_JSC(env, exception);
 
     return napi_ok;
@@ -1623,6 +1630,13 @@ napi_status napi_get_value_uint32(napi_env env, napi_value value, uint32_t* resu
 
     JSValueRef exception{};
     *result = static_cast<uint32_t>(JSValueToNumber(env->context, ToJSValue(value), &exception));
+
+    double number = JSValueToNumber(env->context, ToJSValue(value), &exception);
+    if (number > UINT32_MAX) {
+        *result = -1;
+    } else {
+        *result = static_cast<uint32_t>(number);
+    }
     CHECK_JSC(env, exception);
 
     return napi_ok;
