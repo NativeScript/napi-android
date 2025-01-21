@@ -9,6 +9,7 @@
 #define ARGCONVERTER_H_
 
 #include "Runtime.h"
+#include "NativeScriptAssert.h"
 #include "JEnv.h"
 #include <string>
 #include <map>
@@ -26,15 +27,11 @@ namespace tns {
         static int64_t ConvertToJavaLong(napi_env env, napi_value value);
 
         static napi_value jstringToJsString(napi_env env, jstring value) {
-            if (value == nullptr) {
-                napi_value result;
-                napi_get_null(env, &result);
-                return result;
-            }
+            if (value == nullptr) return napi_util::null(env);
 
             JEnv jenv;
-            auto chars = jenv.GetStringUTFChars(value, JNI_FALSE);
-            auto length = jenv.GetStringLength(value);
+            auto chars = jenv.GetStringUTFChars(value, NULL);
+            auto length = jenv.GetStringUTFLength(value);
             auto jsString = convertToJsString(env, chars, length);
             jenv.ReleaseStringUTFChars(value, chars);
 
@@ -72,8 +69,7 @@ namespace tns {
 
         inline static jstring ConvertToJavaString(napi_env env, napi_value jsValue) {
             JEnv jenv;
-            const char * str = napi_util::get_string_value(env, jsValue, 0);
-            return jenv.NewStringUTF(str);
+            return jenv.NewStringUTF(napi_util::get_string_value(env, jsValue, 0));
         }
 
         inline static napi_value convertToJsString(napi_env env, const jchar *data, int length) {
