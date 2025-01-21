@@ -166,7 +166,8 @@ void ObjectManager::Init(napi_env env) {
 }
 
 napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instance) {
-    napi_value weakProxy, proxy;
+    napi_value weakProxy = nullptr;
+    napi_value proxy = nullptr;
     napi_get_named_property(m_env, instance, "__proxy__", &weakProxy);
     if (!napi_util::is_null_or_undefined(m_env, weakProxy)) {
         napi_value deref;
@@ -186,6 +187,11 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
     napi_call_function(m_env, napi_util::global(m_env),
                        napi_util::get_ref_value(m_env, this->m_jsObjectProxyCreator),
                        2, argv, &proxy);
+
+    if (!proxy) {
+        DEBUG_WRITE("Failed to create proxy for javaObjectId %d", javaObjectID);
+        return nullptr;
+    }
 
     auto javaObjectIdFound = m_weakObjectIds.find(javaObjectID);
     if (javaObjectIdFound != m_weakObjectIds.end()) {
@@ -306,6 +312,7 @@ napi_value ObjectManager::GetJsObjectByJavaObject(int javaObjectID) {
     }
 
     napi_value instance = napi_util::get_ref_value(m_env, it->second);
+    if (napi_util::is_null_or_undefined(m_env, instance)) return nullptr;
     return GetOrCreateProxy(javaObjectID, instance);
 }
 

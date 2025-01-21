@@ -156,7 +156,7 @@ namespace napi_util {
 
     inline napi_status define_property(napi_env env, napi_value object, const char *propertyName,
                                        napi_value value = nullptr, napi_callback getter = nullptr,
-                                       napi_callback setter = nullptr, void *data = nullptr) {
+                                       napi_callback setter = nullptr, void *data = nullptr, napi_property_attributes attributes = napi_default_jsproperty) {
         napi_property_descriptor desc = {
                 propertyName, // utf8name
                 nullptr,      // name
@@ -164,7 +164,7 @@ namespace napi_util {
                 getter,       // getter
                 setter,       // setter
                 value,        // value
-                napi_default, // attributes
+                attributes, // attributes
                 data          // data
         };
 
