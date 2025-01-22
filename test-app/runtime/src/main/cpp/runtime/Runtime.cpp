@@ -392,8 +392,8 @@ void Runtime::DestroyRuntime() {
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
     NapiScope scope(env);
     m_objectManager->OnGarbageCollected(jEnv, object_ids);
-//    this->TryCallGC();
-    return true;
+    bool success = __sync_bool_compare_and_swap(&m_runGC, false, true);
+    return success;
 }
 
 
@@ -421,9 +421,15 @@ bool Runtime::TryCallGC() {
         if (napi_util::is_null_or_undefined(env, gc)) return true;
         napi_create_reference(env, gc, 1, &m_gcFunc);
     }
-    napi_value result;
-    napi_call_function(env, global, napi_util::get_ref_value(env, m_gcFunc), 0, nullptr, &result);
-    return true;
+
+    bool success = __sync_bool_compare_and_swap(&m_runGC, true, false);
+
+    if (success) {
+        napi_value result;
+        napi_call_function(env, global, napi_util::get_ref_value(env, m_gcFunc), 0, nullptr, &result);
+    }
+
+    return success;
 }
 
 void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
