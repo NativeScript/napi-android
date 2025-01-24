@@ -88,10 +88,7 @@ string MetadataNode::GetTypeMetadataName(napi_env env, napi_value value) {
     return napi_util::get_string_value(env, typeMetadataName);
 }
 
-MetadataNode *MetadataNode::GetNodeFromHandle(napi_env env, napi_value value) {
-    auto node = GetInstanceMetadata(env, value);
-    return node;
-}
+
 
 bool MetadataNode::isArray() {
     return m_isArray;
@@ -318,19 +315,7 @@ void MetadataNode::SetInstanceMetadata(napi_env env, napi_value object, Metadata
 //    napi_wrap(env, object, node, nullptr, nullptr, nullptr);
 }
 
-MetadataNode *MetadataNode::GetInstanceMetadata(napi_env env, napi_value object) {
-    void *node;
-    napi_value external;
-    napi_get_named_property(env, object, "#instance_metadata", &external);
 
-    if (napi_util::is_null_or_undefined(env, external)) return nullptr;
-
-    napi_get_value_external(env, external, &node);
-//    napi_unwrap(env, object, &node);
-    if (node == nullptr)
-        return nullptr;
-    return reinterpret_cast<MetadataNode *>(node);
-}
 
 napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(0)
@@ -473,7 +458,7 @@ napi_value MetadataNode::ClassConstructorCallback(napi_env env, napi_callback_in
                                                           nullptr, false, &jsThisProxy, className);
 
 
-        return jsThisProxy;
+        return jsThis;
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
     } catch (std::exception e) {

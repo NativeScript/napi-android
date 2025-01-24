@@ -34,21 +34,7 @@ void NumericCasts::CreateGlobalCastFunctions(napi_env env, napi_value globalObje
     napi_set_named_property(env, globalObject, "char", charFunc);
 }
 
-CastType NumericCasts::GetCastType(napi_env env, napi_value object) {
-    CastType ret = CastType::None;
 
-    napi_value hidden;
-
-    napi_get_named_property(env, object, s_castMarker, &hidden);
-
-    if (!napi_util::is_null_or_undefined(env, hidden)) {
-        int32_t castType;
-        napi_get_value_int32(env, hidden, &castType);
-        ret = static_cast<CastType>(castType);
-    }
-
-    return ret;
-}
 
 napi_value NumericCasts::GetCastValue(napi_env env, napi_value object) {
     napi_value value;

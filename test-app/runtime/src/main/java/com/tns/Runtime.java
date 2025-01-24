@@ -974,6 +974,7 @@ public class Runtime {
         if (logger != null && logger.isEnabled()) {
             logger.write("MakeInstanceStrong (" + objectId + ", " + instance.getClass().toString() + ")");
         }
+        // TODO: This can be done async
         this.gcListener.createPhantomReference(this, instance, objectId);
     }
 

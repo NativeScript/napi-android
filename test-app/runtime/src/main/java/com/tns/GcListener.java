@@ -25,16 +25,13 @@ public class GcListener {
             GCSubscriber subscriber =  instance.subscribers.get(runtime);
             if (subscriber != null) {
                 ConcurrentHashMap<PhantomReference<Object>, Integer> refMap = subscriber.referencesMap;
-                if (!refMap.containsValue(objectId)) {
-                    PhantomReference<Object> ref = new PhantomReference<>(object, subscriber.referenceQueue);
-                    refMap.put(ref, objectId);
-                }
+                PhantomReference<Object> ref = new PhantomReference<>(object, subscriber.referenceQueue);
+                refMap.put(ref, objectId);
 
                 if (runtime.getLogger().isEnabled()) {
                     runtime.getLogger().write("GC", "Added object to watch list with id: " + String.valueOf(objectId));
                 }
             }
-
     }
 
     private class GcMonitor implements Runnable {

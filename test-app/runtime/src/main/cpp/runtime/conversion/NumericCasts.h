@@ -2,6 +2,7 @@
 #define NUMERICCASTS_H_
 
 #include "js_native_api.h"
+#include "Runtime.h"
 #include <string>
 
 namespace tns {
@@ -19,7 +20,21 @@ namespace tns {
     public:
         void CreateGlobalCastFunctions(napi_env env, napi_value globalObject);
 
-        static CastType GetCastType(napi_env env, napi_value object);
+        inline static CastType GetCastType(napi_env env, napi_value object) {
+            CastType ret = CastType::None;
+
+            napi_value hidden;
+
+            napi_get_named_property(env, object, s_castMarker, &hidden);
+
+            if (!napi_util::is_null_or_undefined(env, hidden)) {
+                int32_t castType;
+                napi_get_value_int32(env, hidden, &castType);
+                ret = static_cast<CastType>(castType);
+            }
+
+            return ret;
+        }
 
         static napi_value GetCastValue(napi_env env, napi_value object);
 

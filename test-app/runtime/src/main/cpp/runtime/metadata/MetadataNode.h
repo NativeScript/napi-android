@@ -30,9 +30,23 @@ public:
 
     static napi_value GetImplementationObject(napi_env env, napi_value object);
 
-    static MetadataNode* GetInstanceMetadata(napi_env env, napi_value object);
+    inline static MetadataNode* GetInstanceMetadata(napi_env env, napi_value object) {
+        void *node;
+        napi_value external;
+        napi_get_named_property(env, object, "#instance_metadata", &external);
 
-    static MetadataNode* GetNodeFromHandle(napi_env env, napi_value value);
+        if (napi_util::is_null_or_undefined(env, external)) return nullptr;
+
+        napi_get_value_external(env, external, &node);
+        if (node == nullptr)
+            return nullptr;
+        return reinterpret_cast<MetadataNode *>(node);
+    }
+
+    inline static MetadataNode* GetNodeFromHandle(napi_env env, napi_value value) {
+        auto node = GetInstanceMetadata(env, value);
+        return node;
+    }
 
     static string GetTypeMetadataName(napi_env env, napi_value value);
 
