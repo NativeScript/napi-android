@@ -31,8 +31,6 @@ NativeScriptException::NativeScriptException(const string& message, const string
 NativeScriptException::NativeScriptException(napi_env env, napi_value error, const string& message)
     : m_javaException(JniLocalRef()) {
     m_javascriptException = nullptr;
-    napi_valuetype type;
-    napi_typeof(env, error, &type);
     napi_create_reference(env, error, 1, &m_javascriptException);
     m_message = GetErrorMessage(env, error, message);
     m_stackTrace = GetErrorStackTrace(env, error);
@@ -221,7 +219,8 @@ napi_value NativeScriptException::GetJavaExceptionFromEnv(napi_env env, const Jn
 
 string NativeScriptException::GetFullMessage(napi_env env, napi_value error, const string& jsExceptionMessage) {
     bool isError;
-    if (!napi_is_error(env, error, &isError)) {
+    napi_is_error(env, error, &isError);
+    if (!isError) {
         return jsExceptionMessage;
     }
 
@@ -277,7 +276,13 @@ void NativeScriptException::PrintErrorMessage(const string& errorMessage) {
 
 string NativeScriptException::GetErrorMessage(napi_env env, napi_value error, const string& prependMessage) {
     bool isError;
-    if (!napi_is_error(env, error, &isError)) return "";
+    napi_is_error(env, error, &isError);
+
+    if (!isError) {
+        napi_value err;
+        napi_coerce_to_string(env, error, &err);
+        return napi_util::get_string_value(env, err);
+    }
 
     napi_value message;
     napi_get_named_property(env, error, "message", &message);
@@ -314,7 +319,8 @@ string NativeScriptException::GetErrorStackTrace(napi_env env, napi_value error)
     stringstream ss;
 
     bool isError;
-    if (!napi_is_error(env, error, &isError)) return "";
+    napi_is_error(env, error, &isError);
+    if (!isError) return "";
 
     napi_value stack;
     napi_get_named_property(env, error, "stack", &stack);
