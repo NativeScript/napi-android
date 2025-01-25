@@ -227,76 +227,21 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         obj = objectManager->GetJavaObjectByJsObject(arg);
 
                         if (obj.IsNull()) {
-                            bool isTypedArray;
-                            napi_is_typedarray(m_env, arg, &isTypedArray);
+                            bool isArrayBuffer = false;
+                            bool isDataView = false;
+                            bool isTypedArray = false;
 
-                            if (isTypedArray) {
-                                napi_typedarray_type type;
-                                size_t length;
-                                void *data;
-                                napi_value arrayBuffer;
-                                size_t byteOffset;
-
-                                napi_get_typedarray_info(m_env, arg, &type, &length, &data,
-                                                         &arrayBuffer, &byteOffset);
-
-                                BufferCastType bufferCastType = JsArgConverter::GetCastType(type);
-
-                                auto directBuffer = jEnv.NewDirectByteBuffer(
-                                        static_cast<uint8_t *>(data) + byteOffset, length);
-
-                                auto directBufferClazz = jEnv.GetObjectClass(directBuffer);
-
-                                auto byteOrderId = jEnv.GetMethodID(directBufferClazz, "order",
-                                                                    "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
-
-                                auto byteOrderClazz = jEnv.FindClass("java/nio/ByteOrder");
-
-                                auto byteOrderEnumId = jEnv.GetStaticMethodID(byteOrderClazz,
-                                                                              "nativeOrder",
-                                                                              "()Ljava/nio/ByteOrder;");
-
-                                auto nativeByteOrder = jEnv.CallStaticObjectMethodA(byteOrderClazz,
-                                                                                    byteOrderEnumId,
-                                                                                    nullptr);
-
-                                directBuffer = jEnv.CallObjectMethod(directBuffer, byteOrderId,
-                                                                     nativeByteOrder);
-
-                                jobject buffer;
-
-                                if (bufferCastType == BufferCastType::Short) {
-                                    auto id = jEnv.GetMethodID(directBufferClazz, "asShortBuffer",
-                                                               "()Ljava/nio/ShortBuffer;");
-                                    buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                                } else if (bufferCastType == BufferCastType::Int) {
-                                    auto id = jEnv.GetMethodID(directBufferClazz, "asIntBuffer",
-                                                               "()Ljava/nio/IntBuffer;");
-                                    buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                                } else if (bufferCastType == BufferCastType::Long) {
-                                    auto id = jEnv.GetMethodID(directBufferClazz, "asLongBuffer",
-                                                               "()Ljava/nio/LongBuffer;");
-                                    buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                                } else if (bufferCastType == BufferCastType::Float) {
-                                    auto id = jEnv.GetMethodID(directBufferClazz, "asFloatBuffer",
-                                                               "()Ljava/nio/FloatBuffer;");
-                                    buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                                } else if (bufferCastType == BufferCastType::Double) {
-                                    auto id = jEnv.GetMethodID(directBufferClazz, "asDoubleBuffer",
-                                                               "()Ljava/nio/DoubleBuffer;");
-                                    buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                                } else {
-                                    buffer = directBuffer;
+                            napi_is_arraybuffer(env, arg, &isArrayBuffer);
+                            if (!isArrayBuffer) {
+                                napi_is_typedarray(env, arg, &isTypedArray);
+                                if (!isTypedArray) {
+                                    napi_is_dataview(env, arg, &isDataView);
                                 }
+                            }
 
-                                buffer = jEnv.NewGlobalRef(buffer);
-
-                                int id = objectManager->GetOrCreateObjectId(buffer);
-                                auto clazz = jEnv.GetObjectClass(buffer);
-
-                                objectManager->Link(arg, id, clazz);
-
-                                obj = objectManager->GetJavaObjectByJsObject(arg);
+                            if (isArrayBuffer || isDataView || isTypedArray) {
+                                obj = JsArgConverter::GetByteBuffer(env, arg, isArrayBuffer,
+                                                                    isTypedArray, isDataView);
                             }
                         }
 
@@ -326,8 +271,10 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                                 break;
                             }
 
-                            sprintf(buff, "Cannot convert object to %s at index %d",
-                                    typeSignature.c_str(), index);
+                            if (!success) {
+                                sprintf(buff, "Cannot convert object to %s at index %d",
+                                        typeSignature.c_str(), index);
+                            }
                         }
                         break;
 
@@ -381,7 +328,8 @@ void JsArgConverter::SetConvertedObject(int index, jobject obj, bool isGlobal) {
     }
 }
 
-bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, int index, bool isNumberObject = false) {
+bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, int index,
+                                             bool isNumberObject = false) {
     bool success = true;
 
     jvalue value = {0};
@@ -424,7 +372,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         case 'J': { // long
             int64_t intValue;
             if (isNumberObject) {
-                napi_get_value_int64(env,  napi_util::valueOf(env, jsValue), &intValue);
+                napi_get_value_int64(env, napi_util::valueOf(env, jsValue), &intValue);
             } else {
                 napi_get_value_int64(env, jsValue, &intValue);
             }
@@ -485,7 +433,6 @@ bool JsArgConverter::ConvertJavaScriptBoolean(napi_env env, napi_value jsValue, 
 bool JsArgConverter::ConvertJavaScriptString(napi_env env, napi_value jsValue, int index) {
     jstring stringObject = ArgConverter::ConvertToJavaString(env, jsValue);
     SetConvertedObject(index, stringObject);
-
     return true;
 }
 
@@ -716,3 +663,145 @@ JsArgConverter::~JsArgConverter() {
         }
     }
 }
+
+JniLocalRef JsArgConverter::GetByteBuffer(napi_env env, napi_value object, bool isArrayBuffer,
+                                          bool isTypedArray, bool isDataView) {
+    JEnv jEnv;
+
+    BufferCastType bufferCastType = tns::BufferCastType::Byte;
+    size_t offset = 0;
+    size_t length = 0;
+    void *data = nullptr;
+
+    if (isTypedArray) {
+        napi_typedarray_type type;
+        napi_value arrayBuffer;
+        size_t byteOffset;
+        napi_get_typedarray_info(env, object, &type, nullptr, &data,
+                                 &arrayBuffer, &byteOffset);
+
+
+
+
+        napi_get_arraybuffer_info(env, arrayBuffer, nullptr, &length);
+
+        offset = byteOffset;
+        bufferCastType = JsArgConverter::GetCastType(type);
+    } else if (isArrayBuffer) {
+        napi_get_arraybuffer_info(env, object, &data, &length);
+    } else if (isDataView) {
+        napi_get_dataview_info(env, object, &length, &data, nullptr,
+                               &offset);
+    }
+
+    jobject directBuffer;
+
+    if (isDataView || isTypedArray) {
+        directBuffer =jEnv.NewDirectByteBuffer(static_cast<uint8_t *>(data) + offset, length);
+    } else {
+        directBuffer = jEnv.NewDirectByteBuffer(static_cast<uint8_t *>(data), length);
+    }
+
+
+    auto directBufferClazz = jEnv.GetObjectClass(directBuffer);
+
+    auto byteOrderId = BYTE_ORDER_METHOD_ID;
+
+    if (!BYTE_ORDER_METHOD_ID) {
+        byteOrderId = jEnv.GetMethodID(directBufferClazz, "order",
+                                       "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
+        BYTE_ORDER_METHOD_ID = byteOrderId;
+    }
+
+    auto byteOrderClazz = jEnv.FindClass("java/nio/ByteOrder");
+
+    auto byteOrderEnumId = BYTE_ORDER_ENUM_ID;
+
+    if (!byteOrderEnumId) {
+        byteOrderEnumId = jEnv.GetStaticMethodID(byteOrderClazz,
+                                                 "nativeOrder",
+                                                 "()Ljava/nio/ByteOrder;");
+        BYTE_ORDER_ENUM_ID = byteOrderEnumId;
+    }
+
+    auto nativeByteOrder = jEnv.CallStaticObjectMethodA(byteOrderClazz,
+                                                        byteOrderEnumId,
+                                                        nullptr);
+
+    directBuffer = jEnv.CallObjectMethod(directBuffer, byteOrderId,
+                                         nativeByteOrder);
+
+    jobject buffer;
+
+    if (bufferCastType == BufferCastType::Short) {
+        auto id = AS_SHORT_BUFFER;
+        if (!id) {
+            id = jEnv.GetMethodID(directBufferClazz, "asShortBuffer",
+                                  "()Ljava/nio/ShortBuffer;");
+            AS_SHORT_BUFFER = id;
+        }
+
+        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
+    } else if (bufferCastType == BufferCastType::Int) {
+        auto id = AS_INT_BUFFER;
+
+        if (!id) {
+            id = jEnv.GetMethodID(directBufferClazz, "asIntBuffer",
+                                  "()Ljava/nio/IntBuffer;");
+            AS_INT_BUFFER = id;
+        }
+        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
+    } else if (bufferCastType == BufferCastType::Long) {
+        auto id = AS_LONG_BUFFER;
+
+        if (!id) {
+            id = jEnv.GetMethodID(directBufferClazz, "asLongBuffer",
+                                  "()Ljava/nio/LongBuffer;");
+            AS_LONG_BUFFER = id;
+        }
+
+        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
+    } else if (bufferCastType == BufferCastType::Float) {
+
+        auto id = AS_FLOAT_BUFFER;
+        if (!id) {
+            id = jEnv.GetMethodID(directBufferClazz, "asFloatBuffer",
+                                  "()Ljava/nio/FloatBuffer;");
+            AS_FLOAT_BUFFER = id;
+        }
+
+        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
+    } else if (bufferCastType == BufferCastType::Double) {
+
+        auto id = AS_DOUBLE_BUFFER;
+        if (!id) {
+            id = jEnv.GetMethodID(directBufferClazz, "asDoubleBuffer",
+                                  "()Ljava/nio/DoubleBuffer;");
+            AS_DOUBLE_BUFFER = id;
+        }
+        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
+    } else {
+        buffer = directBuffer;
+    }
+
+    buffer = jEnv.NewGlobalRef(buffer);
+
+    ObjectManager *objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+
+    int id = objectManager->GetOrCreateObjectId(buffer);
+    auto clazz = jEnv.GetObjectClass(buffer);
+
+    ObjectManager::MarkObject(env, object);
+
+    objectManager->Link(object, id, clazz);
+
+    return objectManager->GetJavaObjectByJsObject(object);
+}
+
+jmethodID JsArgConverter::BYTE_ORDER_METHOD_ID = nullptr;
+jmethodID JsArgConverter::BYTE_ORDER_ENUM_ID = nullptr;
+jmethodID JsArgConverter::AS_SHORT_BUFFER = nullptr;
+jmethodID JsArgConverter::AS_LONG_BUFFER = nullptr;
+jmethodID JsArgConverter::AS_FLOAT_BUFFER = nullptr;
+jmethodID JsArgConverter::AS_INT_BUFFER = nullptr;
+jmethodID JsArgConverter::AS_DOUBLE_BUFFER = nullptr;

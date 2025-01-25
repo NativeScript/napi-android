@@ -36,7 +36,11 @@ namespace tns {
             return ret;
         }
 
-        static napi_value GetCastValue(napi_env env, napi_value object);
+        inline static napi_value GetCastValue(napi_env env, napi_value object) {
+            napi_value value;
+            napi_get_named_property(env, object, "value", &value);
+            return value;
+        }
 
         static void MarkAsLong(napi_env env, napi_value object, napi_value value);
 

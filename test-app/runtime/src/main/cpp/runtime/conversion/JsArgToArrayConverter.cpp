@@ -228,97 +228,22 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
                 obj = objectManager->GetJavaObjectByJsObject(jsObj);
 
-                bool bufferOrTypedArrayOrDataView;
+                if (obj.IsNull()) {
+                    bool isArrayBuffer = false;
+                    bool isDataView = false;
+                    bool isTypedArray = false;
 
-                napi_is_arraybuffer(env, jsObj, &bufferOrTypedArrayOrDataView);
-
-                if (!bufferOrTypedArrayOrDataView) {
-                    napi_is_typedarray(env, jsObj, &bufferOrTypedArrayOrDataView);
-                }
-
-                if (!bufferOrTypedArrayOrDataView) {
-                    napi_is_dataview(env, jsObj, &bufferOrTypedArrayOrDataView);
-                }
-
-
-                if (obj.IsNull() && bufferOrTypedArrayOrDataView) {
-                    BufferCastType bufferCastType = tns::BufferCastType::Byte;
-                    size_t offset = 0;
-                    size_t length;
-                    uint8_t *data = nullptr;
-
-                    bool isTypedArray;
-                    napi_is_typedarray(env, jsObj, &isTypedArray);
-                    if (isTypedArray) {
-                        napi_typedarray_type type;
-                        napi_value arrayBuffer;
-                        size_t byteOffset;
-                        napi_get_typedarray_info(env, jsObj, &type, &length, (void **) &data,
-                                                 &arrayBuffer, &byteOffset);
-                        offset = byteOffset;
-                        bufferCastType = JsArgConverter::GetCastType(type);
-                    } else {
-                        bool isArrayBuffer;
-                        napi_is_arraybuffer(env, jsObj, &isArrayBuffer);
-                        if (isArrayBuffer) {
-                            napi_get_arraybuffer_info(env, jsObj, (void **) &data, &length);
-                        } else {
-                            napi_get_dataview_info(env, jsObj, &length, (void **) &data, nullptr,
-                                                   &offset);
+                    napi_is_arraybuffer(env, jsObj, &isArrayBuffer);
+                    if (!isArrayBuffer) {
+                        napi_is_typedarray(env, jsObj, &isTypedArray);
+                        if (!isTypedArray) {
+                            napi_is_dataview(env, jsObj, &isDataView);
                         }
                     }
 
-                    auto directBuffer = jEnv.NewDirectByteBuffer(data + offset, length);
-
-                    auto directBufferClazz = jEnv.GetObjectClass(directBuffer);
-
-                    auto byteOrderId = jEnv.GetMethodID(directBufferClazz, "order",
-                                                        "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
-
-                    auto byteOrderClazz = jEnv.FindClass("java/nio/ByteOrder");
-
-                    auto byteOrderEnumId = jEnv.GetStaticMethodID(byteOrderClazz, "nativeOrder",
-                                                                  "()Ljava/nio/ByteOrder;");
-
-                    auto nativeByteOrder = jEnv.CallStaticObjectMethodA(byteOrderClazz,
-                                                                        byteOrderEnumId, nullptr);
-
-                    directBuffer = jEnv.CallObjectMethod(directBuffer, byteOrderId,
-                                                         nativeByteOrder);
-
-                    jobject buffer;
-
-                    if (bufferCastType == BufferCastType::Short) {
-                        auto id = jEnv.GetMethodID(directBufferClazz, "asShortBuffer",
-                                                   "()Ljava/nio/ShortBuffer;");
-                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                    } else if (bufferCastType == BufferCastType::Int) {
-                        auto id = jEnv.GetMethodID(directBufferClazz, "asIntBuffer",
-                                                   "()Ljava/nio/IntBuffer;");
-                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                    } else if (bufferCastType == BufferCastType::Long) {
-                        auto id = jEnv.GetMethodID(directBufferClazz, "asLongBuffer",
-                                                   "()Ljava/nio/LongBuffer;");
-                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                    } else if (bufferCastType == BufferCastType::Float) {
-                        auto id = jEnv.GetMethodID(directBufferClazz, "asFloatBuffer",
-                                                   "()Ljava/nio/FloatBuffer;");
-                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                    } else if (bufferCastType == BufferCastType::Double) {
-                        auto id = jEnv.GetMethodID(directBufferClazz, "asDoubleBuffer",
-                                                   "()Ljava/nio/DoubleBuffer;");
-                        buffer = jEnv.CallObjectMethodA(directBuffer, id, nullptr);
-                    } else {
-                        buffer = directBuffer;
+                    if (isArrayBuffer || isDataView || isTypedArray) {
+                        obj = JsArgConverter::GetByteBuffer(env, jsObj, isArrayBuffer, isTypedArray, isDataView);
                     }
-
-                    buffer = jEnv.NewGlobalRef(buffer);
-
-                    int id = objectManager->GetOrCreateObjectId(buffer);
-                    auto clazz = jEnv.GetObjectClass(buffer);
-                    objectManager->Link(jsObj, id, clazz);
-
-                    obj = objectManager->GetJavaObjectByJsObject(jsObj);
                 }
 
                 napi_value privateValue;
@@ -393,11 +318,13 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                         break;
                     }
 
-                    napi_value objStr;
-                    napi_coerce_to_string(env, jsObj, &objStr);
-                    const char * objStrValue = napi_util::get_string_value(env, objStr);
-                    s << "Cannot marshal JavaScript argument " << objStrValue << " at index " << index
-                      << " to Java type.";
+                    if (!success) {
+                        napi_value objStr;
+                        napi_coerce_to_string(env, jsObj, &objStr);
+                        const char * objStrValue = napi_util::get_string_value(env, objStr);
+                        s << "Cannot marshal JavaScript argument " << objStrValue << " at index " << index
+                          << " to Java type.";
+                    }
                 }
                 break;
 

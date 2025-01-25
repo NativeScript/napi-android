@@ -50,6 +50,17 @@ namespace tns {
 
         static BufferCastType GetCastType(napi_typedarray_type type);
 
+        static JniLocalRef GetByteBuffer(napi_env env, napi_value object, bool isArrayBuffer, bool isTypedArray, bool isDataView);
+
+
+
+        static jmethodID BYTE_ORDER_METHOD_ID;
+        static jmethodID BYTE_ORDER_ENUM_ID;
+        static jmethodID AS_SHORT_BUFFER;
+        static jmethodID AS_INT_BUFFER;
+        static jmethodID AS_LONG_BUFFER;
+        static jmethodID AS_FLOAT_BUFFER;
+        static jmethodID AS_DOUBLE_BUFFER;
     private:
 
         bool ConvertArg(napi_env env, napi_value arg, int index);
@@ -63,6 +74,7 @@ namespace tns {
         bool ConvertJavaScriptString(napi_env env, napi_value jsValue, int index);
 
         void SetConvertedObject(int index, jobject obj, bool isGlobal = false);
+
 
         template<typename T>
         bool ConvertFromCastFunctionObject(T value, int index);
