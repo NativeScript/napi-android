@@ -1219,10 +1219,10 @@ const char *typedArrayClassNames[] = {
         "Uint16Array",
         "Int32Array",
         "Uint32Array",
-        "BigInt64Array",
-        "BigUint64Array",
         "Float32Array",
         "Float64Array",
+        "BigInt64Array",
+        "BigUint64Array",
 };
 
 napi_status napi_create_typedarray(napi_env env,
@@ -1486,7 +1486,6 @@ napi_status napi_get_arraybuffer_info(napi_env env,
                                       size_t *byte_length) {
     CHECK_ARG(env)
     CHECK_ARG(arraybuffer)
-    CHECK_ARG(data)
     CHECK_ARG(byte_length)
 
     size_t size = 0;
@@ -1498,9 +1497,14 @@ napi_status napi_get_arraybuffer_info(napi_env env,
     if (JS_HasProperty(env->context, value, env->atoms.napi_buffer))
         return napi_set_last_error(env, napi_invalid_arg, NULL, 0, NULL);;
 
-    if (data) *data = JS_GetArrayBuffer(env->context, &size, value);
+    if (data) {
+        *data = JS_GetArrayBuffer(env->context, &size, value);
+        if (byte_length) *byte_length = size;
+    } else {
+        JS_GetArrayBuffer(env->context, &size, value);
+        if (byte_length) *byte_length = size;
+    }
 
-    if (byte_length) *byte_length = size;
 
     return napi_clear_last_error(env);
 }
@@ -1603,9 +1607,9 @@ napi_status napi_get_typedarray_info(napi_env env,
     }
 
     if (length) {
-        JSValue byteLength = JS_GetPropertyStr(env->context, value, "byteLength");
-        *length = JS_VALUE_GET_INT(byteLength);
-        JS_FreeValue(env->context, byteLength);
+        JSValue len = JS_GetPropertyStr(env->context, value, "length");
+        *length = JS_VALUE_GET_INT(len);
+        JS_FreeValue(env->context, len);
     }
 
     if (data || arraybuffer) {
