@@ -457,8 +457,7 @@ napi_value MetadataNode::ClassConstructorCallback(napi_env env, napi_callback_in
         bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argsWrapper,
                                                           nullptr, false, &jsThisProxy, className);
 
-
-        return jsThis;
+        return jsThisProxy;
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
     } catch (std::exception e) {
