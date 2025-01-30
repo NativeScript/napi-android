@@ -78,7 +78,7 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
         bool isFloat = napi_util::is_float(env, length);
 
         if (isFloat) {
-            Throw(env, "Expect integer value as a second argument.");
+            Throw(env, "Expect integer value as a second argument. It is a float");
             return nullptr;
         }
 
