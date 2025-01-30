@@ -306,7 +306,7 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     if (Util::EndsWith(modulePath, ".js")) {
         napi_value script = LoadScript(env, modulePath, fullRequiredModulePath);
         DEBUG_WRITE("%s", modulePath.c_str());
-        
+
         napi_status status = js_execute_script(env, script, EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
         if (status != napi_ok) {
             bool pendingException;

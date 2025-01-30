@@ -1293,6 +1293,14 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         jEnv.CallStaticVoidMethod(RUNTIME_CLASS, INIT_WORKER_METHOD_ID, (jstring) filePath,
                                   (jstring) dirPath, workerId);
 
+        napi_value stack;
+        napi_value error;
+        napi_value empty;
+        napi_create_string_utf8(env, "",0,  &empty);
+        napi_create_error(env, empty, empty, &error);
+        napi_get_named_property(env, error, "stack", &stack);
+        napi_set_named_property(env, jsThis, "__stack__", stack);
+
         return jsThis;
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -1730,13 +1738,22 @@ void CallbackHandlers::CallWorkerObjectOnErrorHandle(napi_env env, jint workerId
 
         if (napi_util::is_of_type(env, callback, napi_function)) {
             napi_value errEvent;
-            napi_create_object(env, &errEvent);
-
             napi_value msgValue = ArgConverter::jstringToJsString(env, message);
-            napi_set_named_property(env, errEvent, "message", msgValue);
+            napi_value codeValue;
+            napi_create_string_utf8(env, "",0, &codeValue);
+            napi_create_error(env,codeValue, msgValue, &errEvent);
+            napi_value stack_main_thread;
+            napi_get_named_property(env, worker, "__stack__", &stack_main_thread);
+            std::string main_stack = napi_util::get_string_value(env, stack_main_thread);
 
-            napi_value stackTraceValue = ArgConverter::jstringToJsString(env, stackTrace);
-            napi_set_named_property(env, errEvent, "stack", stackTraceValue);
+            std::string curr_stack = ArgConverter::jstringToString(stackTrace);
+
+            std::string full_stack = curr_stack + "\n" + main_stack.substr(main_stack.find_first_of("\n") + 1) ;
+
+            napi_value full_stack_value;
+            napi_create_string_utf8(env, full_stack.c_str(), full_stack.size(), &full_stack_value);
+
+            napi_set_named_property(env, errEvent, "stack", full_stack_value);
 
             napi_value args[1] = {errEvent};
 
