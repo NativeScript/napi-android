@@ -27,6 +27,7 @@ class ModuleInternal {
          * Used before initializing workers, to ensure a thread will not be created, when the file doesn't exist
          */
         static void CheckFileExists(napi_env env, const std::string& path, const std::string& baseDir);
+        static std::string EnsureFileProtocol(const std::string& path);
 
         static int MODULE_PROLOGUE_LENGTH;
         void DeInit();

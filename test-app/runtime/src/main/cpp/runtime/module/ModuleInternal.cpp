@@ -272,6 +272,14 @@ napi_value ModuleInternal::LoadImpl(napi_env env, const std::string& moduleName,
     return result;
 }
 
+std::string ModuleInternal::EnsureFileProtocol(const std::string& path) {
+    const std::string protocol = "file://";
+    if (path.compare(0, protocol.length(), protocol) != 0) {
+        return protocol + path;
+    }
+    return path;
+}
+
 napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePath, const std::string& moduleCacheKey) {
     napi_value result;
 
@@ -297,8 +305,9 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
 
     if (Util::EndsWith(modulePath, ".js")) {
         napi_value script = LoadScript(env, modulePath, fullRequiredModulePath);
-
-        napi_status status = js_execute_script(env, script, modulePath.c_str(), &moduleFunc);
+        DEBUG_WRITE("%s", modulePath.c_str());
+        
+        napi_status status = js_execute_script(env, script, EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
         if (status != napi_ok) {
             bool pendingException;
             napi_is_exception_pending(env, &pendingException);

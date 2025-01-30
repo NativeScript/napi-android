@@ -460,7 +460,8 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode);
 
     napi_value result;
-    status = js_execute_script(env, soureCode, filename.c_str(), &result);
+    DEBUG_WRITE("%s", filename.c_str());
+    status = js_execute_script(env, soureCode, ModuleInternal::EnsureFileProtocol(filename).c_str(), &result);
 
     bool pendingException;
     napi_is_exception_pending(env, &pendingException);
