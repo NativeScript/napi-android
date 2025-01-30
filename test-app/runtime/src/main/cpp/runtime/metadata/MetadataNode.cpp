@@ -1478,8 +1478,12 @@ void MetadataNode::SetInnerTypes(napi_env env, napi_value constructor, MetadataT
     if (treeNode->children != nullptr) {
         const auto &children = *treeNode->children;
         for (auto curChild: children) {
-            napi_util::define_property(env, constructor, curChild->name.c_str(), nullptr,
-                                       SetInnerTypeCallback, nullptr, curChild);
+            bool hasProperty;
+            napi_has_named_property(env, constructor, curChild->name.c_str(), &hasProperty);
+            if (!hasProperty) {
+                napi_util::define_property(env, constructor, curChild->name.c_str(), nullptr,
+                                           SetInnerTypeCallback, nullptr, curChild);
+            }
         }
     }
 }
