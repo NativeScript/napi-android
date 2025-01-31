@@ -1821,8 +1821,8 @@ void CallbackHandlers::ClearWorkerPersistent(napi_env env, int workerId) {
 }
 
 void CallbackHandlers::TerminateWorkerThread(napi_env env) {
+    JSEnterScope
     try {
-        JSEnterScope
         Runtime::GetRuntime(env)->DestroyRuntime();
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);

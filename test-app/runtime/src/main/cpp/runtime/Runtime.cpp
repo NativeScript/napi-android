@@ -381,19 +381,19 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
-    Runtime::thread_id_to_rt_cache.erase(this_thread::get_id());
     this->m_module.DeInit();
-    id_to_runtime_cache.erase(m_id);
-    env_to_runtime_cache.erase(env);
     Console::onDisposeEnv(env);
     CallbackHandlers::RemoveEnvEntries(env);
     tns::GlobalHelpers::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
     js_free_napi_env(env);
+    Runtime::thread_id_to_rt_cache.erase(this_thread::get_id());
+    id_to_runtime_cache.erase(m_id);
+    env_to_runtime_cache.erase(env);
+
 #ifndef __V8__
     js_free_runtime(rt);
 #endif
-
 }
 
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
