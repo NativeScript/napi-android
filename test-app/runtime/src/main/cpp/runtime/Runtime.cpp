@@ -299,6 +299,8 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
                                      CallbackHandlers::WorkerGlobalPostMessageCallback, nullptr);
         napi_util::napi_set_function(env, global, "close",
                                      CallbackHandlers::WorkerGlobalCloseCallback, nullptr);
+        napi_util::napi_set_function(env, global, "terminate",
+                                     CallbackHandlers::WorkerGlobalCloseCallback, nullptr);
         napi_util::define_property(env, global, "__ns__worker", napi_util::get_true(env));
     }
 

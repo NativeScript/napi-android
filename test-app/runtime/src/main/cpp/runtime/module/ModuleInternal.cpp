@@ -334,7 +334,7 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
             throw NativeScriptException(errMsg);
         }
 
-        napi_create_function(env, "", 0, RequireNativeCallback, func, &moduleFunc);
+        napi_create_function(env, "nativeRequire", strlen("nativeRequire"), RequireNativeCallback, func, &moduleFunc);
     } else {
         std::string errMsg = "Unsupported file extension: " + modulePath;
         throw NativeScriptException(errMsg);

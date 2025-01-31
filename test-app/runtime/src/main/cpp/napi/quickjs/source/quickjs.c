@@ -63,6 +63,12 @@
 #define NO_TM_GMTOFF
 #endif
 
+#ifdef ANDROID
+#include <android/log.h>
+#define LOG_TAG "QuickJS"
+#define printf(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#endif
+
 // atomic_store etc. are completely busted in recent versions of tcc;
 // somehow the compiler forgets to load |ptr| into %rdi when calling
 // the __atomic_*() helpers in its lib/stdatomic.c and lib/atomic.S

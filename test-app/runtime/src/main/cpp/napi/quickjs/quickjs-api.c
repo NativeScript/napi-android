@@ -3710,6 +3710,10 @@ napi_status qjs_create_runtime(napi_runtime *runtime) {
     (*runtime)->runtime = JS_NewRuntime();
 #endif
 
+    #ifndef NDEBUG
+    JS_SetDumpFlags((*runtime)->runtime, JS_DUMP_LEAKS);
+    #endif
+
     JS_SetMaxStackSize((*runtime)->runtime, 1024 * 1024 * 1024);
 
     (*runtime)->constructorClassId = 0;

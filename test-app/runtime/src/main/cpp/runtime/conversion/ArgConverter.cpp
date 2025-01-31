@@ -24,11 +24,11 @@ void ArgConverter::Init(napi_env env) {
 
     napi_value longNumberPrototype = napi_util::get_prototype(env, longNumberCtorFunc);
 
-    napi_create_function(env, nullptr, 0,
+    napi_create_function(env, "valueOf", strlen("valueOf"),
                          ArgConverter::NativeScriptLongValueOfFunctionCallback, nullptr,
                          &valueOfFunc);
 
-    napi_create_function(env, nullptr, 0,
+    napi_create_function(env, "toString", strlen("toString"),
                          ArgConverter::NativeScriptLongToStringFunctionCallback, nullptr,
                          &toStringFunc);
 

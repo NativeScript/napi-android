@@ -47,15 +47,15 @@ void Console::createConsole(napi_env env, ConsoleCallback callback, const int ma
     napi_get_global(env, &global);
 
     napi_value assertFunc, errorFunc, infoFunc, logFunc, warnFunc, dirFunc, traceFunc, timeFunc, timeEndFunc;
-    napi_create_function(env, nullptr, 0, assertCallback, nullptr, &assertFunc);
-    napi_create_function(env, nullptr, 0, errorCallback, nullptr, &errorFunc);
-    napi_create_function(env, nullptr, 0, infoCallback, nullptr, &infoFunc);
-    napi_create_function(env, nullptr, 0, logCallback, nullptr, &logFunc);
-    napi_create_function(env, nullptr, 0, warnCallback, nullptr, &warnFunc);
-    napi_create_function(env, nullptr, 0, dirCallback, nullptr, &dirFunc);
-    napi_create_function(env, nullptr, 0, traceCallback, nullptr, &traceFunc);
-    napi_create_function(env, nullptr, 0, timeCallback, nullptr, &timeFunc);
-    napi_create_function(env, nullptr, 0, timeEndCallback, nullptr, &timeEndFunc);
+    napi_create_function(env, "assert", strlen("assert"), assertCallback, nullptr, &assertFunc);
+    napi_create_function(env, "error", strlen("error"), errorCallback, nullptr, &errorFunc);
+    napi_create_function(env, "info", strlen("info"), infoCallback, nullptr, &infoFunc);
+    napi_create_function(env, "log", strlen("log"), logCallback, nullptr, &logFunc);
+    napi_create_function(env, "warn", strlen("warn"), warnCallback, nullptr, &warnFunc);
+    napi_create_function(env, "dir", strlen("dir"), dirCallback, nullptr, &dirFunc);
+    napi_create_function(env, "trace", strlen("trace"), traceCallback, nullptr, &traceFunc);
+    napi_create_function(env, "time", strlen("time"), timeCallback, nullptr, &timeFunc);
+    napi_create_function(env, "timeEnd", strlen("timeEnd"), timeEndCallback, nullptr, &timeEndFunc);
 
     napi_set_named_property(env, console, "assert", assertFunc);
     napi_set_named_property(env, console, "error", errorFunc);
