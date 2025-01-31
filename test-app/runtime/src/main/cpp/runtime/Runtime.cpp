@@ -69,12 +69,11 @@ Runtime *Runtime::Current() {
     if (itFound != Runtime::thread_id_to_rt_cache.end()) {
         return itFound->second;
     }
-    if (thread_id_to_rt_cache.size() == 1) {
-        itFound = Runtime::thread_id_to_rt_cache.find(s_main_thread_id);
-        if (itFound != Runtime::thread_id_to_rt_cache.end()) {
-            return itFound->second;
-        }
-    }
+
+   itFound = Runtime::thread_id_to_rt_cache.find(s_main_thread_id);
+       if (itFound != Runtime::thread_id_to_rt_cache.end()) {
+           return itFound->second;
+       }
 
     return nullptr;
 }
