@@ -81,7 +81,7 @@ napi_status js_free_napi_env(napi_env env) {
 
 napi_status js_free_runtime(napi_runtime runtime) {
     JSR* jsr = (JSR*) runtime;
-//    jsr->isolate->Dispose();
+    jsr->isolate->Dispose();
     delete jsr;
     return napi_ok;
 }

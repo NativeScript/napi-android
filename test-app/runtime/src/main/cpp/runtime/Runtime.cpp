@@ -146,7 +146,6 @@ napi_value Runtime::GlobalAccessorCallback(napi_env env, napi_callback_info  inf
     return global;
 }
 
-
 void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
                    bool verboseLoggingEnabled, bool isDebuggable, jstring packageName,
                    jobjectArray args, jstring callingDir, int maxLogcatObjectSize, bool forceLog) {
@@ -156,7 +155,6 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     auto nativeLibDirStr = ArgConverter::jstringToString(nativeLibsDir);
     auto packageNameStr = ArgConverter::jstringToString(packageName);
     auto callingDirStr = ArgConverter::jstringToString(callingDir);
-
 
     Constants::APP_ROOT_FOLDER_PATH = filesRoot + "/app/";
 
@@ -356,6 +354,9 @@ Runtime::~Runtime() {
     delete this->m_loopTimer;
 
     CallbackHandlers::RemoveEnvEntries(env);
+
+    js_free_runtime(rt);
+
     if (m_isMainThread) {
         if (m_mainLooper_fd[0] != -1) {
             ALooper_removeFd(m_mainLooper, m_mainLooper_fd[0]);
@@ -382,13 +383,12 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 void Runtime::DestroyRuntime() {
     tns::GlobalHelpers::onDisposeEnv(env);
     Runtime::thread_id_to_rt_cache.erase(this_thread::get_id());
-    Console::onDisposeEnv(env);
-    napi_close_handle_scope(env, this->global_scope);
     this->m_module.DeInit();
-    js_free_napi_env(env);
-    js_free_runtime(rt);
+    Console::onDisposeEnv(env);
     id_to_runtime_cache.erase(m_id);
     env_to_runtime_cache.erase(env);
+    napi_close_handle_scope(env, this->global_scope);
+    js_free_napi_env(env);
 }
 
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
