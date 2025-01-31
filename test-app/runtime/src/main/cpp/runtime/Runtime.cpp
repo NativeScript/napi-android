@@ -353,9 +353,9 @@ Runtime::~Runtime() {
     delete this->m_objectManager;
     delete this->m_loopTimer;
 
-    CallbackHandlers::RemoveEnvEntries(env);
-
+#ifdef __V8__
     js_free_runtime(rt);
+#endif
 
     if (m_isMainThread) {
         if (m_mainLooper_fd[0] != -1) {
@@ -381,14 +381,19 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
-    tns::GlobalHelpers::onDisposeEnv(env);
     Runtime::thread_id_to_rt_cache.erase(this_thread::get_id());
     this->m_module.DeInit();
-    Console::onDisposeEnv(env);
     id_to_runtime_cache.erase(m_id);
     env_to_runtime_cache.erase(env);
+    Console::onDisposeEnv(env);
+    CallbackHandlers::RemoveEnvEntries(env);
+    tns::GlobalHelpers::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
     js_free_napi_env(env);
+#ifndef __V8__
+    js_free_runtime(rt);
+#endif
+
 }
 
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
