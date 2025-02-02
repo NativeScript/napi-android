@@ -14,8 +14,8 @@ import com.tns.bindings.desc.reflection.MethodInfo;
 public class Dump {
     public static final char CLASS_NAME_LOCATION_SEPARATOR = '_';
 
-    private static final String callJsMethodSignatureCtor = "Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Z[Ljava/lang/Object;";
-    private static final String callJsMethodSignatureMethod = "Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Class;[Ljava/lang/Object;";
+    private static final String callJsMethodSignatureCtor = "Ljava/lang/Object;ILjava/lang/Object;Ljava/lang/String;Z[Ljava/lang/Object;";
+    private static final String callJsMethodSignatureMethod = "Ljava/lang/Object;ILjava/lang/Object;Ljava/lang/String;Ljava/lang/Class;[Ljava/lang/Object;";
     private static final String LCOM_TNS = "Lcom/tns/gen/";
     private static final String LCOM_TNS_RUNTIME = "Lcom/tns/Runtime;";
     static final String objectClass = "Ljava/lang/Object;";
@@ -449,6 +449,10 @@ public class Dump {
             mv.visitMethodInsn(org.ow2.asmdex.Opcodes.INSN_INVOKE_DIRECT_RANGE, objectClass, "<init>", ctorSignature, args);
         }
 
+        // Initialize runtimeId
+        mv.visitVarInsn(org.ow2.asmdex.Opcodes.INSN_CONST_4, 3, 0); // Load 0 into register 3
+        mv.visitFieldInsn(org.ow2.asmdex.Opcodes.INSN_IPUT, tnsClassSignature, "runtimeId", "I", 3, thisRegister); // Store 0 into runtimeId field
+
         if (!isApplicationClass(classTo)) {
             generateInitializedBlock(mv, thisRegister, classSignature, tnsClassSignature);
         }
@@ -469,8 +473,9 @@ public class Dump {
         int argCount = generateArrayForCallJsArguments(mv, ctor.getParameterTypes(), thisRegister, classSignature, tnsClassSignature);
         mv.visitStringInsn(org.ow2.asmdex.Opcodes.INSN_CONST_STRING, 1, "init"); //put "init" in register 1
         mv.visitVarInsn(org.ow2.asmdex.Opcodes.INSN_CONST_4, 2, 1); //put true to register 2 == isConstructor argument
+        mv.visitFieldInsn(org.ow2.asmdex.Opcodes.INSN_IGET, tnsClassSignature, "runtimeId", "I", 3, thisRegister); // Load runtimeId
         mv.visitMethodInsn(org.ow2.asmdex.Opcodes.INSN_INVOKE_STATIC, LCOM_TNS_RUNTIME, "callJSMethod", callJsMethodSignatureCtor, new int[]
-                           { 3, 1, 2, 0 }); //invoke callJSMethod(this, "init", true, params)
+                           { 3, 4, 1, 2, 0 }); //invoke callJSMethod(runtimeId, this, "init", true, params)
     }
 
     private void generateInitializedBlock(MethodVisitor mv, int thisRegister, String classSignature, String tnsClassSignature) {
@@ -577,9 +582,9 @@ public class Dump {
     }
 
     private int generateMaxStackSize(MethodVisitor mv, MethodDescriptor method) {
-        //3 local vars are enough for NativeScript bindings methods. Local vars start from 0 register till register 2.
-        //Then 'this' is register 3 and then all parameters according to their size
-        int registersCount = 3/*local vars*/ + 1 /*this*/;
+        //4 local vars are enough for NativeScript bindings methods. Local vars start from 0 register till register 2.
+        //Then 'this' is register 4 and then all parameters according to their size
+        int registersCount = 4/*local vars*/ + 1 /*this*/;
         int thisRegister = registersCount - 1;
 
         ClassDescriptor[] paramTypes = method.getParameterTypes();
@@ -605,6 +610,8 @@ public class Dump {
         int argCount = generateArrayForCallJsArguments(mv, method.getParameterTypes(), thisRegister, classSignature, tnsClassSignature);
         mv.visitStringInsn(org.ow2.asmdex.Opcodes.INSN_CONST_STRING, 1, method.getName());
 
+        mv.visitFieldInsn(org.ow2.asmdex.Opcodes.INSN_IGET, tnsClassSignature, "runtimeId", "I", 3, thisRegister); // Load runtimeId
+
         ClassDescriptor returnType = method.getReturnType();
         if (returnType.isPrimitive()) {
             //mv.visitFieldInsn(INSN_SGET_OBJECT, "Ljava/lang/Long;", "TYPE", "Ljava/lang/Class;", 2, 0);
@@ -613,7 +620,7 @@ public class Dump {
             mv.visitTypeInsn(org.ow2.asmdex.Opcodes.INSN_CONST_CLASS, 2, 0, 0, getClassSignatureOfType(returnType));
         }
 
-        mv.visitMethodInsn(org.ow2.asmdex.Opcodes.INSN_INVOKE_STATIC, runtimeClass, callJSMethodName, callJsMethodSignatureMethod, new int[] { thisRegister, 1, 2, 0 });
+        mv.visitMethodInsn(org.ow2.asmdex.Opcodes.INSN_INVOKE_STATIC, runtimeClass, callJSMethodName, callJsMethodSignatureMethod, new int[] { 3, thisRegister, 1, 2, 0 });
 
         //Label returnLabel = new Label();
         //mv.visitLabel(returnLabel);
@@ -663,9 +670,9 @@ public class Dump {
         mv.visitTypeInsn(org.ow2.asmdex.Opcodes.INSN_NEW_ARRAY, 0, 0, 2, "[Ljava/lang/Object;"); //create array with size in register 2 and put it in register 0
 
         int arrayIndex = 0;
-        int argNumber = 4;
+        int argNumber = 5;
         int numberOfDoubleRegisterArguments = 0;
-        while (argNumber < 4 + argumentsCount + numberOfDoubleRegisterArguments) {
+        while (argNumber < 5 + argumentsCount + numberOfDoubleRegisterArguments) {
             mv.visitVarInsn(org.ow2.asmdex.Opcodes.INSN_CONST_16, 1, arrayIndex); //put the array access index value in register 1
 
             ClassDescriptor paramType = paramTypes[arrayIndex];
@@ -803,6 +810,9 @@ public class Dump {
 
     private void generateFields(ClassVisitor cv) {
         FieldVisitor fv = cv.visitField(org.ow2.asmdex.Opcodes.ACC_PRIVATE, "__initialized", "Z", null, null);
+        fv.visitEnd();
+        // Add runtimeId field
+        fv = cv.visitField(org.ow2.asmdex.Opcodes.ACC_PUBLIC, "runtimeId", "I", null, null);
         fv.visitEnd();
     }
 

@@ -20,10 +20,10 @@ public class MethodsWriterImpl implements MethodsWriter {
     private static final String ON_CREATE_METHOD_NAME = "onCreate";
 
     private static final String GET_INSTANCE_METHOD_SIGNATURE_PATTERN = "public static %s getInstance()";
-    private static final String RUNTIME_CALL_JS_METHOD_CALL_PATTERN = "com.tns.Runtime.callJSMethod(this, \"%s\", %s.class, " + ARGS_VARIABLE_NAME + ")";
-    private static final String RUNTIME_CALL_JS_CONSTRUCTOR_METHOD_CALL_PATTERN = "com.tns.Runtime.callJSMethod(this, \"%s\", %s.class, true," + ARGS_VARIABLE_NAME + ")";
-    private static final String RUNTIME_CALL_JS_METHOD_FROM_POSSIBLE_NON_MAIN_THREAD_CALL_PATTERN = "com.tns.Runtime.callJSMethodFromPossibleNonMainThread(this, \"%s\", %s.class, " + ARGS_VARIABLE_NAME + ")";
-    private static final String RUNTIME_CALL_JS_CONSTRUCTOR_METHOD_FROM_POSSIBLE_NON_MAIN_THREAD_CALL_PATTERN = "com.tns.Runtime.callJSMethodFromPossibleNonMainThread(this, \"%s\", %s.class, true," + ARGS_VARIABLE_NAME + ")";
+    private static final String RUNTIME_CALL_JS_METHOD_CALL_PATTERN = "com.tns.Runtime.callJSMethod(runtimeId, this, \"%s\", %s.class, " + ARGS_VARIABLE_NAME + ")";
+    private static final String RUNTIME_CALL_JS_CONSTRUCTOR_METHOD_CALL_PATTERN = "com.tns.Runtime.callJSMethod(runtimeId, this, \"%s\", %s.class, true," + ARGS_VARIABLE_NAME + ")";
+    private static final String RUNTIME_CALL_JS_METHOD_FROM_POSSIBLE_NON_MAIN_THREAD_CALL_PATTERN = "com.tns.Runtime.callJSMethodFromPossibleNonMainThread(runtimeId, this, \"%s\", %s.class, " + ARGS_VARIABLE_NAME + ")";
+    private static final String RUNTIME_CALL_JS_CONSTRUCTOR_METHOD_FROM_POSSIBLE_NON_MAIN_THREAD_CALL_PATTERN = "com.tns.Runtime.callJSMethodFromPossibleNonMainThread(runtimeId, this, \"%s\", %s.class, true," + ARGS_VARIABLE_NAME + ")";
     private static final String ARGS_VARIABLE_PATTERN = "java.lang.Object[] " + ARGS_VARIABLE_NAME + " = new java.lang.Object[%d];";
 
     private static final String THROWS_DECLARATION_BEGINNING = " throws ";

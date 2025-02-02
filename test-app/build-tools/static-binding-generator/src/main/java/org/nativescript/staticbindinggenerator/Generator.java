@@ -396,6 +396,8 @@ public class Generator {
         FieldsWriter fieldsWriter = new FieldsWriterImpl(writer);
         boolean isApplicationClass = androidClassChecker.isApplicationClass(clazz);
 
+        fieldsWriter.writePublicRuntimeIdField();
+
         if (isApplicationClass) {
             String normalizedClassName = BcelNamingUtil.resolveClassName(clazz.getClassName());
             fieldsWriter.writeStaticThizField(normalizedClassName);

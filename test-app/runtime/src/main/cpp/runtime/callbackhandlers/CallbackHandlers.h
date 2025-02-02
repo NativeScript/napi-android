@@ -308,6 +308,8 @@ namespace tns {
 
         static robin_hood::unordered_map<uint64_t, CacheEntry> cache_;
 
+        static robin_hood::unordered_map<jclass, jfieldID> jclass_to_runtimeId_cache;
+
         static std::atomic_uint64_t frameCallbackCount_;
 
         struct FrameCallbackCacheEntry {

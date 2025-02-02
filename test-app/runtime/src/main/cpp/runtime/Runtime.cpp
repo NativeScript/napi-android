@@ -60,7 +60,14 @@ void Runtime::Init(JavaVM *vm) {
         sigaction(SIGSEGV, &action, NULL);
     }
 }
-
+/**
+ * Returns the runtime based on the current thread id
+ * Defaults to returning the main runtime if no runtime is found.
+ *
+ * One thread can only host a single runtime at the moment. Multiple runtimes
+ * on a single thread are not supported.
+ * @return
+ */
 Runtime *Runtime::Current() {
     if (!s_mainThreadInitialized) return nullptr;
     auto id = this_thread::get_id();
@@ -70,12 +77,7 @@ Runtime *Runtime::Current() {
         return itFound->second;
     }
 
-   itFound = Runtime::thread_id_to_rt_cache.find(s_main_thread_id);
-       if (itFound != Runtime::thread_id_to_rt_cache.end()) {
-           return itFound->second;
-       }
-
-    return nullptr;
+   return s_main_rt;
 }
 
 Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)

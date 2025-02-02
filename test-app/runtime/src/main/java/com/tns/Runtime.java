@@ -5,6 +5,7 @@ import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Process;
+import android.util.Log;
 
 import com.tns.bindings.ProxyGenerator;
 import com.tns.system.classes.caching.impl.ClassCacheImpl;
@@ -210,6 +211,9 @@ public class Runtime {
                 }
 
                 this.runtimeId = nextRuntimeId.getAndIncrement();
+
+                Log.d("TNS.Runtime.ID",  String.valueOf(this.runtimeId));
+
                 this.config = config;
                 this.dynamicConfig = dynamicConfiguration;
                 this.threadScheduler = dynamicConfiguration.myThreadScheduler;
@@ -1137,24 +1141,24 @@ public class Runtime {
         return result;
     }
 
-    public static Object callJSMethodFromPossibleNonMainThread(Object javaObject, String methodName, Class<?> retType, Object... args) throws NativeScriptException {
-        return callJSMethodFromPossibleNonMainThread(javaObject, methodName, retType, false /* isConstructor */, args);
+    public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, Object javaObject, String methodName, Class<?> retType, Object... args) throws NativeScriptException {
+        return callJSMethodFromPossibleNonMainThread(runtimeId,javaObject, methodName, retType, false /* isConstructor */, args);
     }
 
-    public static Object callJSMethodFromPossibleNonMainThread(Object javaObject, String methodName, Class<?> retType, boolean isConstructor, Object... args) throws NativeScriptException {
-        return callJSMethodFromPossibleNonMainThread(javaObject, methodName, retType, isConstructor, 0, args);
+    public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, Object javaObject, String methodName, Class<?> retType, boolean isConstructor, Object... args) throws NativeScriptException {
+        return callJSMethodFromPossibleNonMainThread(runtimeId,javaObject, methodName, retType, isConstructor, 0, args);
     }
 
-    public static Object callJSMethodFromPossibleNonMainThread(Object javaObject, String methodName, boolean isConstructor, Object... args) throws NativeScriptException {
-        return callJSMethodFromPossibleNonMainThread(javaObject, methodName, void.class, isConstructor, 0, args);
+    public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, Object javaObject, String methodName, boolean isConstructor, Object... args) throws NativeScriptException {
+        return callJSMethodFromPossibleNonMainThread(runtimeId,javaObject, methodName, void.class, isConstructor, 0, args);
     }
 
-    public static Object callJSMethodFromPossibleNonMainThread(final Object javaObject, final String methodName, final Class<?> retType, final boolean isConstructor, final long delay, final Object... args) throws NativeScriptException {
+    public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, final Object javaObject, final String methodName, final Class<?> retType, final boolean isConstructor, final long delay, final Object... args) throws NativeScriptException {
         if (isNotOnMainThread()) {
             Callable<Object> callable = new Callable<Object>() {
                 @Override
                 public Object call() {
-                    return callJSMethod(javaObject, methodName, retType, isConstructor, delay, args);
+                    return callJSMethod(runtimeId, javaObject, methodName, retType, isConstructor, delay, args);
                 }
             };
 
@@ -1168,34 +1172,40 @@ public class Runtime {
             }
 
         } else {
-            return callJSMethod(javaObject, methodName, retType, isConstructor, delay, args);
+            return callJSMethod(runtimeId, javaObject, methodName, retType, isConstructor, delay, args);
         }
     }
 
 
     // sends args in pairs (typeID, value, null) except for objects where its
     // (typeid, javaObjectID, javaJNIClassPath)
-    public static Object callJSMethod(Object javaObject, String methodName, Class<?> retType, Object... args) throws NativeScriptException {
-        return callJSMethod(javaObject, methodName, retType, false /* isConstructor */, args);
+    public static Object callJSMethod(int runtimeId, Object javaObject, String methodName, Class<?> retType, Object... args) throws NativeScriptException {
+
+        return callJSMethod(runtimeId, javaObject, methodName, retType, false /* isConstructor */, args);
     }
 
-    public static Object callJSMethod(Object javaObject, String methodName, Class<?> retType, boolean isConstructor, Object... args) throws NativeScriptException {
-        return callJSMethod(javaObject, methodName, retType, isConstructor, 0, args);
+    public static Object callJSMethod(int runtimeId, Object javaObject, String methodName, Class<?> retType, boolean isConstructor, Object... args) throws NativeScriptException {
+
+        return callJSMethod(runtimeId, javaObject, methodName, retType, isConstructor, 0, args);
     }
 
-    public static Object callJSMethod(Object javaObject, String methodName, boolean isConstructor, Object... args) throws NativeScriptException {
-        return callJSMethod(javaObject, methodName, void.class, isConstructor, 0, args);
+    public static Object callJSMethod(int runtimeId, Object javaObject, String methodName, boolean isConstructor, Object... args) throws NativeScriptException {
+        return callJSMethod(runtimeId, javaObject, methodName, void.class, isConstructor, 0, args);
     }
 
-    public static Object callJSMethodWithDelay(Object javaObject, String methodName, Class<?> retType, long delay, Object... args) throws NativeScriptException {
-        return callJSMethod(javaObject, methodName, retType, false /* isConstructor */, delay, args);
+    public static Object callJSMethodWithDelay(int runtimeId, Object javaObject, String methodName, Class<?> retType, long delay, Object... args) throws NativeScriptException {
+        return callJSMethod(runtimeId, javaObject, methodName, retType, false /* isConstructor */, delay, args);
     }
 
-    public static Object callJSMethod(Object javaObject, String methodName, Class<?> retType, boolean isConstructor, long delay, Object... args) throws NativeScriptException {
-        Runtime runtime = Runtime.getCurrentRuntime();
+    public static Object callJSMethod(int runtimeId, Object javaObject, String methodName, Class<?> retType, boolean isConstructor, long delay, Object... args) throws NativeScriptException {
+        Runtime runtime = Runtime.runtimeCache.get(runtimeId);
 
         if (runtime == null) {
             runtime = getObjectRuntime(javaObject);
+        }
+
+        if (runtime == null) {
+            runtime =  Runtime.getCurrentRuntime();
         }
 
         if (runtime == null) {

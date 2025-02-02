@@ -495,6 +495,23 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
         }
     }
 
+    // Set runtimeId field on interface and extended classes
+    if (runtime->GetId() != 0 && (isInterface || implementationObject != nullptr)) {
+        jfieldID runtimeIdField;
+        auto itFound = jclass_to_runtimeId_cache.find(generatedJavaClass);
+        if (itFound != jclass_to_runtimeId_cache.end()) {
+            runtimeIdField = itFound->second;
+        } else {
+            runtimeIdField = jEnv.GetFieldID(generatedJavaClass, "runtimeId", "I");
+            jclass_to_runtimeId_cache.emplace(generatedJavaClass, runtimeIdField);
+        }
+        if (runtimeIdField != nullptr) {
+            jint runtimeId = runtime->GetId(); // Assuming GetId() returns the current runtime's id
+            DEBUG_WRITE("Setting runtimeId %d on instance of %s", runtimeId, fullClassName.c_str());
+            jEnv.SetIntField(instance, runtimeIdField, runtimeId);
+        }
+    }
+
     jEnv.CallVoidMethod(runtime->GetJavaRuntime(), MAKE_INSTANCE_STRONG_ID, instance, javaObjectID);
 
     AdjustAmountOfExternalAllocatedMemory(env);
@@ -1839,6 +1856,7 @@ void CallbackHandlers::TerminateWorkerThread(napi_env env) {
 }
 
 robin_hood::unordered_map<uint64_t, CallbackHandlers::CacheEntry> CallbackHandlers::cache_;
+robin_hood::unordered_map<jclass, jfieldID> CallbackHandlers::jclass_to_runtimeId_cache;
 
 robin_hood::unordered_map<uint64_t, CallbackHandlers::FrameCallbackCacheEntry> CallbackHandlers::frameCallbackCache_;
 
