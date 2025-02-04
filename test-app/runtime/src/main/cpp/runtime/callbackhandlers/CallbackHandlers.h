@@ -63,7 +63,7 @@ namespace tns {
         static napi_value
         CallJavaMethod(napi_env env, napi_value caller, const std::string &className,
                        const std::string &methodName, MetadataEntry *entry, bool isFromInterface,
-                       bool isStatic, bool isSuper, napi_callback_info info);
+                       bool isStatic, bool isSuper, napi_callback_info info,  size_t argc, napi_value* argv);
 
         static napi_value
         CallJSMethod(napi_env env, JNIEnv *jEnv, napi_value jsObject,
@@ -218,6 +218,10 @@ namespace tns {
         typedef void (*func_AChoreographer_postFrameCallbackDelayed64)(
                 AChoreographer *choreographer, AChoreographer_frameCallback64 callback,
                 void *data, uint32_t delayMillis);
+
+
+        static jint lastCallId;
+        static napi_value lastCallValue;
 
     private:
         CallbackHandlers() {
@@ -407,6 +411,7 @@ namespace tns {
 
         static void PostCallback(napi_env env, napi_callback_info info,
                                  FrameCallbackCacheEntry *entry);
+
     };
 }
 

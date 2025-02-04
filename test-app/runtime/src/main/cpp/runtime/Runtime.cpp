@@ -117,18 +117,6 @@ jobject Runtime::GetJavaRuntime() const {
     return m_runtime;
 }
 
-Runtime *Runtime::GetRuntime(napi_env env) {
-    auto runtime = env_to_runtime_cache.at(env);
-
-    if (runtime == nullptr) {
-        stringstream ss;
-        ss << "Cannot find runtime for napi_env: " << env;
-        throw NativeScriptException(ss.str());
-    }
-
-    return runtime;
-}
-
 void
 Runtime::Init(JNIEnv *_env, jobject obj, int runtimeId, jstring filesPath, jstring nativeLibsDir,
               jboolean verboseLoggingEnabled, jboolean isDebuggable, jstring packageName,
@@ -531,12 +519,13 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
         m_objectManager->SetJavaClass(jsObject, instanceClass);
     }
 
-
     string method_name = ArgConverter::jstringToString(methodName);
 
     DEBUG_WRITE("CallJSMethodNative called jsObject %s", method_name.c_str());
 
     auto jsResult = CallbackHandlers::CallJSMethod(env, jEnv, jsObject, method_name, packagedArgs);
+
+    if (napi_util::is_null_or_undefined(env, jsResult)) return nullptr;
 
     int classReturnType = retType;
     jobject javaObject = ConvertJsValueToJavaObject(jEnv, jsResult, classReturnType);
@@ -550,8 +539,6 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
     NapiScope scope(env);
     DEBUG_WRITE("createJSInstanceNative called");
     JEnv jEnv(_jEnv);
-
-
 
     string existingClassName = ArgConverter::jstringToString(className);
 
@@ -583,17 +570,14 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     jclass clazz = jEnv.FindClass(jniName);
     m_objectManager->Link(jsInstance, javaObjectID, clazz);
-
 }
 
 jint Runtime::GenerateNewObjectId(JNIEnv *jEnv, jobject obj) {
     int objectId = m_objectManager->GenerateNewObjectID();
-
     return objectId;
 }
 
 jobject Runtime::ConvertJsValueToJavaObject(JEnv &jEnv, napi_value value, int classReturnType) {
-    NapiScope scope(env);
     JsArgToArrayConverter argConverter(env, value, false /*is implementation object*/,
                                        classReturnType);
     jobject jr = argConverter.GetConvertedArg();
@@ -601,7 +585,6 @@ jobject Runtime::ConvertJsValueToJavaObject(JEnv &jEnv, napi_value value, int cl
     if (jr != nullptr) {
         javaResult = jEnv.NewLocalRef(jr);
     }
-
 
     return javaResult;
 }
@@ -692,6 +675,7 @@ void Runtime::Unlock() {
     m_fileWriteMutex.unlock();
 #endif
 }
+
 
 JavaVM *Runtime::java_vm = nullptr;
 jmethodID Runtime::GET_USED_MEMORY_METHOD_ID = nullptr;

@@ -93,8 +93,7 @@ napi_value
 CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &className,
                                  const string &methodName, MetadataEntry *entry,
                                  bool isFromInterface, bool isStatic,
-                                 bool isSuper, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+                                 bool isSuper, napi_callback_info info, size_t argc, napi_value* argv) {
 
     JEnv jEnv;
 
@@ -181,7 +180,7 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
 
         clazz = jEnv.FindClass(className);
         if (clazz != nullptr) {
-            mi = MethodCache::ResolveMethodSignature(env, className, methodName, info, isStatic);
+            mi = MethodCache::ResolveMethodSignature(env, className, methodName, argc, argv, isStatic);
             if (mi.mid == nullptr) {
                 DEBUG_WRITE("Cannot resolve class=%s, method=%s, isStatic=%d, isSuper=%d",
                             className.c_str(), methodName.c_str(), isStatic, isSuper);
@@ -192,7 +191,7 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
             const string callerClassName = callerNode->GetName();
             DEBUG_WRITE("Resolving method on caller class: %s.%s on className %s",
                         callerClassName.c_str(), methodName.c_str(), className.c_str());
-            mi = MethodCache::ResolveMethodSignature(env, callerClassName, methodName, info,
+            mi = MethodCache::ResolveMethodSignature(env, callerClassName, methodName, argc, argv,
                                                      isStatic);
             if (mi.mid == nullptr) {
                 DEBUG_WRITE(
@@ -217,8 +216,8 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
     }
 
     JsArgConverter argConverter = (entry != nullptr && entry->isExtensionFunction)
-                                  ? JsArgConverter(env, caller, argv.data(), argc, *sig, entry)
-                                  : JsArgConverter(env, argv.data(), argc, false, *sig, entry);
+                                  ? JsArgConverter(env, caller, argv, argc, *sig, entry)
+                                  : JsArgConverter(env, argv, argc, false, *sig, entry);
 
 
     if (!argConverter.IsValid()) {
@@ -429,6 +428,7 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
             break;
         }
         default: {
+            returnValue = napi_util::undefined(env);
             assert(false);
             break;
         }
@@ -480,15 +480,9 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
             // resolve arguments before passing them on to the constructor
             //            JSToJavaConverter argConverter(isolate, argWrapper.args, mi.signature);
 
-            napi_callback_info info = argWrapper.args;
-            size_t argc;
-            napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);
-            std::vector<napi_value> argv(argc);
-            if (argc > 0) {
-                napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr);
-            }
 
-            JsArgConverter argConverter(env, argv.data(), argc, mi.signature);
+
+            JsArgConverter argConverter(env, argWrapper.argv, argWrapper.argc, mi.signature);
             auto ctorArgs = argConverter.ToArgs();
 
             instance = jEnv.NewObjectA(generatedJavaClass, mi.mid, ctorArgs);
@@ -1002,7 +996,7 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
                 jsArgs = (napi_value *) malloc(sizeof(napi_value) * argc);
 #endif
             }
-            ArgConverter::ConvertJavaArgsToJsArgs(env, args, nullptr, jsArgs);
+            ArgConverter::ConvertJavaArgsToJsArgs(env, args, argc, jsArgs);
             napi_call_function(env, jsObject, method, argc, jsArgs, &result);
 
             if (argc > 8) {
@@ -1864,6 +1858,8 @@ std::atomic_int64_t CallbackHandlers::count_ = {0};
 std::atomic_uint64_t CallbackHandlers::frameCallbackCount_ = {0};
 
 int CallbackHandlers::nextWorkerId = 0;
+int CallbackHandlers::lastCallId = -1;
+napi_value CallbackHandlers::lastCallValue = nullptr;
 robin_hood::unordered_map<int, napi_ref> CallbackHandlers::id2WorkerMap;
 
 short CallbackHandlers::MAX_JAVA_STRING_ARRAY_LENGTH = 100;
@@ -1882,5 +1878,6 @@ jmethodID CallbackHandlers::TERMINATE_WORKER_METHOD_ID = nullptr;
 jmethodID CallbackHandlers::WORKER_SCOPE_CLOSE_METHOD_ID = nullptr;
 
 NumericCasts CallbackHandlers::castFunctions;
+
 ArrayElementAccessor CallbackHandlers::arrayElementAccessor;
 FieldAccessor CallbackHandlers::fieldAccessor;

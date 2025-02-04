@@ -24,12 +24,10 @@ JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, napi_value arg,
     }
 }
 
-JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, napi_callback_info info,
+JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, size_t argc, napi_value* argv,
                                              bool hasImplementationObject)
         : m_arr(nullptr), m_argsAsObject(nullptr), m_argsLen(0), m_isValid(false), m_error(Error()),
           m_return_type(static_cast<int>(Type::Null)) {
-    size_t argc;
-    napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);
     m_argsLen = !hasImplementationObject ? argc : argc - 2;
 
     bool success = true;
@@ -37,9 +35,6 @@ JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, napi_callback_info in
     if (m_argsLen > 0) {
         m_argsAsObject = new jobject[m_argsLen];
         memset(m_argsAsObject, 0, m_argsLen * sizeof(jobject));
-
-        std::vector<napi_value> argv(argc);
-        napi_get_cb_info(env, info, &argc, argv.data(), nullptr, nullptr);
 
         for (int i = 0; i < m_argsLen; i++) {
             success = ConvertArg(env, argv[i], i);

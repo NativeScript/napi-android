@@ -10,7 +10,7 @@
 namespace tns {
 class JsArgToArrayConverter {
     public:
-        JsArgToArrayConverter(napi_env env, napi_callback_info info, bool hasImplementationObject);
+        JsArgToArrayConverter(napi_env env, size_t argc, napi_value* argv, bool hasImplementationObject);
 
         JsArgToArrayConverter(napi_env env, napi_value arg, bool isImplementationObject, int classReturnType);
 

@@ -36,9 +36,9 @@ public:
     explicit NapiScope(napi_env env)
             : env_(env),
               locker_(env->isolate),
-              isolate_scope_(env->isolate),
-              context_scope_(env->context()),
-              handle_scope_(env->isolate)
+             isolate_scope_(env->isolate),
+              context_scope_(env->context())
+//              handle_scope_(env->isolate)
     {
         napi_open_handle_scope(env_, &napiHandleScope_);
     }
@@ -52,7 +52,7 @@ private:
     v8::Locker locker_;
     v8::Isolate::Scope isolate_scope_;
     v8::Context::Scope context_scope_;
-    v8::HandleScope handle_scope_;
+//    v8::HandleScope handle_scope_;
     napi_handle_scope napiHandleScope_;
 };
 

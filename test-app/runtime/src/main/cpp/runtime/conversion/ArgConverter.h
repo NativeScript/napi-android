@@ -20,7 +20,7 @@ namespace tns {
     public:
         static void Init(napi_env env);
 
-        static void ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t* length, napi_value* arr);
+        static void ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t length, napi_value* arr);
 
         static napi_value ConvertFromJavaLong(napi_env env, jlong value);
 

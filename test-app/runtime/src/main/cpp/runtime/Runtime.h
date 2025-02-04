@@ -15,6 +15,8 @@
 #include "ArrayBufferHelper.h"
 #include <thread>
 #include "jsr.h"
+#include "NativeScriptException.h"
+#include <sstream>
 
 namespace tns {
     class Runtime {
@@ -24,7 +26,17 @@ namespace tns {
 
         static Runtime* GetRuntime(int runtimeId);
 
-        static Runtime* GetRuntime(napi_env env);
+        inline static Runtime *GetRuntime(napi_env env) {
+            auto runtime = env_to_runtime_cache.at(env);
+
+            if (runtime == nullptr) {
+                std::stringstream ss;
+                ss << "Cannot find runtime for napi_env: " << env;
+                throw NativeScriptException(ss.str());
+            }
+
+            return runtime;
+        }
 
         static void Init(JavaVM *vm);
 

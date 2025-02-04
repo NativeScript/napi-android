@@ -300,6 +300,10 @@ tasks.configureEach { task ->
     if (task =~ /test.+UnitTest/) {
         task.finalizedBy(":app:buildMetadata")
     }
+
+    if (taskName.contains("bundleLibCompileToJar")) {
+        task.finalizedBy(":app:cleanupAllJars")
+    }
 }
 
 task 'setPackageVersion' {

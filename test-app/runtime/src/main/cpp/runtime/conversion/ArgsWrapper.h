@@ -17,11 +17,12 @@ enum class ArgType {
 
 struct ArgsWrapper {
     public:
-        ArgsWrapper(napi_callback_info a, ArgType t)
+        ArgsWrapper(napi_value* argv_, size_t argc_, ArgType t)
             :
-            args(a), type(t) {
+            argv(argv_), argc(argc_), type(t) {
         }
-        napi_callback_info args;
+        napi_value* argv;
+        size_t argc;
         ArgType type;
 };
 }

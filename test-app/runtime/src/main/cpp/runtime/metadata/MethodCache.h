@@ -39,16 +39,16 @@ class MethodCache {
 
         static void Init();
 
-    inline static MethodCache::CacheMethodInfo ResolveMethodSignature(napi_env env, const string &className, const string &methodName, napi_callback_info info, bool isStatic)
+    inline static MethodCache::CacheMethodInfo ResolveMethodSignature(napi_env env, const string &className, const string &methodName, size_t argc, napi_value* argv, bool isStatic)
     {
         CacheMethodInfo method_info;
 
-        auto encoded_method_signature = EncodeSignature(env, className, methodName, info, isStatic);
+        auto encoded_method_signature = EncodeSignature(env, className, methodName,argc, argv, isStatic);
         auto it = s_method_ctor_signature_cache.find(encoded_method_signature);
 
         if (it == s_method_ctor_signature_cache.end())
         {
-            auto signature = ResolveJavaMethod(env, info, className, methodName);
+            auto signature = ResolveJavaMethod(env, argc, argv, className, methodName);
 
             DEBUG_WRITE("ResolveMethodSignature %s='%s'", encoded_method_signature.c_str(), signature.c_str());
 
@@ -81,13 +81,12 @@ class MethodCache {
     {
         CacheMethodInfo constructor_info;
 
-        auto &args = argWrapper.args;
-        auto encoded_ctor_signature = EncodeSignature(env, fullClassName, "<init>", args, false);
+        auto encoded_ctor_signature = EncodeSignature(env, fullClassName, "<init>", argWrapper.argc, argWrapper.argv, false);
         auto it = s_method_ctor_signature_cache.find(encoded_ctor_signature);
 
         if (it == s_method_ctor_signature_cache.end())
         {
-            auto signature = ResolveConstructor(env, args, javaClass, isInterface);
+            auto signature = ResolveConstructor(env, argWrapper.argc, argWrapper.argv, javaClass, isInterface);
 
             DEBUG_WRITE("ResolveConstructorSignature %s='%s'", encoded_ctor_signature.c_str(), signature.c_str());
 
@@ -114,7 +113,7 @@ private:
         }
 
     // Encoded signature <className>.S/I.<methodName>.<argsCount>.<arg1class>.<...>
-    inline static string EncodeSignature(napi_env env, const string &className, const string &methodName, napi_callback_info info, bool isStatic)
+    inline static string EncodeSignature(napi_env env, const string &className, const string &methodName, size_t argc, napi_value* argv, bool isStatic)
     {
         string sig(className);
         sig.append(".");
@@ -128,13 +127,6 @@ private:
         }
         sig.append(methodName);
         sig.append(".");
-
-        size_t argc;
-        napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);
-        napi_value argv[argc];
-        if (argc > 0) {
-            napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
-        }
 
         stringstream s;
         s << argc;
@@ -303,11 +295,11 @@ private:
         return type;
     }
 
-    inline static string ResolveJavaMethod(napi_env env, napi_callback_info info, const string &className, const string &methodName)
+    inline static string ResolveJavaMethod(napi_env env , size_t argc, napi_value* argv, const string &className, const string &methodName)
     {
         JEnv jEnv;
 
-        JsArgToArrayConverter argConverter(env, info, false);
+        JsArgToArrayConverter argConverter(env, argc, argv, false);
 
         auto canonicalClassName = Util::ConvertFromJniToCanonicalName(className);
         JniLocalRef jsClassName(jEnv.NewStringUTF(canonicalClassName.c_str()));
@@ -330,12 +322,12 @@ private:
         return resolvedSignature;
     }
 
-    inline static string ResolveConstructor(napi_env env, napi_callback_info info, jclass javaClass, bool isInterface)
+    inline static string ResolveConstructor(napi_env env, size_t argc, napi_value* argv, jclass javaClass, bool isInterface)
     {
         JEnv jEnv;
         string resolvedSignature;
 
-        JsArgToArrayConverter argConverter(env, info, isInterface);
+        JsArgToArrayConverter argConverter(env, argc, argv, isInterface);
         if (argConverter.IsValid())
         {
             jobjectArray javaArgs = argConverter.ToJavaArray();

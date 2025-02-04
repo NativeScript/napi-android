@@ -318,7 +318,7 @@ void MetadataNode::SetInstanceMetadata(napi_env env, napi_value object, Metadata
 
 
 napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN(0)
+    NAPI_CALLBACK_BEGIN_VARGS()
 
     try {
         napi_value newTarget;
@@ -334,7 +334,7 @@ napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_cal
 
         string fullClassName = extData->fullClassName;
 
-        ArgsWrapper argWrapper(info, ArgType::Class);
+        ArgsWrapper argWrapper(argv.data(), argc, ArgType::Class);
         napi_value jsThisProxy;
         bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argWrapper,
                                                           implementationObject, false,
@@ -416,7 +416,7 @@ napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callbac
 
         napi_set_named_property(env, jsThis, CLASS_IMPLEMENTATION_OBJECT, implementationObject);
 
-        ArgsWrapper argsWrapper(info, ArgType::Interface);
+        ArgsWrapper argsWrapper(argv.data(), argc, ArgType::Interface);
 
         napi_value jsThisProxy;
         auto success = CallbackHandlers::RegisterInstance(env, jsThis, className, argsWrapper,
@@ -439,7 +439,7 @@ napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callbac
 }
 
 napi_value MetadataNode::ClassConstructorCallback(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN(0)
+    NAPI_CALLBACK_BEGIN_VARGS()
 
     try {
 
@@ -452,7 +452,7 @@ napi_value MetadataNode::ClassConstructorCallback(napi_env env, napi_callback_in
 
         string fullClassName = CreateFullClassName(className, extendName);
 
-        ArgsWrapper argsWrapper(info, ArgType::Class);
+        ArgsWrapper argsWrapper(argv.data(), argc, ArgType::Class);
         napi_value jsThisProxy;
         bool success = CallbackHandlers::RegisterInstance(env, jsThis, fullClassName, argsWrapper,
                                                           nullptr, false, &jsThisProxy, className);
@@ -1966,7 +1966,7 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
         } else {
             bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();
             return CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
-                                                    isFromInterface, first.isStatic, isSuper, info);
+                                                    isFromInterface, first.isStatic, isSuper,info, argc, argv.data());
         }
 
     } catch (NativeScriptException &e) {
