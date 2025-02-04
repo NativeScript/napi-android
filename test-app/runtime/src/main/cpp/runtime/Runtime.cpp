@@ -38,6 +38,8 @@
 using namespace tns;
 using namespace std;
 
+
+
 bool tns::LogEnabled = false;
 
 void Runtime::Init(JavaVM *vm) {
@@ -81,11 +83,13 @@ Runtime *Runtime::Current() {
 }
 
 Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
-        : m_id(id), m_lastUsedMemory(0),m_gcFunc(nullptr) {
+        : m_id(id), m_lastUsedMemory(0),m_gcFunc(nullptr){
     m_runtime = jEnv->NewGlobalRef(runtime);
     m_objectManager = new ObjectManager(m_runtime);
     m_loopTimer = new MessageLoopTimer();
     id_to_runtime_cache.emplace(id, this);
+
+    js_method_cache = new JSMethodCache(this);
 
     auto tid = this_thread::get_id();
     Runtime::thread_id_to_rt_cache.emplace(tid, this);
@@ -371,6 +375,7 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 
 void Runtime::DestroyRuntime() {
     this->m_module.DeInit();
+    delete this->js_method_cache;
     Console::onDisposeEnv(env);
     CallbackHandlers::RemoveEnvEntries(env);
     tns::GlobalHelpers::onDisposeEnv(env);
@@ -386,7 +391,7 @@ void Runtime::DestroyRuntime() {
 }
 
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
-    NapiScope scope(env);
+    NapiScope scope(env, false);
     m_objectManager->OnGarbageCollected(jEnv, object_ids);
     bool success = __sync_bool_compare_and_swap(&m_runGC, false, true);
     return success;
@@ -429,25 +434,21 @@ bool Runtime::TryCallGC() {
 }
 
 void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
-    NapiScope scope(env);
     JEnv jEnv(_jEnv);
     string filePath = ArgConverter::jstringToString(scriptFile);
     m_module.Load(env, filePath);
 }
 
 void Runtime::RunModule(const char *moduleName) {
-    NapiScope scope(env);
     m_module.Load(env, moduleName);
 }
 
 void Runtime::RunWorker(jstring scriptFile) {
-    NapiScope scope(env);
     string filePath = ArgConverter::jstringToString(scriptFile);
     m_module.LoadWorker(env, filePath);
 }
 
 jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
-    NapiScope scope(env);
     int status;
     auto filename = ArgConverter::jstringToString(scriptFile);
     auto src = ReadFileText(filename);
@@ -497,16 +498,15 @@ int Runtime::GetReader() {
 }
 
 jobject
-Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstring methodName,
+Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jclass claz, jstring methodName,
                             jint retType, jboolean isConstructor, jobjectArray packagedArgs) {
-    NapiScope scope(env);
     JEnv jEnv(_jEnv);
 
     DEBUG_WRITE("CallJSMethodNative called javaObjectID=%d", javaObjectID);
 
-    auto jsObject = m_objectManager->GetJsObjectByJavaObject(javaObjectID);
+    auto jsObject = m_objectManager->GetJsObjectByJavaObjectInternal(javaObjectID);
 
-    if (jsObject == nullptr || napi_util::is_undefined(env, jsObject)) {
+    if (napi_util::is_null_or_undefined(env, jsObject)) {
         stringstream ss;
         ss << "JavaScript object for Java ID " << javaObjectID << " not found." << endl;
         ss << "Attempting to call method " << ArgConverter::jstringToString(methodName) << endl;
@@ -523,7 +523,7 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
 
     DEBUG_WRITE("CallJSMethodNative called jsObject %s", method_name.c_str());
 
-    auto jsResult = CallbackHandlers::CallJSMethod(env, jEnv, jsObject, method_name, packagedArgs);
+    auto jsResult = CallbackHandlers::CallJSMethod(env, jEnv, jsObject, claz,method_name, javaObjectID,packagedArgs);
 
     if (napi_util::is_null_or_undefined(env, jsResult)) return nullptr;
 
@@ -536,7 +536,6 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jstri
 void
 Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, jint javaObjectID,
                                 jstring className) {
-    NapiScope scope(env);
     DEBUG_WRITE("createJSInstanceNative called");
     JEnv jEnv(_jEnv);
 
@@ -593,7 +592,6 @@ void
 Runtime::PassExceptionToJsNative(JNIEnv *jEnv, jobject obj, jthrowable exception, jstring message,
                                  jstring fullStackTrace, jstring jsStackTrace,
                                  jboolean isDiscarded) {
-    NapiScope scope(env);
     napi_env napiEnv = env;
 
     std::string errMsg = ArgConverter::jstringToString(message);
@@ -637,7 +635,6 @@ Runtime::PassExceptionToJsNative(JNIEnv *jEnv, jobject obj, jthrowable exception
 void
 Runtime::PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_value stackTrace,
                                                       napi_value filename, int lineno) {
-    NapiScope scope(env);
     JEnv jEnv;
     auto runtimeClass = jEnv.GetObjectClass(m_runtime);
 

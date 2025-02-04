@@ -33,12 +33,12 @@ namespace tns {
         int GetOrCreateObjectId(jobject object);
 
         napi_value GetJsObjectByJavaObject(int javaObjectID);
+        napi_value GetJsObjectByJavaObjectInternal(int javaObjectID);
 
         napi_value
-        CreateJSWrapper(jint javaObjectID, const std::string &typeName, bool isArray = false);
+        CreateJSWrapper(jint javaObjectID, const std::string &typeName);
 
-        napi_value CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance,
-                                   bool isArray = false);
+        napi_value CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance);
 
         napi_value GetOrCreateProxy(jint javaObjectID, napi_value instance);
 
@@ -116,8 +116,7 @@ namespace tns {
         JSInstanceInfo *GetJSInstanceInfoFromRuntimeObject(napi_value object);
 
         napi_value
-        CreateJSWrapperHelper(jint javaObjectID, const std::string &typeName, jclass clazz,
-                              bool isArray = false);
+        CreateJSWrapperHelper(jint javaObjectID, const std::string &typeName, jclass clazz);
 
         static void JSObjectFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint);
 

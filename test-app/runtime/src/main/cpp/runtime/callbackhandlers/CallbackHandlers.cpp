@@ -413,8 +413,7 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
                     jint javaObjectID = objectManager->GetOrCreateObjectId(result);
                     returnValue = objectManager->GetJsObjectByJavaObject(javaObjectID);
 
-                    if (returnValue == nullptr || napi_util::is_undefined(env, returnValue)) {
-
+                    if (napi_util::is_null_or_undefined(env, returnValue)) {
                         returnValue = objectManager->CreateJSWrapper(javaObjectID, *returnType,
                                                                      result);
                     }
@@ -965,13 +964,18 @@ vector<string> CallbackHandlers::GetTypeMetadata(const string &name, int index) 
 }
 
 napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
-                                          napi_value jsObject, const string &methodName,
+                                          napi_value jsObject, jclass claz,const string &methodName,int javaObjectId,
                                           jobjectArray args) {
     JEnv jEnv(_jEnv);
     napi_value result;
     napi_value method;
+    auto runtime = Runtime::GetRuntime(env);
 
-    napi_get_named_property(env, jsObject, methodName.c_str(), &method);
+    method = runtime->js_method_cache->getCachedMethod(javaObjectId,methodName);
+    if (!method) {
+        napi_get_named_property(env, jsObject, methodName.c_str(), &method);
+        runtime->js_method_cache->cacheMethod(javaObjectId, methodName, method);
+    }
 
     if (method == nullptr || !napi_util::is_of_type(env, method, napi_function)) {
         stringstream ss;
@@ -1019,6 +1023,7 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
             }
         }
     }
+
 
     return result;
 }

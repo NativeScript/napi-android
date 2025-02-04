@@ -169,7 +169,7 @@ void ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size
                 jint javaObjectID = JType::IntValue(jenv, arg);
                 jsArg = objectManager->GetJsObjectByJavaObject(javaObjectID);
 
-                if (jsArg == nullptr) {
+                if (napi_util::is_null_or_undefined(env, jsArg)) {
                     string argClassName = jstringToString(ObjectToString(argJavaClassPath));
                     argClassName = Util::ConvertFromCanonicalToJniName(argClassName);
                     jsArg = objectManager->CreateJSWrapper(javaObjectID, argClassName);

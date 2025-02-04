@@ -33,18 +33,24 @@ public:
 
 class NapiScope {
 public:
-    explicit NapiScope(napi_env env)
+    explicit NapiScope(napi_env env, bool openHandle = true)
             : env_(env),
               locker_(env->isolate),
              isolate_scope_(env->isolate),
               context_scope_(env->context())
 //              handle_scope_(env->isolate)
     {
-        napi_open_handle_scope(env_, &napiHandleScope_);
+        if (openHandle) {
+            napi_open_handle_scope(env_, &napiHandleScope_);
+        } else {
+            napiHandleScope_ = nullptr;
+        }
     }
 
     ~NapiScope() {
-        napi_close_handle_scope(env_, napiHandleScope_);
+       if (napiHandleScope_) {
+           napi_close_handle_scope(env_, napiHandleScope_);
+       }
     }
 
 private:

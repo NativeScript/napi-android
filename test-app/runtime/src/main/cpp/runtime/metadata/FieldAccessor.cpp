@@ -173,7 +173,7 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                 int javaObjectID = objectManager->GetOrCreateObjectId(result);
                 auto objectResult = objectManager->GetJsObjectByJavaObject(javaObjectID);
 
-                if (objectResult == nullptr) {
+                if (napi_util::is_null_or_undefined(env, objectResult)) {
                     objectResult = objectManager->CreateJSWrapper(javaObjectID, fieldTypeName,
                                                                   result);
                 }

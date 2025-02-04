@@ -198,7 +198,7 @@ napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* o
                 jint javaObjectID = objectManager->GetOrCreateObjectId(*(jobject*) value);
                 jsValue = objectManager->GetJsObjectByJavaObject(javaObjectID);
 
-                if (jsValue == nullptr) {
+                if (napi_util::is_null_or_undefined(env, jsValue)) {
                     string className;
                     if (elementSignature[0] == '[') {
                         className = Util::JniClassPathToCanonicalName(elementSignature);

@@ -334,23 +334,31 @@ napi_value ObjectManager::GetJsObjectByJavaObject(int javaObjectID) {
     return GetOrCreateProxy(javaObjectID, instance);
 }
 
-napi_value
-ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName, bool isArray) {
-    return CreateJSWrapperHelper(javaObjectID, typeName, nullptr, isArray);
+napi_value ObjectManager::GetJsObjectByJavaObjectInternal(int javaObjectID) {
+    auto it = m_idToObject.find(javaObjectID);
+    if (it == m_idToObject.end()) {
+        return nullptr;
+    }
+
+    napi_value instance = napi_util::get_ref_value(m_env, it->second);
+    return instance;
 }
 
 napi_value
-ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance,
-                               bool isArray) {
+ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName) {
+    return CreateJSWrapperHelper(javaObjectID, typeName, nullptr);
+}
+
+napi_value
+ObjectManager::CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance) {
     JEnv jenv;
     JniLocalRef clazz(jenv.GetObjectClass(instance));
 
-    return CreateJSWrapperHelper(javaObjectID, typeName, clazz, isArray);
+    return CreateJSWrapperHelper(javaObjectID, typeName, clazz);
 }
 
 napi_value
-ObjectManager::CreateJSWrapperHelper(jint javaObjectID, const std::string &typeName, jclass clazz,
-                                     bool isArray) {
+ObjectManager::CreateJSWrapperHelper(jint javaObjectID, const std::string &typeName, jclass clazz) {
     auto className = (clazz != nullptr) ? GetClassName(clazz) : typeName;
 
     auto node = MetadataNode::GetOrCreate(className);
@@ -538,7 +546,7 @@ void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {
             napi_delete_reference(m_env, itFound->second);
             this->m_idToObject.erase(javaObjectId);
             this->m_weakObjectIds.erase(javaObjectId);
-//            this->m_markedAsWeakIds.erase(javaObjectId);
+            Runtime::GetRuntime(m_env)->js_method_cache->cleanupObject(javaObjectId);
             DEBUG_WRITE("JS Object released for object id: %d", javaObjectId);
         }
     }

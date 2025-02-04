@@ -71,7 +71,8 @@ napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *ob
         napi_value extendedCtorFunc = napi_util::get_ref_value(env,
                                                                cacheData.extendedCtorFunction);
 
-        napi_util::setPrototypeOf(env, extInstance, napi_util::get_prototype(env, extendedCtorFunc));
+        napi_util::setPrototypeOf(env, extInstance,
+                                  napi_util::get_prototype(env, extendedCtorFunc));
 
         napi_set_named_property(env, extInstance, CONSTRUCTOR, extendedCtorFunc);
 
@@ -87,7 +88,6 @@ string MetadataNode::GetTypeMetadataName(napi_env env, napi_value value) {
 
     return napi_util::get_string_value(env, typeMetadataName);
 }
-
 
 
 bool MetadataNode::isArray() {
@@ -244,7 +244,8 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
     bool hasProperty;
 
     napi_value prototypeImplObjectKey;
-    napi_create_string_utf8(env, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, NAPI_AUTO_LENGTH, &prototypeImplObjectKey);
+    napi_create_string_utf8(env, PROP_KEY_IS_PROTOTYPE_IMPLEMENTATION_OBJECT, NAPI_AUTO_LENGTH,
+                            &prototypeImplObjectKey);
     napi_has_own_property(env, object, prototypeImplObjectKey, &hasProperty);
 
     if (hasProperty) {
@@ -310,11 +311,10 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 void MetadataNode::SetInstanceMetadata(napi_env env, napi_value object, MetadataNode *node) {
     auto cache = GetMetadataNodeCache(env);
     napi_value external;
-    napi_create_external(env, node, nullptr,nullptr, &external);
+    napi_create_external(env, node, nullptr, nullptr, &external);
     napi_set_named_property(env, object, "#instance_metadata", external);
 //    napi_wrap(env, object, node, nullptr, nullptr, nullptr);
 }
-
 
 
 napi_value MetadataNode::ExtendedClassConstructorCallback(napi_env env, napi_callback_info info) {
@@ -410,7 +410,8 @@ napi_value MetadataNode::InterfaceConstructorCallback(napi_env env, napi_callbac
         ObjectManager::MarkSuperCall(env, jsThis);
 
 
-        napi_util::setPrototypeOf(env, implementationObject, napi_util::getPrototypeOf(env, jsThis));
+        napi_util::setPrototypeOf(env, implementationObject,
+                                  napi_util::getPrototypeOf(env, jsThis));
 
         napi_util::setPrototypeOf(env, jsThis, implementationObject);
 
@@ -806,7 +807,7 @@ bool MetadataNode::IsJavascriptKeyword(const std::string &word) {
                     "transient", "true", "try", "typeof", "var", "void", "volatile", "while",
                     "with", "yield"};
 
-        keywords = set<string>(kw, kw + sizeof(kw) / sizeof(kw[0]));
+        keywords = set < string > (kw, kw + sizeof(kw) / sizeof(kw[0]));
     }
 
     return keywords.find(word) != keywords.end();
@@ -1438,7 +1439,6 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
                                                              baseInstanceMethodsCallbackData);
 
 
-
             if (baseConstructor != nullptr) {
                 napi_util::napi_inherits(env, constructor, baseConstructor);
             }
@@ -1538,7 +1538,7 @@ napi_value MetadataNode::NullObjectAccessorGetterCallback(napi_env env, napi_cal
 
             napi_util::napi_set_function(env,
                                          jsThis,
-                                         "valueOf",  MetadataNode::NullValueOfCallback);
+                                         "valueOf", MetadataNode::NullValueOfCallback);
         }
 
         return jsThis;
@@ -1794,7 +1794,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
         auto cachedData = GetCachedExtendedClassData(env, fullExtendedName);
         if (cachedData.extendedCtorFunction != nullptr) {
-            auto value =  napi_util::get_ref_value(env, cachedData.extendedCtorFunction);
+            auto value = napi_util::get_ref_value(env, cachedData.extendedCtorFunction);
             if (!napi_util::is_null_or_undefined(env, value)) return value;
         }
 
@@ -1966,7 +1966,8 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
         } else {
             bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();
             return CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
-                                                    isFromInterface, first.isStatic, isSuper,info, argc, argv.data());
+                                                    isFromInterface, first.isStatic, isSuper, info,
+                                                    argc, argv.data());
         }
 
     } catch (NativeScriptException &e) {

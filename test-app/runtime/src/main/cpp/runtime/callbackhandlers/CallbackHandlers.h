@@ -66,9 +66,8 @@ namespace tns {
                        bool isStatic, bool isSuper, napi_callback_info info,  size_t argc, napi_value* argv);
 
         static napi_value
-        CallJSMethod(napi_env env, JNIEnv *jEnv, napi_value jsObject,
-                     const std::string &methodName, jobjectArray args);
-
+        CallJSMethod(napi_env env, JNIEnv *jEnv, napi_value jsObject,jclass claz,
+                     const std::string &methodName,int javaObjectId, jobjectArray args);
         static napi_value
         GetJavaField(napi_env env, napi_value caller,
                      FieldCallbackData *fieldData);

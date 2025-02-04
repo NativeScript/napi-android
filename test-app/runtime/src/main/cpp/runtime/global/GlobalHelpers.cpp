@@ -135,10 +135,10 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
 #ifndef __HERMES__
         napi_value err;
         napi_value msg;
-        napi_create_string_utf8(env, "Error", 0, &msg);
-        napi_value ex;
-        napi_get_and_clear_last_exception(env, &ex);
-        napi_create_error(env, nullptr, msg, &err);
+        napi_create_string_utf8(env, "Error", strlen("Error"), &msg);
+//        napi_value ex;
+//        napi_get_and_clear_last_exception(env, &ex);
+        napi_create_error(env, msg, msg, &err);
         napi_get_named_property(env, err, "stack", &stack);
 #else
         napi_value global;

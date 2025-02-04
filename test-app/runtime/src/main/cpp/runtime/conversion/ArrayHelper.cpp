@@ -132,9 +132,7 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
     }
 
     jint javaObjectID = objectManager->GetOrCreateObjectId(array);
-    auto jsWrapper = objectManager->CreateJSWrapper(javaObjectID, "" /* ignored */, array, true);
-
-    return jsWrapper;
+    return objectManager->CreateJSWrapper(javaObjectID, "" /* ignored */, array);
 }
 
 void ArrayHelper::Throw(napi_env env, const std::string& errorMessage) {

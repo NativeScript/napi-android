@@ -65,14 +65,19 @@ void NativeScriptException::ReThrowToNapi(napi_env env) {
 }
 
 void NativeScriptException::ReThrowToJava(napi_env env) {
-    NapiScope scope(env);
+    if (env) {
+        NapiScope scope(env);
+    }
     jthrowable ex = nullptr;
     JEnv jEnv;
 
     if (!m_javaException.IsNull()) {
-        auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+        std::string excClassName;
+        if (env) {
+            auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+            excClassName = objectManager->GetClassName((jobject)m_javaException);
+        }
 
-        auto excClassName = objectManager->GetClassName((jobject)m_javaException);
         if (excClassName == "com/tns/NativeScriptException") {
             ex = m_javaException;
         } else {
@@ -203,7 +208,7 @@ napi_value NativeScriptException::GetJavaExceptionFromEnv(napi_env env, const Jn
     jint javaObjectID = objectManager->GetOrCreateObjectId((jobject)exc);
     auto nativeExceptionObject = objectManager->GetJsObjectByJavaObject(javaObjectID);
 
-    if (nativeExceptionObject == nullptr) {
+    if (napi_util::is_null_or_undefined(env, nativeExceptionObject)) {
         string className = objectManager->GetClassName((jobject)exc);
         nativeExceptionObject = objectManager->CreateJSWrapper(javaObjectID, className);
     }
