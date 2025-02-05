@@ -355,13 +355,14 @@ namespace tns {
 
             static void execute(double ts, void *data) {
                 if (data != nullptr) {
+
                     auto entry = static_cast<FrameCallbackCacheEntry *>(data);
                     if (entry->shouldRemoveBeforeCall()) {
                         frameCallbackCache_.erase(entry->id); // invalidates *entry
                         return;
                     }
                     napi_env env = entry->env;
-
+                    NapiScope scope(env);
                     napi_value cb = napi_util::get_ref_value(env, entry->callback);
 
                     napi_value global;

@@ -2039,8 +2039,8 @@ napi_status NAPI_CDECL napi_call_function(napi_env env,
 
   v8::Local<v8::Context> context = env->context();
 
-  v8::Locker locker(env->isolate);
-  v8::Context::Scope contextScope(env->context());
+//  v8::Locker locker(env->isolate);
+//  v8::Context::Scope contextScope(env->context());
 
   v8::Local<v8::Value> v8recv = v8impl::V8LocalValueFromJsValue(recv);
 
@@ -2840,8 +2840,8 @@ napi_status NAPI_CDECL napi_new_instance(napi_env env,
 
   v8::Local<v8::Context> context = env->context();
 
-  v8::Locker locker(env->isolate);
-  v8::Context::Scope contextScope(env->context());
+//  v8::Locker locker(env->isolate);
+//  v8::Context::Scope contextScope(env->context());
 
   v8::Local<v8::Function> ctor;
   CHECK_TO_FUNCTION(env, ctor, constructor);

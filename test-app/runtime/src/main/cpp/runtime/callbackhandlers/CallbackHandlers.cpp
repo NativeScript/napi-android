@@ -1344,6 +1344,16 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
             throw exception;
         }
 
+        napi_value isTerminated;
+        napi_get_named_property(env, jsThis, "isTerminated", &isTerminated);
+        if (!napi_util::is_null_or_undefined(env, isTerminated)) {
+            bool terminated;
+            napi_get_value_bool(env, isTerminated, &terminated);
+            if (terminated) {
+                return nullptr;
+            }
+        }
+
         std::string msg = tns::JsonStringifyObject(env, argv[0], false);
 
         // get worker's ID that is associated on the other side - in Java
@@ -1545,15 +1555,12 @@ napi_value CallbackHandlers::WorkerObjectTerminateCallback(napi_env env, napi_ca
 
         napi_value isTerminated;
         napi_get_named_property(env, thiz, "isTerminated", &isTerminated);
-
-        bool terminated;
-        napi_get_value_bool(env, isTerminated, &terminated);
-
-        if (terminated) {
-            DEBUG_WRITE(
-                    "Main: WorkerObjectTerminateCallback - Worker(id=%d)'s terminate has already been called.",
-                    id);
-            return nullptr;
+        if (!napi_util::is_null_or_undefined(env, isTerminated)) {
+            bool terminated;
+            napi_get_value_bool(env, isTerminated, &terminated);
+            if (terminated) {
+                return nullptr;
+            }
         }
 
         napi_value trueValue;
@@ -1590,15 +1597,14 @@ napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callba
         napi_value global;
         napi_get_global(env, &global);
 
-        napi_value isTerminating;
-        napi_get_named_property(env, global, "isTerminating", &isTerminating);
-
-        bool terminating;
-        napi_get_value_bool(env, isTerminating, &terminating);
-
-        if (terminating) {
-            DEBUG_WRITE("WORKER: WorkerThreadCloseCallback - Worker is currently terminating...");
-            return napi_util::undefined(env);
+        napi_value isTerminated;
+        napi_get_named_property(env, global, "isTerminating", &isTerminated);
+        if (!napi_util::is_null_or_undefined(env, isTerminated)) {
+            bool terminated;
+            napi_get_value_bool(env, isTerminated, &terminated);
+            if (terminated) {
+                return nullptr;
+            }
         }
 
         napi_value trueValue;
@@ -1607,8 +1613,6 @@ napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callba
 
         napi_value callback;
         napi_get_named_property(env, global, "onclose", &callback);
-
-
         if (napi_util::is_of_type(env, callback, napi_function)) {
             napi_value result;
             napi_call_function(env, global, callback, 0, nullptr, &result);

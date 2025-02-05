@@ -186,7 +186,7 @@ describe("TNS require", function () {
 
     it("can can catch a syntax error in module", function () {
         require("./SyntaxErrorInModule");
-        var expected = 'main started Error main ended';
+        var expected = 'main started SyntaxError main ended';
         expect(TNSGetOutput()).toBe(expected);
     });
 

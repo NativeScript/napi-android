@@ -12,7 +12,7 @@ describe("TNS Workers", () => {
 
     beforeEach(() => {
         originalTimeout = jasmine.DEFAULT_TIMEOUT_INTERVAL;
-        jasmine.DEFAULT_TIMEOUT_INTERVAL = 8000; // For slower android emulators
+        jasmine.DEFAULT_TIMEOUT_INTERVAL = 16000; // For slower android emulators
     });
 
     afterEach(() => {
@@ -275,12 +275,11 @@ describe("TNS Workers", () => {
         var worker = new Worker("./EvalWorker.js");
 
         worker.postMessage({
-            eval:
-                "onclose = () => {\
-                postMessage('closed');\
-                close();\
-            };\
-            close()"
+            eval: `onclose = () => {
+                postMessage('closed');
+                close();
+            };
+            close()`
         });
 
         var responseCounter = 0;
