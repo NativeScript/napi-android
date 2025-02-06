@@ -17,6 +17,7 @@
 #include "jsr.h"
 #include "NativeScriptException.h"
 #include <sstream>
+#include "ConcurrentMap.h"
 
 
 
@@ -139,14 +140,17 @@ namespace tns {
 
         static int m_mainLooper_fd[2];
 
-        static robin_hood::unordered_map<int, Runtime*> id_to_runtime_cache;
+        static tns::ConcurrentMap<int, Runtime*> id_to_runtime_cache;
 
         static robin_hood::unordered_map<napi_env, Runtime*> env_to_runtime_cache;
 
-        static robin_hood::unordered_map<std::thread::id, Runtime*> thread_id_to_rt_cache;
+        static tns::ConcurrentMap<std::thread::id, Runtime*> thread_id_to_rt_cache;
 
         static Runtime* s_main_rt;
         static std::thread::id s_main_thread_id;
+
+
+        std::thread::id my_thread_id;
 
 #ifdef APPLICATION_IN_DEBUG
         std::mutex m_fileWriteMutex;
@@ -206,6 +210,7 @@ namespace tns {
             }
             methodCache.clear();
         }
+
 
     private:
         Runtime* rt;

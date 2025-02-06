@@ -49,7 +49,7 @@ public class Runtime {
 
     private native Object runScript(int runtimeId, String filePath) throws NativeScriptException;
 
-    private native Object callJSMethodNative(int runtimeId, int javaObjectID, Class<?>claz, String methodName,int retType, boolean isConstructor, Object... packagedArgs) throws NativeScriptException;
+    private native Object callJSMethodNative(int runtimeId, int javaObjectID, Class<?> claz, String methodName, int retType, boolean isConstructor, Object... packagedArgs) throws NativeScriptException;
 
     private native void createJSInstanceNative(int runtimeId, Object javaObject, int javaObjectID, String canonicalName);
 
@@ -212,7 +212,7 @@ public class Runtime {
 
                 this.runtimeId = nextRuntimeId.getAndIncrement();
 
-                Log.d("TNS.Runtime.ID",  String.valueOf(this.runtimeId));
+                Log.d("TNS.Runtime.ID", String.valueOf(this.runtimeId));
 
                 this.config = config;
                 this.dynamicConfig = dynamicConfiguration;
@@ -290,8 +290,8 @@ public class Runtime {
 
     public static String getJSStackTrace(Throwable ex) {
         Throwable cause = ex;
-        while(cause != null) {
-            if(cause instanceof NativeScriptException) {
+        while (cause != null) {
+            if (cause instanceof NativeScriptException) {
                 return ((NativeScriptException) cause).getIncomingStackTrace();
             }
             cause = cause.getCause();
@@ -385,7 +385,7 @@ public class Runtime {
 
     private static class WorkerThreadHandler extends Handler {
 
-        WorkerThreadHandler(Looper looper){
+        WorkerThreadHandler(Looper looper) {
             super(looper);
         }
 
@@ -1142,15 +1142,15 @@ public class Runtime {
     }
 
     public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, Object javaObject, String methodName, Class<?> retType, Object... args) throws NativeScriptException {
-        return callJSMethodFromPossibleNonMainThread(runtimeId,javaObject, methodName, retType, false /* isConstructor */, args);
+        return callJSMethodFromPossibleNonMainThread(runtimeId, javaObject, methodName, retType, false /* isConstructor */, args);
     }
 
     public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, Object javaObject, String methodName, Class<?> retType, boolean isConstructor, Object... args) throws NativeScriptException {
-        return callJSMethodFromPossibleNonMainThread(runtimeId,javaObject, methodName, retType, isConstructor, 0, args);
+        return callJSMethodFromPossibleNonMainThread(runtimeId, javaObject, methodName, retType, isConstructor, 0, args);
     }
 
     public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, Object javaObject, String methodName, boolean isConstructor, Object... args) throws NativeScriptException {
-        return callJSMethodFromPossibleNonMainThread(runtimeId,javaObject, methodName, void.class, isConstructor, 0, args);
+        return callJSMethodFromPossibleNonMainThread(runtimeId, javaObject, methodName, void.class, isConstructor, 0, args);
     }
 
     public static Object callJSMethodFromPossibleNonMainThread(int runtimeId, final Object javaObject, final String methodName, final Class<?> retType, final boolean isConstructor, final long delay, final Object... args) throws NativeScriptException {
@@ -1205,7 +1205,7 @@ public class Runtime {
         }
 
         if (runtime == null) {
-            runtime =  Runtime.getCurrentRuntime();
+            runtime = Runtime.getCurrentRuntime();
         }
 
         if (runtime == null) {
@@ -1322,11 +1322,11 @@ public class Runtime {
         return arr;
     }
 
-    private Object dispatchCallJSMethodNative(final int javaObjectID,Class<?> claz,  final String methodName, boolean isConstructor, Class<?> retType, final Object[] args) throws NativeScriptException {
-        return dispatchCallJSMethodNative(javaObjectID,claz, methodName, isConstructor, 0, retType, args);
+    private Object dispatchCallJSMethodNative(final int javaObjectID, Class<?> claz, final String methodName, boolean isConstructor, Class<?> retType, final Object[] args) throws NativeScriptException {
+        return dispatchCallJSMethodNative(javaObjectID, claz, methodName, isConstructor, 0, retType, args);
     }
 
-    private Object dispatchCallJSMethodNative(final int javaObjectID,Class<?> claz, final String methodName,final  boolean isConstructor, long delay, Class<?> retType, final Object[] args) throws NativeScriptException {
+    private Object dispatchCallJSMethodNative(final int javaObjectID, Class<?> claz, final String methodName, final boolean isConstructor, long delay, Class<?> retType, final Object[] args) throws NativeScriptException {
         final int returnType = TypeIDs.GetObjectTypeId(retType);
         Object ret = null;
 
@@ -1339,7 +1339,7 @@ public class Runtime {
         if (enableMultithreadedJavascript || isWorkThread) {
             Object[] packagedArgs = packageArgs(tmpArgs);
             try {
-                ret = callJSMethodNative(getRuntimeId(), javaObjectID,claz, methodName, returnType, isConstructor, packagedArgs);
+                ret = callJSMethodNative(getRuntimeId(), javaObjectID, claz, methodName, returnType, isConstructor, packagedArgs);
             } catch (NativeScriptException e) {
                 if (discardUncaughtJsExceptions) {
                     String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";
@@ -1360,7 +1360,7 @@ public class Runtime {
                     synchronized (this) {
                         try {
                             final Object[] packagedArgs = packageArgs(tmpArgs);
-                            arr[0] = callJSMethodNative(getRuntimeId(), javaObjectID,claz, methodName, returnType, isCtor, packagedArgs);
+                            arr[0] = callJSMethodNative(getRuntimeId(), javaObjectID, claz, methodName, returnType, isCtor, packagedArgs);
                         } catch (NativeScriptException e) {
                             if (discardUncaughtJsExceptions) {
                                 String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";

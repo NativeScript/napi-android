@@ -3,6 +3,7 @@
 //
 
 #include "WeakRef.h"
+#include "native_api_util.h"
 
 using namespace tns;
 
@@ -24,10 +25,13 @@ void WeakRef::Init(napi_env env) {
             { "deref", 0, Deref, 0, 0, 0, napi_default, 0 }
     };
 
-    napi_value cons;
-    napi_define_class(env, "WeakRef", NAPI_AUTO_LENGTH, New, nullptr, 2, properties, &cons);
-
-    napi_set_named_property(env, global, "WeakRef", cons);
+    napi_value wr;
+    napi_get_named_property(env, global, "WeakRef", &wr);
+   if (!napi_util::is_null_or_undefined(env, wr)) {
+       napi_value cons;
+       napi_define_class(env, "WeakRef", NAPI_AUTO_LENGTH, New, nullptr, 2, properties, &cons);
+       napi_set_named_property(env, global, "WeakRef", cons);
+   }
 }
 
 napi_value WeakRef::New(napi_env env, napi_callback_info info) {

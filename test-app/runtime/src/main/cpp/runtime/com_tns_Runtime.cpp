@@ -200,7 +200,6 @@ extern "C" JNIEXPORT jint Java_com_tns_Runtime_generateNewObjectId(JNIEnv* env, 
         return 0;
     }
     try {
-
         return runtime->GenerateNewObjectId(env, obj);
     } catch (NativeScriptException& e) {
         e.ReThrowToJava( runtime->GetNapiEnv());
@@ -222,6 +221,7 @@ extern "C" JNIEXPORT jboolean Java_com_tns_Runtime_notifyGc(JNIEnv* jEnv, jobjec
     if (runtime == nullptr) {
         return JNI_FALSE;
     }
+    NapiScope scope(runtime->GetNapiEnv(), false);
     runtime->NotifyGC(jEnv, obj, object_ids);
 
     return true;

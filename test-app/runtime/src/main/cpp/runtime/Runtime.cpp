@@ -73,11 +73,8 @@ void Runtime::Init(JavaVM *vm) {
 Runtime *Runtime::Current() {
     if (!s_mainThreadInitialized) return nullptr;
     auto id = this_thread::get_id();
-    auto itFound = Runtime::thread_id_to_rt_cache.find(id);
-
-    if (itFound != Runtime::thread_id_to_rt_cache.end()) {
-        return itFound->second;
-    }
+    auto rt = Runtime::thread_id_to_rt_cache.Get(id);
+    if (rt) return rt;
 
    return s_main_rt;
 }
@@ -87,12 +84,13 @@ Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
     m_runtime = jEnv->NewGlobalRef(runtime);
     m_objectManager = new ObjectManager(m_runtime);
     m_loopTimer = new MessageLoopTimer();
-    id_to_runtime_cache.emplace(id, this);
+    id_to_runtime_cache.Insert(id, this);
 
     js_method_cache = new JSMethodCache(this);
 
     auto tid = this_thread::get_id();
-    Runtime::thread_id_to_rt_cache.emplace(tid, this);
+    Runtime::thread_id_to_rt_cache.Insert(tid, this);
+    this->my_thread_id = tid;
 
     if (GET_USED_MEMORY_METHOD_ID == nullptr) {
         auto RUNTIME_CLASS = jEnv->FindClass("com/tns/Runtime");
@@ -103,17 +101,14 @@ Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
 }
 
 Runtime *Runtime::GetRuntime(int runtimeId) {
-    auto itFound = id_to_runtime_cache.find(runtimeId);
-    auto runtime = (itFound != id_to_runtime_cache.end())
-                   ? itFound->second
-                   : nullptr;
+    auto runtime = id_to_runtime_cache.Get(runtimeId);
+
 
     if (runtime == nullptr) {
         stringstream ss;
         ss << "Cannot find runtime for id:" << runtimeId;
         throw NativeScriptException(ss.str());
     }
-
     return runtime;
 }
 
@@ -381,8 +376,8 @@ void Runtime::DestroyRuntime() {
     tns::GlobalHelpers::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
     js_free_napi_env(env);
-    Runtime::thread_id_to_rt_cache.erase(this_thread::get_id());
-    id_to_runtime_cache.erase(m_id);
+    Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
+    id_to_runtime_cache.Remove(m_id);
     env_to_runtime_cache.erase(env);
 
 #ifndef __V8__
@@ -391,7 +386,6 @@ void Runtime::DestroyRuntime() {
 }
 
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
-    NapiScope scope(env, false);
     m_objectManager->OnGarbageCollected(jEnv, object_ids);
     bool success = __sync_bool_compare_and_swap(&m_runGC, false, true);
     return success;
@@ -676,12 +670,12 @@ void Runtime::Unlock() {
 
 JavaVM *Runtime::java_vm = nullptr;
 jmethodID Runtime::GET_USED_MEMORY_METHOD_ID = nullptr;
-robin_hood::unordered_map<int, Runtime *> Runtime::id_to_runtime_cache;
+tns::ConcurrentMap<int, Runtime *> Runtime::id_to_runtime_cache;
 robin_hood::unordered_map<napi_env, Runtime *> Runtime::env_to_runtime_cache;
 bool Runtime::s_mainThreadInitialized = false;
 int Runtime::m_androidVersion = Runtime::GetAndroidVersion();
 ALooper *Runtime::m_mainLooper = nullptr;
-robin_hood::unordered_map<std::thread::id, Runtime*> Runtime::thread_id_to_rt_cache;
+tns::ConcurrentMap<std::thread::id, Runtime*> Runtime::thread_id_to_rt_cache;
 
 int Runtime::m_mainLooper_fd[2];
 
