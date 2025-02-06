@@ -154,8 +154,6 @@ void ObjectManager::Init(napi_env env) {
 			return true;
 		  },
 		});
-
-        object.__proxy__ = new WeakRef(proxy);
 		return proxy;
 	  };
 	})();)";
@@ -185,14 +183,11 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
         proxy = napi_util::get_ref_value(m_env, it->second);
         if (!napi_util::is_null_or_undefined(m_env, proxy)) {
             return proxy;
+        } else {
+            napi_delete_reference(m_env, it->second);
+            m_idToProxy.erase(javaObjectID);
         }
     }
-
-
-//    napi_get_named_property(m_env, instance, "__getproxy__", &proxy);
-//    if (!napi_util::is_null_or_undefined(m_env, proxy)) {
-//        return proxy;
-//    }
 
     DEBUG_WRITE("%s %d", "Creating a new proxy for java object with id:", javaObjectID);
 
@@ -444,16 +439,15 @@ void ObjectManager::JSObjectProxyFinalizerCallback(napi_env env, void *finalizeD
     if (state == nullptr) return;
     DEBUG_WRITE("JS Proxy finalizer called for object id: %d", state->javaObjectId);
 
+    auto itFound = state->thisPtr->m_weakObjectIds.find(state->javaObjectId);
+    if (itFound == state->thisPtr->m_weakObjectIds.end()) {
+        state->thisPtr->m_weakObjectIds.emplace(state->javaObjectId);
+        JEnv jEnv;
+        jEnv.CallVoidMethod(state->thisPtr->m_javaRuntimeObject, state->thisPtr->MAKE_INSTANCE_WEAK_METHOD_ID,
+                            state->javaObjectId);
+    }
 
-    state->thisPtr->m_idToProxy.erase(state->javaObjectId);
-//#ifdef __HERMES__
-    ReleaseObjectNow(env, state->javaObjectId);
-//#endif
-//#ifdef __QJS__
-//    objectManager->m_weakObjectIds.emplace(state->javaObjectId);
-//#endif
-
-    delete state;
+   delete state;
 }
 
 int ObjectManager::GenerateNewObjectID() {
@@ -500,8 +494,7 @@ napi_value ObjectManager::JSObjectConstructorCallback(napi_env env, napi_callbac
 void ObjectManager::ReleaseObjectNow(napi_env env, int javaObjectId) {
     if (javaObjectId < 0) return;
     ObjectManager *objMgr = Runtime::GetRuntime(env)->GetObjectManager();
-//    auto itFound = this->m_markedAsWeakIds.find(javaObjectId);
-//    if (itFound == this->m_markedAsWeakIds.end()) {
+    objMgr->m_idToProxy.erase(javaObjectId);
     auto itFound = objMgr->m_weakObjectIds.find(javaObjectId);
     if (itFound == objMgr->m_weakObjectIds.end()) {
         objMgr->m_weakObjectIds.emplace(javaObjectId);
@@ -509,9 +502,6 @@ void ObjectManager::ReleaseObjectNow(napi_env env, int javaObjectId) {
         jEnv.CallVoidMethod(objMgr->m_javaRuntimeObject, objMgr->MAKE_INSTANCE_WEAK_METHOD_ID,
                             javaObjectId);
     }
-//        this->m_markedAsWeakIds.emplace(javaObjectId);
-
-//    }
 }
 
 void ObjectManager::ReleaseNativeObject(napi_env env, napi_value object) {
@@ -549,6 +539,14 @@ void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {
             Runtime::GetRuntime(m_env)->js_method_cache->cleanupObject(javaObjectId);
             DEBUG_WRITE("JS Object released for object id: %d", javaObjectId);
         }
+        auto itFound2 = this->m_idToProxy.find(javaObjectId);
+        if (itFound2 != this->m_idToProxy.end()) {
+            if (itFound2->second != nullptr) {
+                napi_delete_reference(m_env, itFound2->second);
+            }
+            this->m_idToProxy.erase(javaObjectId);
+        }
+
     }
 }
 

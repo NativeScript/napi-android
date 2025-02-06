@@ -205,7 +205,9 @@ namespace tns {
             JEnv env;
             for (auto& classEntry : methodCache) {
                 for (auto& methodEntry : classEntry.second) {
-                    napi_delete_reference(rt->GetNapiEnv(), methodEntry.second);
+                    if (methodEntry.second != nullptr) {
+                        napi_delete_reference(rt->GetNapiEnv(), methodEntry.second);
+                    }
                 }
             }
             methodCache.clear();

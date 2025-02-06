@@ -369,8 +369,9 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
-    this->m_module.DeInit();
+    this->js_method_cache->cleanupCache();
     delete this->js_method_cache;
+    this->m_module.DeInit();
     Console::onDisposeEnv(env);
     CallbackHandlers::RemoveEnvEntries(env);
     tns::GlobalHelpers::onDisposeEnv(env);
