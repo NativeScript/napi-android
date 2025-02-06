@@ -56,7 +56,10 @@ if (!hasNdkDirectory) {
     NDK_PATH = ndkDirectory
 }
 
-if (NDK_PATH == null || NDK_PATH == "null" || NDK_PATH == "") {
+// if a ndkVersion is passed ensure we use it in NDK_PATH
+if (hasNdkVersion) {
+    NDK_PATH = "$System.env.ANDROID_HOME/ndk/${ndkVersion}"
+} else if (NDK_PATH == null || NDK_PATH == "null" || NDK_PATH == "") {
    if (!hasNdkVersion) {
         NDK_PATH = "$System.env.ANDROID_HOME/ndk/${defaultNdkVersion}"
    } else {
@@ -132,7 +135,7 @@ android {
 
 //              arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DANDROID_NDK_ROOT=${NDK_PATH}"
                 cppFlags "-std=c++17"
-                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}"
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}", "-DCMAKE_ANDROID_NDK=${NDK_PATH}", "-DCMAKE_TOOLCHAIN_FILE=${NDK_PATH}/build/cmake/android.toolchain.cmake"
             }
         }
 
