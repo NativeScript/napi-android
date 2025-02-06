@@ -217,6 +217,7 @@ class NativeInfo {
     static T* GetNativeInfo(JSContextRef ctx, JSObjectRef obj, const char * propertyKey) {
         JSValueRef exception {};
         JSValueRef native_info = JSObjectGetProperty(ctx, obj, JSString(propertyKey), &exception);
+
         NativeInfo* info = Get<NativeInfo>(JSValueToObject(ctx, native_info, &exception));
         if (info != nullptr && info->Type() == T::StaticType) {
             return reinterpret_cast<T*>(info);
@@ -349,6 +350,11 @@ class ConstructorInfo : public NativeInfo {
         JSClassRef _class;
 };
 
+namespace xyz {
+    static std::once_flag functionInfoOnceFlag;
+    JSClassRef functionInfoClass {};
+}
+
 class FunctionInfo : public NativeInfo {
         public:
         static const NativeType StaticType = NativeType::Function;
@@ -363,19 +369,11 @@ class FunctionInfo : public NativeInfo {
             if (info == nullptr) {
                 return napi_set_last_error(env, napi_generic_failure);
             }
-
-            JSObjectRef function{JSObjectMakeFunctionWithCallback(env->context, JSString(utf8name), CallAsFunction)};
-//            JSObjectRef prototype{JSObjectMake(env->context, info->_class, info)};
-//
-//
-//            JSObjectSetPrototype(env->context, prototype, JSObjectGetPrototype(env->context, function));
-//            JSObjectSetPrototype(env->context, function, prototype);
-
-            NativeInfo::SetNativeInfo(env->context, function, info->_class, "[[jsc_function_info]]", info);
-
+            JSObjectRef function = JSObjectMake(env->context, xyz::functionInfoClass, info);
             *result = ToNapi(function);
             return napi_ok;
         }
+
 
         private:
         FunctionInfo(napi_env env, napi_callback cb, void* data)
@@ -383,15 +381,32 @@ class FunctionInfo : public NativeInfo {
         , _env{env}
         , _cb{cb}
         , _data{data} {
-            JSClassDefinition definition{kJSClassDefinitionEmpty};
-            definition.className = "Native";
-            definition.finalize = Finalize;
-            _class = JSClassCreate(&definition);
+            std::call_once(xyz::functionInfoOnceFlag, []() {
+                JSClassDefinition definition{kJSClassDefinitionEmpty};
+                definition.className = "NapiFunctionCallback";
+                definition.callAsFunction = FunctionInfo::CallAsFunction;
+                definition.attributes = kJSClassAttributeNoAutomaticPrototype;
+                definition.initialize = FunctionInfo::initialize;
+                definition.finalize = Finalize;
+                xyz::functionInfoClass = JSClassCreate(&definition);
+            });
+
         }
 
-        ~FunctionInfo() {
-            JSClassRelease(_class);
+        ~FunctionInfo() {}
+
+    static void initialize(JSContextRef ctx, JSObjectRef object) {
+        JSObjectRef global = JSContextGetGlobalObject(ctx);
+        JSValueRef value =
+                JSObjectGetProperty(ctx, global, JSString("Function"), nullptr);
+        JSObjectRef funcCtor = JSValueToObject(ctx, value, nullptr);
+        if (!funcCtor) {
+            // We can't do anything if Function is not an object
+            return;
         }
+        JSValueRef funcProto = JSObjectGetPrototype(ctx, funcCtor);
+        JSObjectSetPrototype(ctx, object, funcProto);
+    }
 
         // JSObjectCallAsFunctionCallback
         static JSValueRef CallAsFunction(JSContextRef ctx,
@@ -401,7 +416,7 @@ class FunctionInfo : public NativeInfo {
         const JSValueRef arguments[],
         JSValueRef* exception) {
 //            FunctionInfo* info = NativeInfo::Get<FunctionInfo>(function);
-            FunctionInfo* info = NativeInfo::GetNativeInfo<FunctionInfo>(ctx, function, "[[jsc_function_info]]");
+            FunctionInfo* info = reinterpret_cast<FunctionInfo *>(JSObjectGetPrivate(function));
 
             // Make sure any errors encountered last time we were in N-API are gone.
             napi_clear_last_error(info->_env);
@@ -411,6 +426,7 @@ class FunctionInfo : public NativeInfo {
             cbinfo.newTarget = nullptr;
             cbinfo.argc = argumentCount;
             cbinfo.argv = ToNapi(arguments);
+
             cbinfo.data = info->_data;
 
             napi_value result = info->_cb(info->_env, &cbinfo);
@@ -433,8 +449,8 @@ class FunctionInfo : public NativeInfo {
         napi_env _env;
         napi_callback _cb;
         void* _data;
-        JSClassRef _class;
 };
+
 
 template<typename T, NativeType TType>
 class BaseInfoT : public NativeInfo {
@@ -713,6 +729,15 @@ void NapiEnvironment::deinit_refs() {
         napi_ref ref{strong_refs.front()};
         ref->deinit(this);
     }
+}
+
+void NapiEnvironment::init_symbol(JSValueRef &symbol, const char *description) {
+    symbol = JSValueMakeSymbol(context, JSString(description));
+    JSValueProtect(context, symbol);
+}
+
+void NapiEnvironment::deinit_symbol(JSValueRef symbol) {
+    JSValueUnprotect(context, symbol);
 }
 
 // Warning: Keep in-sync with napi_status enum

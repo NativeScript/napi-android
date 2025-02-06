@@ -12,14 +12,14 @@ typedef struct NapiRuntime *napi_runtime;
 
 class NapiScope {
 public:
-    explicit NapiScope(napi_env env)
+    explicit NapiScope(napi_env env, bool openHandle = true)
             : env_(env)
     {
-        napi_open_handle_scope(env_, &napiHandleScope_);
+//        napi_open_handle_scope(env_, &napiHandleScope_);
     }
 
     ~NapiScope() {
-        napi_close_handle_scope(env_, napiHandleScope_);
+//        napi_close_handle_scope(env_, napiHandleScope_);
     }
 
 private:
