@@ -7,6 +7,7 @@
 #include "js_native_api.h"
 #include "jsr_common.h"
 #include "mutex"
+#include <map>
 
 class JSR {
 public:
