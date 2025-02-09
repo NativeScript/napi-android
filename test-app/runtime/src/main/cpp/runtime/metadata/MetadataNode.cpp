@@ -652,14 +652,10 @@ MetadataNode::GetCachedExtendedClassData(napi_env env, const string &proxyClassN
 }
 
 MetadataNode::MetadataNodeCache *MetadataNode::GetMetadataNodeCache(napi_env env) {
-    MetadataNodeCache *cache;
-    auto itFound = s_metadata_node_cache.find(env);
-    if (itFound == s_metadata_node_cache.end()) {
-        cache = new MetadataNodeCache;
-        s_metadata_node_cache.emplace(env, cache);
-    } else {
-        cache = itFound->second;
-    }
+    auto cache = s_metadata_node_cache.Get(env);
+    if (cache) return cache;
+    cache = new MetadataNodeCache;
+    s_metadata_node_cache.Insert(env, cache);
     return cache;
 }
 
@@ -834,61 +830,45 @@ napi_value MetadataNode::CreateWrapper(napi_env env) {
 }
 
 napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info info) {
-    size_t argc = 1;
-    napi_value args[1];
-    napi_value thisArg;
-    void *data;
-
-    napi_get_cb_info(env, info, &argc, args, &thisArg, &data);
-
+    NAPI_CALLBACK_BEGIN(0)
     try {
+        auto childTreeNode = static_cast<MetadataTreeNode *>(data);
+        auto node = GetOrCreateInternal(childTreeNode->parent);
+        DEBUG_WRITE("Get package item: %s", childTreeNode->name.c_str());
+        auto hiddenPropName = "__" + childTreeNode->name;
+        napi_value hiddenValue;
+        napi_get_named_property(env, jsThis, hiddenPropName.c_str(), &hiddenValue);
 
-        auto *methodInfo = static_cast<PackageGetterMethodData *>(data);
-
-        if (methodInfo->value != nullptr) {
-            napi_value value = napi_util::get_ref_value(env, methodInfo->value);
-            if (!napi_util::is_null_or_undefined(env, value)) {
-                return value;
-            }
+        if (!napi_util::is_null_or_undefined(env, hiddenValue)) {
+            DEBUG_WRITE("Get cached package item: %s", hiddenPropName.c_str());
+            return hiddenValue;
         }
 
-        auto node = methodInfo->node;
+        auto childNode = MetadataNode::GetOrCreateInternal(childTreeNode);
+        hiddenValue = childNode->CreateWrapper(env);
 
-        uint8_t nodeType = s_metadataReader.GetNodeType(node->m_treeNode);
-
-        auto child = GetChildMetadataForPackage(node, methodInfo->utf8name);
-        auto foundChild = child.treeNode != nullptr;
-        napi_value cachedItem = nullptr;
-        if (foundChild) {
-            auto childNode = MetadataNode::GetOrCreateInternal(child.treeNode);
-            auto cache = GetMetadataNodeCache(env);
-            if (methodInfo->value != nullptr) {
-                cache->CtorFuncCache.erase(childNode->m_treeNode);
-            }
-            cachedItem = childNode->CreateWrapper(env);
-            methodInfo->value = napi_util::make_ref(env, cachedItem);
-
-            uint8_t childNodeType = s_metadataReader.GetNodeType(child.treeNode);
-            bool isInterface = s_metadataReader.IsNodeTypeInterface(childNodeType);
-            if (isInterface) {
-                // For all java interfaces we register the special Symbol.hasInstance property
-                // which is invoked by the instanceof operator (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/hasInstance).
-                // For example:
-                //
-                // Object.defineProperty(android.view.animation.Interpolator, Symbol.hasInstance, {
-                //    value: function(obj) {
-                //        return true;
-                //    }
-                // });
-                RegisterSymbolHasInstanceCallback(env, child, cachedItem);
-            }
-
-            if (node->m_name == "org/json" && child.name == "JSONObject") {
-                JSONObjectHelper::RegisterFromFunction(env, cachedItem);
-            }
+        uint8_t childNodeType = s_metadataReader.GetNodeType(childTreeNode);
+        bool isInterface = s_metadataReader.IsNodeTypeInterface(childNodeType);
+        if (isInterface) {
+            // For all java interfaces we register the special Symbol.hasInstance property
+            // which is invoked by the instanceof operator (https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol/hasInstance).
+            // For example:
+            //
+            // Object.defineProperty(android.view.animation.Interpolator, Symbol.hasInstance, {
+            //    value: function(obj) {
+            //        return true;
+            //    }
+            // });
+            RegisterSymbolHasInstanceCallback(env, childTreeNode, hiddenValue);
+        }
+        auto parentNode = GetOrCreateInternal(childTreeNode->parent);
+        if (parentNode->m_name == "org/json" && childTreeNode->name == "JSONObject") {
+            JSONObjectHelper::RegisterFromFunction(env, hiddenValue);
         }
 
-        return cachedItem;
+        napi_set_named_property(env, jsThis, hiddenPropName.c_str(), hiddenValue);
+
+        return hiddenValue;
 
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -901,18 +881,17 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToNapi(env);
     }
-
-    return nullptr;
 }
 
-void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const MetadataEntry &entry,
+void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const MetadataTreeNode* treeNode,
                                                      napi_value interface) {
     if (napi_util::is_undefined(env, interface) || napi_util::is_null(env, interface)) {
         return;
     }
 
     JEnv jEnv;
-    auto className = GetJniClassName(entry);
+
+    auto className = GetJniClassName(treeNode);
     auto clazz = jEnv.FindClass(className);
     if (clazz == nullptr) {
         return;
@@ -976,9 +955,10 @@ napi_value MetadataNode::SymbolHasInstanceCallback(napi_env env, napi_callback_i
 
 }
 
-std::string MetadataNode::GetJniClassName(const MetadataEntry &entry) {
+
+std::string MetadataNode::GetJniClassName(const MetadataTreeNode * node) {
     std::stack<string> s;
-    MetadataTreeNode *node = entry.treeNode;
+
     while (node != nullptr && !node->name.empty()) {
         s.push(node->name);
         node = node->parent;
@@ -1002,20 +982,12 @@ napi_value MetadataNode::CreatePackageObject(napi_env env) {
 
     if (ptrChildren != nullptr) {
         const auto &children = *ptrChildren;
-
         auto lastChildName = "";
-
         for (auto childNode: children) {
-
-            auto *info = new PackageGetterMethodData();
-            info->utf8name = childNode->name.c_str();
-            info->node = this;
-            info->value = nullptr;
-
-            if (strcmp(info->utf8name, lastChildName) == 0) {
+            if (strcmp(childNode->name.c_str(), lastChildName) == 0) {
                 continue;
             }
-            lastChildName = info->utf8name;
+            lastChildName = childNode->name.c_str();
             napi_property_descriptor descriptor{
                     childNode->name.c_str(),
                     nullptr,
@@ -1023,8 +995,8 @@ napi_value MetadataNode::CreatePackageObject(napi_env env) {
                     PackageGetterCallback,
                     nullptr,
                     nullptr,
-                    napi_default,
-                    info};
+                    napi_default_jsproperty,
+                    childNode};
             napi_define_properties(env, packageObj, 1, &descriptor);
         }
     }
@@ -1377,10 +1349,22 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
     auto itFound = cache->CtorFuncCache.find(treeNode);
     if (itFound != cache->CtorFuncCache.end()) {
         instanceMethodsCallbackData = itFound->second.instanceMethodCallbacks;
-        if (itFound->second.constructorFunction == nullptr)
-            return nullptr;
-        auto value = napi_util::get_ref_value(env, itFound->second.constructorFunction);
-        if (!napi_util::is_null_or_undefined(env, value)) return value;
+        if (itFound->second.constructorFunction != nullptr) {
+            auto value = napi_util::get_ref_value(env, itFound->second.constructorFunction);
+            if (!napi_util::is_null_or_undefined(env, value)) {
+                return value;
+            }
+        }
+    }
+
+    if (itFound != cache->CtorFuncCache.end()) {
+        if (itFound->second.constructorFunction != nullptr) {
+            napi_delete_reference(env, itFound->second.constructorFunction);
+        }
+        for (const auto &data: itFound->second.instanceMethodCallbacks) {
+            delete data;
+        }
+        cache->CtorFuncCache.erase(itFound);
     }
 
     auto node = GetOrCreateInternal(treeNode);
@@ -2075,15 +2059,34 @@ void MetadataNode::BuildMetadata(const std::string &filesPath) {
 
 void MetadataNode::onDisposeEnv(napi_env env) {
     {
-        auto it = s_metadata_node_cache.find(env);
-        if (it != s_metadata_node_cache.end()) {
-            delete it->second;
-            s_metadata_node_cache.erase(it);
+        auto it = s_metadata_node_cache.Get(env);
+        if (it != nullptr) {
+            for (const auto &entry: it->CtorFuncCache) {
+                if (entry.second.constructorFunction == nullptr) {
+                    napi_delete_reference(env, entry.second.constructorFunction);
+                }
+                for (const auto data: entry.second.instanceMethodCallbacks) {
+                    delete data;
+                }
+            }
+            it->CtorFuncCache.clear();
+
+            for (const auto &entry: it->ExtendedCtorFuncCache) {
+                if (entry.second.extendedCtorFunction == nullptr) {
+                    napi_delete_reference(env, entry.second.extendedCtorFunction);
+                }
+            }
+            it->ExtendedCtorFuncCache.clear();
         }
+        s_metadata_node_cache.Remove(env);
+        delete it;
     }
     {
         auto it = s_arrayObjects.find(env);
         if (it != s_arrayObjects.end()) {
+            if (it->second != nullptr) {
+                napi_delete_reference(env, it->second);
+            }
             s_arrayObjects.erase(it);
         }
     }
@@ -2095,8 +2098,7 @@ MetadataReader MetadataNode::s_metadataReader;
 robin_hood::unordered_map<std::string, MetadataNode *> MetadataNode::s_name2NodeCache;
 robin_hood::unordered_map<std::string, MetadataTreeNode *> MetadataNode::s_name2TreeNodeCache;
 robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> MetadataNode::s_treeNode2NodeCache;
-robin_hood::unordered_map<napi_env, MetadataNode::MetadataNodeCache *> MetadataNode::s_metadata_node_cache;
+tns::ConcurrentMap<napi_env, MetadataNode::MetadataNodeCache *> MetadataNode::s_metadata_node_cache;
 robin_hood::unordered_map<napi_env, napi_ref> MetadataNode::s_arrayObjects;
 
-// TODO
 bool MetadataNode::s_profilerEnabled = false;

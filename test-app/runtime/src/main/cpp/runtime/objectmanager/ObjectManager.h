@@ -20,6 +20,8 @@ namespace tns {
     public:
         ObjectManager(jobject javaRuntimeObject);
 
+        ~ObjectManager();
+
         void Init(napi_env env);
 
         JniLocalRef GetJavaObjectByJsObject(napi_value object);
@@ -74,6 +76,8 @@ namespace tns {
         void ReleaseNativeObject(napi_env env, napi_value object);
 
         inline static void ReleaseObjectNow(napi_env env, int javaObjectId);
+
+
 
     private:
         static napi_value JSObjectConstructorCallback(napi_env env, napi_callback_info info);

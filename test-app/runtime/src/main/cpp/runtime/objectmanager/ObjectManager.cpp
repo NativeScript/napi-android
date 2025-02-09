@@ -176,6 +176,22 @@ void ObjectManager::Init(napi_env env) {
     this->m_jsObjectProxyCreator = ref;
 }
 
+ObjectManager::~ObjectManager() {
+    if (this->m_jsObjectCtor) napi_delete_reference(m_env, this->m_jsObjectCtor);
+    if (this->m_jsObjectProxyCreator) napi_delete_reference(m_env, this->m_jsObjectProxyCreator);
+    for (auto &entry: m_idToProxy) {
+        if (!entry.second) continue;
+        napi_delete_reference(m_env, entry.second);
+    }
+    m_idToProxy.clear();
+
+    for (auto &entry: m_idToObject) {
+        if (!entry.second) continue;
+        napi_delete_reference(m_env, entry.second);
+    }
+    m_idToObject.clear();
+}
+
 napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instance) {
     napi_value proxy = nullptr;
     auto it = m_idToProxy.find(javaObjectID);

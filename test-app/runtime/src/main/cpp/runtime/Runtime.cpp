@@ -38,8 +38,6 @@
 using namespace tns;
 using namespace std;
 
-
-
 bool tns::LogEnabled = false;
 
 void Runtime::Init(JavaVM *vm) {
@@ -219,6 +217,11 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
                                      return mode;
                                  });
 
+    napi_util::napi_set_function(env, global, "napiFunction",
+                                 [](napi_env _env, napi_callback_info) -> napi_value {
+                                     return nullptr;
+                                 });
+
     SimpleProfiler::Init(env, global);
 
     CallbackHandlers::CreateGlobalCastFunctions(env);
@@ -338,7 +341,6 @@ ObjectManager *Runtime::GetObjectManager() const {
 }
 
 Runtime::~Runtime() {
-    delete this->m_objectManager;
     delete this->m_loopTimer;
 
 #ifdef __V8__
@@ -369,6 +371,8 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
+    MetadataNode::onDisposeEnv(env);
+    ArgConverter::onDisposeEnv(env);
     this->js_method_cache->cleanupCache();
     delete this->js_method_cache;
     this->m_module.DeInit();
@@ -376,6 +380,7 @@ void Runtime::DestroyRuntime() {
     CallbackHandlers::RemoveEnvEntries(env);
     tns::GlobalHelpers::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
+    delete this->m_objectManager;
     js_free_napi_env(env);
     Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
     id_to_runtime_cache.Remove(m_id);

@@ -99,7 +99,7 @@ namespace tns {
             return result;
         }
 
-        static void onDisposeIsolate(napi_env env);
+        static void onDisposeEnv(napi_env env);
 
     private:
 

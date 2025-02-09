@@ -104,7 +104,7 @@ private:
     static bool IsValidExtendName(napi_env env, napi_value name);
     static bool GetExtendLocation(napi_env env, std::string& extendLocation, bool isTypeScriptExtend);
     static ExtendedClassCacheData GetCachedExtendedClassData(napi_env env, const std::string& proxyClassName);
-    static std::string GetJniClassName(const MetadataEntry &entry);
+    static std::string GetJniClassName(const MetadataTreeNode* node);
 
 
     static void SetClassAccessor(napi_env env, napi_value constructor);
@@ -178,7 +178,7 @@ private:
     static napi_value NullValueOfCallback(napi_env env, napi_callback_info info);
 
 
-    static void RegisterSymbolHasInstanceCallback(napi_env env, const MetadataEntry &entry, napi_value interface);
+    static void RegisterSymbolHasInstanceCallback(napi_env env, const MetadataTreeNode *treeNode, napi_value interface);
 
     static napi_value SymbolHasInstanceCallback(napi_env env, napi_callback_info info);
 
@@ -200,7 +200,7 @@ private:
     static robin_hood::unordered_map<std::string, MetadataNode *> s_name2NodeCache;
     static robin_hood::unordered_map<std::string, MetadataTreeNode *> s_name2TreeNodeCache;
     static robin_hood::unordered_map<MetadataTreeNode *, MetadataNode *> s_treeNode2NodeCache;
-    static robin_hood::unordered_map<napi_env, MetadataNodeCache *> s_metadata_node_cache;
+    static tns::ConcurrentMap<napi_env, MetadataNodeCache *> s_metadata_node_cache;
     static robin_hood::unordered_map<napi_env, napi_ref> s_arrayObjects;
 
     struct CtorCacheData {
@@ -291,10 +291,7 @@ private:
     };
 
     struct MetadataNodeCache {
-//        napi_ref MetadataKey;
-
         robin_hood::unordered_map<MetadataTreeNode *, CtorCacheData> CtorFuncCache;
-
         robin_hood::unordered_map<std::string, MetadataNode::ExtendedClassCacheData> ExtendedCtorFuncCache;
     };
 

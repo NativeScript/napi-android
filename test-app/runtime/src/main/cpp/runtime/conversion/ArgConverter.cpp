@@ -248,9 +248,15 @@ u16string ArgConverter::ConvertToUtf16String(napi_env env, napi_value s) {
     }
 }
 
-void ArgConverter::onDisposeIsolate(napi_env env) {
+void ArgConverter::onDisposeEnv(napi_env env) {
     auto itFound = s_type_long_operations_cache.find(env);
     if (itFound != s_type_long_operations_cache.end()) {
+        if (itFound->second->LongNumberCtorFunc) {
+            napi_delete_reference(env, itFound->second->LongNumberCtorFunc);
+        }
+        if (itFound->second->NanNumberObject) {
+            napi_delete_reference(env, itFound->second->NanNumberObject);
+        }
         delete itFound->second;
         s_type_long_operations_cache.erase(itFound);
     }
