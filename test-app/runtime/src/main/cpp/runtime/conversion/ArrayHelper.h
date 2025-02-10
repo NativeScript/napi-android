@@ -1,7 +1,7 @@
 #ifndef ARRAYHELPER_H_
 #define ARRAYHELPER_H_
 
-#include <js_native_api.h>
+#include "js_native_api.h"
 #include "ObjectManager.h"
 #include <string.h>
 

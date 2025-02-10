@@ -1,4 +1,5 @@
 #include "jsr.h"
+#include "quicks-runtime.h"
 
 JSR::JSR() = default;
 

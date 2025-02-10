@@ -95,9 +95,9 @@ class RefTracker {
 class Finalizer;
 }  // end of namespace v8impl
 
-struct NapiEnvironment {
-  explicit NapiEnvironment(v8::Local<v8::Context> context,
-                           int32_t module_api_version)
+struct napi_env__ {
+  explicit napi_env__(v8::Local<v8::Context> context,
+                      int32_t module_api_version)
       : isolate(context->GetIsolate()),
         context_persistent(isolate, context),
         module_api_version(module_api_version) {
@@ -213,9 +213,9 @@ struct NapiEnvironment {
   bool in_gc_finalizer = false;
 
  protected:
-  // Should not be deleted directly. Delete with `NapiEnvironment::DeleteMe()`
+  // Should not be deleted directly. Delete with `napi_env__::DeleteMe()`
   // instead.
-  virtual ~NapiEnvironment() = default;
+  virtual ~napi_env__() = default;
 };
 
 inline napi_status napi_clear_last_error(napi_env env) {

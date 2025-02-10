@@ -106,7 +106,6 @@ if (HERMES)
     include_directories(
          src/main/cpp/napi/hermes
          src/main/cpp/napi/hermes/include
-         src/main/cpp/napi/hermes/include/node-api
          src/main/cpp/napi/common
     )
     set(SOURCES ${SOURCES}
@@ -247,7 +246,6 @@ find_library(system-log log)
 find_library(system-z z)
 find_library(system-android android)
 
-
 # Command info: https://cmake.org/cmake/help/v3.4/command/target_link_libraries.html
 # Specifies libraries CMake should link to your target library.
 if (QUICKJS)
@@ -262,3 +260,5 @@ elseif (HERMES)
 elseif (JSC OR V8)
     target_link_libraries(NativeScript ${system-log} ${system-z} ${system-android})
 endif ()
+
+

@@ -2,8 +2,9 @@
 #include <sys/queue.h>
 #include <limits.h>
 #include <quickjs.h>
-#include <js_native_api.h>
+#include "js_native_api.h"
 #include "libbf.h"
+#include "quicks-runtime.h"
 
 #ifdef __ANDROID__
 
@@ -106,8 +107,8 @@ typedef struct Handle {
     HandleType type;
 } Handle;
 
-typedef struct NapiHandleScope {
-    LIST_ENTRY(NapiHandleScope)
+typedef struct napi_handle_scope__ {
+    LIST_ENTRY(napi_handle_scope__)
             node; // size_t
     SLIST_HEAD(, Handle)
             handleList; // size_t
@@ -115,19 +116,19 @@ typedef struct NapiHandleScope {
     Handle stackHandles[8];
     int handleCount;
     HandleType type;
-} NapiHandleScope;
+} napi_handle_scope__;
 
-typedef struct NapiReference {
+typedef struct napi_ref__ {
     JSValue value; // size_t * 2
-    LIST_ENTRY(NapiReference)
+    LIST_ENTRY(napi_ref__)
             node;                   // size_t * 2
     uint8_t referenceCount; // 8
-} NapiReference;
+} napi_ref__;
 
-typedef struct NapiDeferred {
+typedef struct napi_deferred__ {
     napi_value resolve;
     napi_value reject;
-} NapiDeferred;
+} napi_deferred__;
 
 typedef struct ExternalInfo {
     void *data;                     // size_t
@@ -156,13 +157,13 @@ typedef struct JsAtoms {
     JSAtom weakref;
 } JsAtoms;
 
-typedef struct NapiEnvironment {
+typedef struct napi_env__ {
     JSValue referenceSymbolValue; // size_t * 2
     napi_runtime runtime;         // size_t
     JSContext *context;           // size_t
-    LIST_HEAD(, NapiHandleScope)
+    LIST_HEAD(, napi_handle_scope__)
             handleScopeList; // size_t
-    LIST_HEAD(, NapiReference)
+    LIST_HEAD(, napi_ref__)
             referencesList; // size_t
     bool isThrowNull;
     ExternalInfo *instanceData;
@@ -172,22 +173,22 @@ typedef struct NapiEnvironment {
     ExternalInfo *gcBefore;
     ExternalInfo *gcAfter;
     int js_enter_state;
-} NapiEnvironment;
+} napi_env__;
 
-typedef struct NapiRuntime {
+typedef struct napi_runtime__ {
     JSRuntime *runtime;           // size_t
     JSClassID constructorClassId; // uint32_t
     JSClassID functionClassId;    // uint32_t
     JSClassID externalClassId;    // uint32_t
-} NapiRuntime;
+} napi_runtime__;
 
-typedef struct NapiCallbackInfo {
+typedef struct napi_callback_info__ {
     JSValueConst newTarget; // size_t * 2
     JSValueConst thisArg;   // size_t * 2
     JSValueConst *argv;     // size_t * 2
     void *data;             // size_t
     int argc;
-} NapiCallbackInfo;
+} napi_callback_info__;
 
 typedef struct FunctionInfo {
     void *data;             // size_t
@@ -363,7 +364,7 @@ static inline napi_status CreateScopedResult(napi_env env, JSValue value, napi_v
 }
 
 #define NAPI_OPEN_HANDLE_SCOPE \
-        NapiHandleScope handleScope; \
+        napi_handle_scope__ handleScope; \
         handleScope.type = HANDLE_STACK_ALLOCATED; \
          handleScope.handleCount = 0;\
          handleScope.escapeCalled = false;                      \
@@ -384,7 +385,7 @@ napi_status napi_open_handle_scope(napi_env env, napi_handle_scope *result) {
     CHECK_ARG(env)
     CHECK_ARG(result)
 
-    NapiHandleScope *handleScope = (NapiHandleScope *) mi_malloc(sizeof(NapiHandleScope));
+    napi_handle_scope__ *handleScope = (napi_handle_scope__ *) mi_malloc(sizeof(napi_handle_scope__));
 
     RETURN_STATUS_IF_FALSE(handleScope, napi_memory_error)
     handleScope->type = HANDLE_HEAP_ALLOCATED;
@@ -428,8 +429,8 @@ napi_status napi_open_escapable_handle_scope(napi_env env, napi_escapable_handle
     CHECK_ARG(env)
     CHECK_ARG(result)
 
-    NapiHandleScope *handleScope = (NapiHandleScope *) mi_malloc(
-            sizeof(NapiHandleScope));
+    napi_handle_scope__ *handleScope = (napi_handle_scope__ *) mi_malloc(
+            sizeof(napi_handle_scope__));
     handleScope->type = HANDLE_HEAP_ALLOCATED;
     handleScope->handleCount = 0;
     RETURN_STATUS_IF_FALSE(handleScope, napi_memory_error)
@@ -671,7 +672,7 @@ napi_create_reference(napi_env env, napi_value value, uint32_t initialRefCount, 
     CHECK_ARG(value)
     CHECK_ARG(result)
 
-    *result = (NapiReference *) mi_malloc(sizeof(NapiReference));
+    *result = (napi_ref__ *) mi_malloc(sizeof(napi_ref__));
     RETURN_STATUS_IF_FALSE(*result, napi_memory_error)
 
     JSValue jsValue = *((JSValue *) value);
@@ -3014,9 +3015,9 @@ CallCFunction(JSContext *context, JSValueConst thisVal, int argc, JSValueConst *
     FunctionInfo *functionInfo = (FunctionInfo *) JS_GetOpaque(funcData[0],
                                                                env->runtime->functionClassId);
 
-    struct NapiCallbackInfo callbackInfo = {JSUndefined, thisVal, argv, functionInfo->data, argc};
+    struct napi_callback_info__ callbackInfo = {JSUndefined, thisVal, argv, functionInfo->data, argc};
 
-    NapiHandleScope handleScope;
+    napi_handle_scope__ handleScope;
     handleScope.type = HANDLE_STACK_ALLOCATED;
     handleScope.handleCount = 0;
     handleScope.escapeCalled = false;
@@ -3221,13 +3222,13 @@ CallConstructor(JSContext *context, JSValueConst newTarget, int argc, JSValueCon
     JSValue thisValue = JS_NewObjectProto(context, prototype);
     JS_FreeValue(context, prototype);
 
-    struct NapiCallbackInfo callbackInfo = {newTarget,
-                                            thisValue,
-                                            argv,
-                                            constructorInfo->data,
-                                            argc};
+    struct napi_callback_info__ callbackInfo = {newTarget,
+                                                thisValue,
+                                                argv,
+                                                constructorInfo->data,
+                                                argc};
 
-    NapiHandleScope handleScope;
+    napi_handle_scope__ handleScope;
     handleScope.type = HANDLE_STACK_ALLOCATED;
     handleScope.handleCount = 0;
     handleScope.escapeCalled = false;
@@ -3528,7 +3529,7 @@ napi_status napi_get_instance_data(napi_env env, void **data) {
  */
 
 void deferred_finalize(napi_env env, void *finalizeData, void *finalizeHint) {
-    NapiDeferred *deferred = (NapiDeferred *) finalizeData;
+    napi_deferred__ *deferred = (napi_deferred__ *) finalizeData;
     JS_FreeValue(env->context, *(JSValue *) deferred->resolve);
     JS_FreeValue(env->context, *(JSValue *) deferred->reject);
 };
@@ -3541,7 +3542,7 @@ napi_status napi_create_promise(napi_env env, napi_deferred *deferred, napi_valu
     JSValue resolving_funcs[2];
     JSValue promise = JS_NewPromiseCapability(env->context, resolving_funcs);
 
-    *deferred = (NapiDeferred *) mi_malloc(sizeof(NapiDeferred));
+    *deferred = (napi_deferred__ *) mi_malloc(sizeof(napi_deferred__));
 
     (*deferred)->resolve = (napi_value) &resolving_funcs[0];
     (*deferred)->reject = (napi_value) &resolving_funcs[1];
@@ -3702,7 +3703,7 @@ napi_status napi_run_script(napi_env env,
 napi_status qjs_create_runtime(napi_runtime *runtime) {
     assert(runtime);
 
-    *runtime = mi_malloc(sizeof(NapiRuntime));
+    *runtime = mi_malloc(sizeof(napi_runtime__));
 
 #ifdef USE_MIMALLOC
     (*runtime)->runtime = JS_NewRuntime2(&mi_mf, NULL);
@@ -3775,10 +3776,15 @@ JSFinalizeValueCallback(JSContext *ctx, JSValueConst this_val, int argc, JSValue
     return JS_UNDEFINED;
 }
 
+static JSValue
+JSEngineCallback(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    return JS_UNDEFINED;
+}
+
 napi_status qjs_create_napi_env(napi_env *env, napi_runtime runtime) {
     assert(env && runtime);
 
-    *env = (NapiEnvironment *) mi_malloc(sizeof(struct NapiEnvironment));
+    *env = (napi_env__ *) mi_malloc(sizeof(struct napi_env__));
 
     (*env)->runtime = runtime;
 
@@ -3830,6 +3836,9 @@ napi_status qjs_create_napi_env(napi_env *env, napi_runtime runtime) {
     JSValue FinalizeCallback = JS_NewCFunction(context, JSFinalizeValueCallback, NULL, 0);
     (*env)->finalizationRegistry = JS_CallConstructor(context, FinalizationRegistry, 1,
                                                       &FinalizeCallback);
+
+    JSValue EngineCallback = JS_NewCFunction(context, JSEngineCallback, NULL, 0);
+    JS_SetPropertyStr(context, globalValue, "directFunction", EngineCallback);
 
     (*env)->instanceData = NULL;
     (*env)->isThrowNull = false;

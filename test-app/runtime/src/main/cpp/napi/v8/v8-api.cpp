@@ -70,7 +70,7 @@
     (out) = v8::type::New((buffer), (byte_offset), (length));                  \
   } while (0)
 
-void NapiEnvironment::InvokeFinalizerFromGC(v8impl::RefTracker* finalizer) {
+void napi_env__::InvokeFinalizerFromGC(v8impl::RefTracker* finalizer) {
   if (module_api_version != NAPI_VERSION_EXPERIMENTAL) {
     EnqueueFinalizer(finalizer);
   } else {

@@ -7,6 +7,8 @@
 #include <map>
 #include "robin_hood.h"
 
+typedef napi_value napi_register_module_v(napi_env env, napi_value exports);
+
 namespace tns {
 class ModuleInternal {
     public:
@@ -54,6 +56,8 @@ class ModuleInternal {
         static napi_value RequireCallback(napi_env env, napi_callback_info info);
 
         static napi_value RequireNativeCallback(napi_env env, napi_callback_info info);
+
+        static napi_value RequireNativeV8Callback(napi_env env, napi_callback_info info);
 
         napi_value RequireCallbackImpl(napi_env env, napi_callback_info info);
 

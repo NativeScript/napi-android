@@ -5,8 +5,6 @@
 #include <dlfcn.h>
 #include <sstream>
 
-#define NAPI_EXPORT __attribute__((visibility("default")))
-
 #ifndef NAPI_PREAMBLE
 #define NAPI_PREAMBLE napi_status status;
 #endif
@@ -73,9 +71,6 @@
   if (status != napi_ok)
 
 #endif
-
-#define NAPI_MODULE_REGISTER \
-  napi_value napi_register_module_v1(napi_env env, napi_value exports)
 
 #define NAPI_FUNCTION(name) \
   napi_value JS_##name(napi_env env, napi_callback_info cbinfo)

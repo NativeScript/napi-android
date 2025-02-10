@@ -6,6 +6,7 @@
 #define TEST_APP_JSR_H
 #include "js_native_api.h"
 #include "jsr_common.h"
+#include "quicks-runtime.h"
 #include "mutex"
 #include <map>
 

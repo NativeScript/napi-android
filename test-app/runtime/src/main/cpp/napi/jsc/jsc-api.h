@@ -13,7 +13,7 @@
 #include <thread>
 #include <cassert>
 
-struct NapiEnvironment {
+struct napi_env__ {
     JSGlobalContextRef context{};
     JSValueRef last_exception{};
     napi_extended_error_info last_error{nullptr, nullptr, 0, napi_ok};
@@ -27,7 +27,7 @@ struct NapiEnvironment {
 
     const std::thread::id thread_id{std::this_thread::get_id()};
 
-    NapiEnvironment(JSGlobalContextRef context) : context{context} {
+    napi_env__(JSGlobalContextRef context) : context{context} {
         napi_envs[context] = this;
         JSGlobalContextRetain(context);
         init_symbol(constructor_info_symbol, "NS_ConstructorInfo");
@@ -36,7 +36,7 @@ struct NapiEnvironment {
         init_symbol(wrapper_info_symbol, "NS_WrapperInfo");
     }
 
-    ~NapiEnvironment() {
+    ~napi_env__() {
         deinit_refs();
         JSGlobalContextRelease(context);
         deinit_symbol(wrapper_info_symbol);

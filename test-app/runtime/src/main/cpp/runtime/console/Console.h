@@ -5,7 +5,7 @@
 #ifndef CONSOLE_H
 #define CONSOLE_H
 
-#include <js_native_api.h>
+#include "js_native_api.h"
 #include "jsr.h"
 #include <string>
 #include <vector>

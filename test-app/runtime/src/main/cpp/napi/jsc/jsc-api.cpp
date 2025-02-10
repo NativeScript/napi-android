@@ -13,7 +13,7 @@
 #include <locale>
 #include <codecvt>
 
-struct NapiCallbackInfo {
+struct napi_callback_info__ {
     napi_value newTarget;
     napi_value thisArg;
     napi_value* argv;
@@ -317,7 +317,7 @@ class ConstructorInfo : public NativeInfo {
 //            JSObjectSetProperty(ctx, instance, JSString("prototype"), JSObjectGetProperty(ctx, constructor, JSString("prototype"), nullptr), kJSPropertyAttributeNone,
 //                                nullptr);
 
-            NapiCallbackInfo cbinfo{};
+            napi_callback_info__ cbinfo{};
             cbinfo.thisArg = ToNapi(instance);
             cbinfo.newTarget = ToNapi(constructor);
             cbinfo.argc = argumentCount;
@@ -421,7 +421,7 @@ class FunctionInfo : public NativeInfo {
             // Make sure any errors encountered last time we were in N-API are gone.
             napi_clear_last_error(info->_env);
 
-            NapiCallbackInfo cbinfo{};
+            napi_callback_info__ cbinfo{};
             cbinfo.thisArg = ToNapi(thisObject);
             cbinfo.newTarget = nullptr;
             cbinfo.argc = argumentCount;
@@ -652,8 +652,8 @@ class ExternalArrayBufferInfo {
 };
 }
 
-struct NapiReference {
-    NapiReference(napi_value value, uint32_t count)
+struct napi_ref__ {
+    napi_ref__(napi_value value, uint32_t count)
     : _value{value}
     , _count{count} {
     }
@@ -724,19 +724,19 @@ struct NapiReference {
     std::list<napi_ref>::iterator _iter{};
 };
 
-void NapiEnvironment::deinit_refs() {
+void napi_env__::deinit_refs() {
     while (!strong_refs.empty()) {
         napi_ref ref{strong_refs.front()};
         ref->deinit(this);
     }
 }
 
-void NapiEnvironment::init_symbol(JSValueRef &symbol, const char *description) {
+void napi_env__::init_symbol(JSValueRef &symbol, const char *description) {
     symbol = JSValueMakeSymbol(context, JSString(description));
     JSValueProtect(context, symbol);
 }
 
-void NapiEnvironment::deinit_symbol(JSValueRef symbol) {
+void napi_env__::deinit_symbol(JSValueRef symbol) {
     JSValueUnprotect(context, symbol);
 }
 
@@ -1924,7 +1924,7 @@ napi_status napi_create_reference(napi_env env,
     CHECK_ARG(env, value);
     CHECK_ARG(env, result);
 
-    NapiReference* ref{new NapiReference{value, initial_refcount}};
+    napi_ref__* ref{new napi_ref__{value, initial_refcount}};
     if (ref == nullptr) {
         return napi_set_last_error(env, napi_generic_failure);
     }

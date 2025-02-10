@@ -1,7 +1,9 @@
 #include "jsr.h"
-#include "js_native_api.h"
+#include "js_runtime.h"
 
-typedef struct NapiRuntime {
+using namespace facebook::jsi;
+
+typedef struct napi_runtime__ {
     JSR* hermes;
 } NapiRuntime;
 
@@ -9,6 +11,13 @@ JSR::JSR() {
     hermes::vm::RuntimeConfig config =
             hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).build();
     threadSafeRuntime = facebook::hermes::makeThreadSafeHermesRuntime(config);
+
+    facebook::jsi::Function abc = facebook::jsi::Function::createFromHostFunction(threadSafeRuntime->getUnsafeRuntime(), facebook::jsi::PropNameID::forAscii(threadSafeRuntime->getUnsafeRuntime(), "directFunction"), 0, [](Runtime& rt, const Value& thisVal, const Value* args, size_t count) -> Value {
+        return Value::undefined();
+    });
+
+    threadSafeRuntime->getUnsafeRuntime().global().setProperty(threadSafeRuntime->getUnsafeRuntime(), "directFunction", abc);
+
     rt = (facebook::hermes::HermesRuntime *)&threadSafeRuntime->getUnsafeRuntime();
 }
 std::unordered_map<napi_env, JSR*> JSR::env_to_jsr_cache;
@@ -16,7 +25,7 @@ std::unordered_map<napi_env, JSR*> JSR::env_to_jsr_cache;
 napi_status js_create_runtime(napi_runtime* runtime) {
     if (runtime == nullptr) return napi_invalid_arg;
 
-    *runtime = static_cast<napi_runtime>(malloc(sizeof(NapiRuntime)));
+    *runtime = static_cast<napi_runtime>(malloc(sizeof(napi_runtime__)));
 
     (*runtime)->hermes = new JSR();
 

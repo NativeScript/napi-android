@@ -28,9 +28,7 @@
 #endif
 #endif
 
-#ifdef NODE_ADDON_API_DISABLE_NODE_SPECIFIC
 #include "js_native_api.h"
-#endif
 
 #include <functional>
 #include <initializer_list>

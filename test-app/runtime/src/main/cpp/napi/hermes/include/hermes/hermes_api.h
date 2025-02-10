@@ -8,7 +8,7 @@
 #ifndef HERMES_HERMES_API_H
 #define HERMES_HERMES_API_H
 
-#include "js_runtime_api.h"
+#include "js_runtime.h"
 
 EXTERN_C_START
 

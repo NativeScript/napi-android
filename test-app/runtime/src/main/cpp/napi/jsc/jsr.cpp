@@ -9,7 +9,7 @@ napi_status js_create_runtime(napi_runtime *runtime) {
 napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
 
-    *env = new NapiEnvironment((JSGlobalContextRef) runtime);
+    *env = new napi_env__((JSGlobalContextRef) runtime);
     JSGlobalContextRelease((JSGlobalContextRef) runtime);
 
     napi_value gc;

@@ -5,7 +5,7 @@
 #ifndef TEST_APP_WEAKREF_H
 #define TEST_APP_WEAKREF_H
 
-#include <js_native_api.h>
+#include "js_native_api.h"
 
 namespace tns {
     class WeakRef {

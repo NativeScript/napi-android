@@ -17,6 +17,8 @@
 #include "GlobalHelpers.h"
 #include <utime.h>
 
+
+
 using namespace tns;
 using namespace std;
 
@@ -177,8 +179,10 @@ napi_value ModuleInternal::RequireCallbackImpl(napi_env env, napi_callback_info 
 napi_value ModuleInternal::RequireNativeCallback(napi_env env, napi_callback_info info) {
     void* data;
     napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
-    auto cb = reinterpret_cast<napi_callback>(data);
-    return cb(env, info);
+    auto cb = reinterpret_cast<napi_register_module_v *>(data);
+    napi_value exports;
+    napi_create_object(env, &exports);
+    return cb(env, exports);
 }
 
 napi_status ModuleInternal::Load(napi_env env, const std::string& path) {
@@ -234,6 +238,8 @@ napi_value ModuleInternal::LoadImpl(napi_env env, const std::string& moduleName,
             auto pos = moduleName.find(sys_lib);
             path = std::string(moduleName);
             path.replace(pos, sys_lib.length(), "");
+        } else if (Util::EndsWith(moduleName, ".so")) {
+            path = "lib" + moduleName;
         } else {
             JEnv jenv;
             JniLocalRef jsModulename(jenv.NewStringUTF(moduleName.c_str()));
@@ -322,19 +328,26 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
             }
         }
     } else if (Util::EndsWith(modulePath, ".so")) {
-        auto handle = dlopen(modulePath.c_str(), RTLD_LAZY);
+        auto handle = dlopen(modulePath.c_str(), RTLD_NOW);
         if (handle == nullptr) {
             auto error = dlerror();
             std::string errMsg(error);
             throw NativeScriptException(errMsg);
         }
-        auto func = dlsym(handle, "NSMain");
+        auto func = dlsym(handle, "napi_register_module_v1");
+
         if (func == nullptr) {
-            std::string errMsg("Cannot find 'NSMain' in " + modulePath);
+            std::string errMsg("Cannot find 'napi_register_module_v1' in " + modulePath);
             throw NativeScriptException(errMsg);
         }
 
-        napi_create_function(env, "nativeRequire", strlen("nativeRequire"), RequireNativeCallback, func, &moduleFunc);
+        auto cb = reinterpret_cast<napi_register_module_v *>(func);
+        napi_value exports;
+        napi_create_object(env, &exports);
+        napi_value result = cb(env, exports);
+        napi_set_named_property(env, moduleObj, "exports", result);
+        tempModule.SaveToCache();
+        return moduleObj;
     } else {
         std::string errMsg = "Unsupported file extension: " + modulePath;
         throw NativeScriptException(errMsg);
