@@ -59,7 +59,7 @@ napi_value MetadataNode::CreateArrayObjectConstructor(napi_env env) {
 }
 
 napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
-                                                 const std::string &proxyClassName) {
+                                                 const std::string &proxyClassName, int javaObjectID) {
     napi_value extInstance = nullptr;
 
     auto cacheData = GetCachedExtendedClassData(env, proxyClassName);
@@ -67,10 +67,8 @@ napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *ob
     if (cacheData.node != nullptr) {
         extInstance = objectManager->GetEmptyObject();
         ObjectManager::MarkSuperCall(env, extInstance);
-
         napi_value extendedCtorFunc = napi_util::get_ref_value(env,
                                                                cacheData.extendedCtorFunction);
-
         napi_util::setPrototypeOf(env, extInstance,
                                   napi_util::get_prototype(env, extendedCtorFunc));
 
@@ -1861,6 +1859,7 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
         if (napi_util::is_null_or_undefined(env, superValue)) {
             auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
             superValue = objectManager->GetEmptyObject();
+
             napi_delete_property(env, superValue,
                                  ArgConverter::convertToJsString(env, PROP_KEY_TOSTRING), nullptr);
             napi_delete_property(env, superValue,
@@ -1873,10 +1872,16 @@ napi_value MetadataNode::SuperAccessorGetterCallback(napi_env env, napi_callback
                                                                                                      jsThis)));
 
             napi_util::setPrototypeOf(env, superValue, superProto);
-            napi_set_named_property(env, jsThis, PROP_KEY_SUPERVALUE, superValue);
             objectManager->CloneLink(jsThis, superValue);
             auto node = GetInstanceMetadata(env, jsThis);
             SetInstanceMetadata(env, superValue, node);
+
+            int javaObjectID = -1;
+            objectManager->GetJavaObjectByJsObject(jsThis, &javaObjectID);
+            if (javaObjectID != -1) {
+                superValue = objectManager->GetOrCreateProxyWeak(javaObjectID, superValue);
+            }
+            napi_set_named_property(env, jsThis, PROP_KEY_SUPERVALUE, superValue);
         }
 
         return superValue;

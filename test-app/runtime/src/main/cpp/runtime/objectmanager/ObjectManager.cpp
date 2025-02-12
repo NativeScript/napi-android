@@ -126,6 +126,7 @@ void ObjectManager::Init(napi_env env) {
         object["#jid"] = objectId;
         const proxy = new Proxy(object, {
 		  get: function(target, prop) {
+            if (prop === "isProxy") return true;
 			if (prop === "#jid") return objectId;
 			if (prop === EXTERNAL_PROP) return this[EXTERNAL_PROP];
             if (prop === REFERENCE_PROP_JSC) return this[REFERENCE_PROP_JSC];
@@ -182,6 +183,20 @@ ObjectManager::~ObjectManager() {
     m_idToObject.clear();
 }
 
+napi_value ObjectManager::GetOrCreateProxyWeak(jint javaObjectID, napi_value instance) {
+    napi_value proxy = nullptr;
+
+    napi_value argv[2];
+    argv[0] = instance;
+    napi_create_int32(m_env, javaObjectID, &argv[1]);
+
+    napi_call_function(m_env, napi_util::global(m_env),
+                       napi_util::get_ref_value(m_env, this->m_jsObjectProxyCreator),
+                       2, argv, &proxy);
+
+    return proxy;
+}
+
 napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instance) {
     napi_value proxy = nullptr;
     auto it = m_idToProxy.find(javaObjectID);
@@ -224,13 +239,9 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
 
     auto data = new JSObjectProxyData(this, javaObjectID);
 
-    napi_value obj;
-    napi_create_object(m_env, &obj);
-
     napi_value external;
     napi_create_external(m_env, data, JSObjectProxyFinalizerCallback, nullptr, &external);
     napi_set_named_property(m_env, proxy, "[[external]]", external);
-
 
     m_idToProxy.emplace(javaObjectID, napi_util::make_ref(m_env, proxy, 0));
 
@@ -503,6 +514,7 @@ napi_value ObjectManager::GetEmptyObject() {
     napi_get_and_clear_last_exception(m_env, &ex);
 
     napi_value jsWrapper = nullptr;
+
     napi_new_instance(m_env, emptyObjCtorFunc, 0, nullptr, &jsWrapper);
 
     if (napi_util::is_null_or_undefined(m_env, jsWrapper)) {
@@ -513,7 +525,7 @@ napi_value ObjectManager::GetEmptyObject() {
 }
 
 napi_value ObjectManager::JSObjectConstructorCallback(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN(0);
+    NAPI_CALLBACK_BEGIN(1);
     return jsThis;
 }
 

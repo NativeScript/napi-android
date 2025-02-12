@@ -44,6 +44,8 @@ namespace tns {
 
         napi_value GetOrCreateProxy(jint javaObjectID, napi_value instance);
 
+        napi_value GetOrCreateProxyWeak(jint javaObjectID, napi_value instance);
+
         void Link(napi_value object, uint32_t javaObjectID, jclass clazz);
 
         bool CloneLink(napi_value src, napi_value dest);

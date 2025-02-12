@@ -504,7 +504,7 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jclas
 
     DEBUG_WRITE("CallJSMethodNative called javaObjectID=%d", javaObjectID);
 
-    auto jsObject = m_objectManager->GetJsObjectByJavaObjectInternal(javaObjectID);
+    auto jsObject = m_objectManager->GetJsObjectByJavaObject(javaObjectID);
 
     if (napi_util::is_null_or_undefined(env, jsObject)) {
         stringstream ss;
@@ -550,7 +550,7 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     DEBUG_WRITE("createJSInstanceNative class %s", proxyClassName.c_str());
 
-    jsInstance = MetadataNode::CreateExtendedJSWrapper(env, m_objectManager, proxyClassName);
+    jsInstance = MetadataNode::CreateExtendedJSWrapper(env, m_objectManager, proxyClassName, javaObjectID);
 
     if (napi_util::is_null_or_undefined(env, jsInstance)) {
         throw NativeScriptException(
@@ -567,8 +567,7 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     DEBUG_WRITE("createJSInstanceNative: implementationObject");
 
-    jclass clazz = jEnv.FindClass(jniName);
-    m_objectManager->Link(jsInstance, javaObjectID, clazz);
+    m_objectManager->Link(jsInstance, javaObjectID, nullptr);
 }
 
 jint Runtime::GenerateNewObjectId(JNIEnv *jEnv, jobject obj) {
