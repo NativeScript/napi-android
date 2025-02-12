@@ -89,20 +89,18 @@ void CallbackHandlers::Init(napi_env env) {
     MethodCache::Init();
 }
 
-napi_value
-CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &className,
+napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &className,
                                  const string &methodName, MetadataEntry *entry,
-                                 bool isFromInterface, bool isStatic,
-                                 bool isSuper, napi_callback_info info, size_t argc, napi_value* argv) {
+                                 bool isFromInterface, bool isStatic, napi_callback_info info, size_t argc, napi_value* argv) {
 
     JEnv jEnv;
-
     jclass clazz;
     jmethodID mid;
     string *sig = nullptr;
     string *returnType = nullptr;
     auto retType = MethodReturnType::Unknown;
     MethodCache::CacheMethodInfo mi;
+    bool isSuper = false;
 
     if ((entry != nullptr) && entry->getIsResolved()) {
         auto &entrySignature = entry->getSig();
@@ -233,7 +231,11 @@ CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &
     auto objectManager = runtime->GetObjectManager();
 
     if (!isStatic) {
-        callerJavaObject = objectManager->GetJavaObjectByJsObject(caller);
+        int objectId = -1;
+
+        callerJavaObject = objectManager->GetJavaObjectByJsObject(caller, &objectId);
+
+        isSuper = objectManager->GetIsSuper(objectId, caller);
 
         if (callerJavaObject.IsNull()) {
             stringstream ss;

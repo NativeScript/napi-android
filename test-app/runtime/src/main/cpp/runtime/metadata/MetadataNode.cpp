@@ -1937,20 +1937,12 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
             }
         }
 
-        auto isSuper = false;
-
-        if (!first.isStatic) {
-            napi_value superValue;
-            napi_get_named_property(env, jsThis, PRIVATE_CALLSUPER, &superValue);
-            isSuper = napi_util::get_bool(env, superValue);
-        }
-
         if (argc == 0 && methodName == PROP_KEY_VALUEOF) {
             return jsThis;
         } else {
             bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();
             return CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
-                                                    isFromInterface, first.isStatic, isSuper, info,
+                                                    isFromInterface, first.isStatic, info,
                                                     argc, argv.data());
         }
 

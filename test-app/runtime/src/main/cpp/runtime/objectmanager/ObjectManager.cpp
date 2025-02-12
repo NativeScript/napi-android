@@ -158,16 +158,6 @@ void ObjectManager::Init(napi_env env) {
 	  };
 	})();)";
 
-    //        Object.defineProperty(object, '__getproxy__', {
-//        get() {
-//          if (this.__proxy__) {
-//            return this.__proxy__.deref();
-//          }
-//        },
-//        configurable: true,
-//        enumerable: false
-//        });
-
     napi_value jsObjectProxyCreator;
     napi_value scriptValue;
     napi_create_string_utf8(env, proxyFunctionScript, strlen(proxyFunctionScript), &scriptValue);
@@ -247,15 +237,26 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
     return proxy;
 }
 
-JniLocalRef ObjectManager::GetJavaObjectByJsObject(napi_value object) {
+JniLocalRef ObjectManager::GetJavaObjectByJsObject(napi_value object, int* objectId) {
     int32_t javaObjectId = -1;
     napi_value javaObjectIdValue;
-    napi_get_named_property(m_env, object, "#jid", &javaObjectIdValue);
-    if (!napi_util::is_null_or_undefined(m_env, javaObjectIdValue)) {
-        napi_get_value_int32(m_env, javaObjectIdValue, &javaObjectId);
-    } else {
-        JSInstanceInfo *jsInstanceInfo = GetJSInstanceInfo(object);
-        if (jsInstanceInfo != nullptr) javaObjectId = jsInstanceInfo->JavaObjectID;
+
+    if (objectId) {
+        javaObjectId = *objectId;
+    }
+
+    if (javaObjectId == -1) {
+        napi_get_named_property(m_env, object, "#jid", &javaObjectIdValue);
+        if (!napi_util::is_null_or_undefined(m_env, javaObjectIdValue)) {
+            napi_get_value_int32(m_env, javaObjectIdValue, &javaObjectId);
+        } else {
+            JSInstanceInfo *jsInstanceInfo = GetJSInstanceInfo(object);
+            if (jsInstanceInfo != nullptr) javaObjectId = jsInstanceInfo->JavaObjectID;
+       }
+    }
+
+    if (objectId) {
+        *objectId = javaObjectId;
     }
 
     if (javaObjectId != -1) return {GetJavaObjectByID(javaObjectId), true};
@@ -264,10 +265,9 @@ JniLocalRef ObjectManager::GetJavaObjectByJsObject(napi_value object) {
 }
 
 ObjectManager::JSInstanceInfo *ObjectManager::GetJSInstanceInfo(napi_value object) {
-    if (IsRuntimeJsObject(object)) {
-        return GetJSInstanceInfoFromRuntimeObject(object);
-    }
-    return nullptr;
+    if (!IsRuntimeJsObject(object)) return nullptr;
+
+    return GetJSInstanceInfoFromRuntimeObject(object);
 }
 
 ObjectManager::JSInstanceInfo *
@@ -428,6 +428,16 @@ string ObjectManager::GetClassName(jobject javaObject) {
     JniLocalRef objectClass(env.GetObjectClass(javaObject));
 
     return GetClassName((jclass) objectClass);
+}
+
+bool ObjectManager::GetIsSuper(int objectId, napi_value value) {
+    auto it = m_idToSuper.find(objectId);
+    if (it != m_idToSuper.end()) return it->second;
+    napi_value superValue;
+    napi_get_named_property(m_env, value, PRIVATE_CALLSUPER, &superValue);
+    bool isSuper = napi_util::get_bool(m_env, superValue);
+    m_idToSuper.emplace(objectId, isSuper);
+    return isSuper;
 }
 
 string ObjectManager::GetClassName(jclass clazz) {

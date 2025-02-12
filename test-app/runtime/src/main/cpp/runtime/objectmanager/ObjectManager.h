@@ -24,7 +24,7 @@ namespace tns {
 
         void Init(napi_env env);
 
-        JniLocalRef GetJavaObjectByJsObject(napi_value object);
+        JniLocalRef GetJavaObjectByJsObject(napi_value object, int* objectId = nullptr);
 
         void UpdateCache(int objectID, jobject obj);
 
@@ -45,7 +45,6 @@ namespace tns {
         napi_value GetOrCreateProxy(jint javaObjectID, napi_value instance);
 
         void Link(napi_value object, uint32_t javaObjectID, jclass clazz);
-
 
         bool CloneLink(napi_value src, napi_value dest);
 
@@ -77,7 +76,7 @@ namespace tns {
 
         inline static void ReleaseObjectNow(napi_env env, int javaObjectId);
 
-
+        bool GetIsSuper(int objectId, napi_value value);
 
     private:
         static napi_value JSObjectConstructorCallback(napi_env env, napi_callback_info info);
@@ -140,6 +139,7 @@ namespace tns {
 
         robin_hood::unordered_map<int, napi_ref> m_idToProxy;
         robin_hood::unordered_map<int, napi_ref> m_idToObject;
+        robin_hood::unordered_map<int, bool> m_idToSuper;
         robin_hood::unordered_set<int> m_weakObjectIds;
         robin_hood::unordered_set<int> m_markedAsWeakIds;
 
@@ -166,8 +166,10 @@ namespace tns {
         jmethodID MAKE_INSTANCE_STRONG_METHOD_ID;
 
         napi_ref m_jsObjectCtor;
+
         napi_ref m_jsObjectProxyCreator;
 
+        napi_ref jid;
     };
 }
 
