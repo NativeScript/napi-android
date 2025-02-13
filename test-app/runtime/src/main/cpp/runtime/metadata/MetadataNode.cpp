@@ -109,7 +109,7 @@ napi_value MetadataNode::CreateJSWrapper(napi_env env, ObjectManager *objectMana
 }
 
 napi_value MetadataNode::ArrayGetterCallback(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN(2);
+    NAPI_CALLBACK_BEGIN(1);
 
     try {
 
