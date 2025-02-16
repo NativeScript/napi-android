@@ -196,6 +196,9 @@ struct napi_env__ {
   v8impl::Persistent<v8::Context> context_persistent;
 
   v8impl::Persistent<v8::Value> last_exception;
+  // Cache the template for NapiHostObject
+  v8::Persistent<v8::ObjectTemplate> host_object_template;
+
 
   // We store references in two different lists, depending on whether they have
   // `napi_finalizer` callbacks, because we must first finalize the ones that
