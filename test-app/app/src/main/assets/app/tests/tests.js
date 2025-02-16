@@ -565,6 +565,7 @@ describe("Tests ", function () {
 
 		var button = new Button();
 		var arrayOfObjects = button.getDummyClassAsObjectArray();
+
 		var name = arrayOfObjects[0].getName();
 
 		expect(name).toEqual("dummy");
@@ -1334,93 +1335,95 @@ describe("Tests ", function () {
 		expect(exceptionCaught).toBe(true);
 	});
 
-	it("TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsDeleted", function () {
+	if (!global.__useHostObjects) {
+	    it("TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsDeleted", function () {
 
-		__log("TEST: TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsDeleted");
+        		__log("TEST: TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsDeleted");
 
-		var exceptionCaught = false;
+        		var exceptionCaught = false;
 
-		var impl = {
-				echo : function(s) {
-					return "!!!" + s;
-				}
-		};
+        		var impl = {
+        				echo : function(s) {
+        					return "!!!" + s;
+        				}
+        		};
 
-		var MyButton = com.tns.tests.Button1.extend("btn1303", impl);
-		var btn = new MyButton();
+        		var MyButton = com.tns.tests.Button1.extend("btn1303", impl);
+        		var btn = new MyButton();
 
-		var echo = com.tns.tests.Button1.prototype.echo;
-		delete com.tns.tests.Button1.prototype.echo;
-		delete impl.echo;
+        		var echo = com.tns.tests.Button1.prototype.echo;
+        		delete com.tns.tests.Button1.prototype.echo;
+        		delete impl.echo;
 
-		try
-		{
-			__log("btn=" + btn.triggerEcho("12345"));
-		}
-		catch (e)
-		{
-			exceptionCaught = true;
-		}
+        		try
+        		{
+        			__log("btn=" + btn.triggerEcho("12345"));
+        		}
+        		catch (e)
+        		{
+        			exceptionCaught = true;
+        		}
 
-		expect(exceptionCaught).toBe(true);
+        		expect(exceptionCaught).toBe(true);
 
-		exceptionCaught = false;
+        		exceptionCaught = false;
 
-		try
-		{
-			__log("btn=" + btn.triggerEchoAsObject("123"));
-		}
-		catch (e)
-		{
-			exceptionCaught = true;
-		}
+        		try
+        		{
+        			__log("btn=" + btn.triggerEchoAsObject("123"));
+        		}
+        		catch (e)
+        		{
+        			exceptionCaught = true;
+        		}
 
-		expect(exceptionCaught).toBe(true);
+        		expect(exceptionCaught).toBe(true);
 
-		com.tns.tests.Button1.prototype.echo = echo;
-	});
+        		com.tns.tests.Button1.prototype.echo = echo;
+        	});
 
-	it("TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsOverwritten", function () {
+        	it("TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsOverwritten", function () {
 
-		__log("TEST: TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsOverwritten");
+        		__log("TEST: TestThrowJavaScriptExceptionWhenOverideMethodImplementationIsOverwritten");
 
-		var exceptionCaught = false;
+        		var exceptionCaught = false;
 
-		var impl = {
-				echo : function(s) {
-					return "!!!" + s;
-				}
-		};
+        		var impl = {
+        				echo : function(s) {
+        					return "!!!" + s;
+        				}
+        		};
 
-		var MyButton = com.tns.tests.Button1.extend("btn1344", impl);
-		var btn = new MyButton();
+        		var MyButton = com.tns.tests.Button1.extend("btn1344", impl);
+        		var btn = new MyButton();
 
-		impl.echo = ""
+        		impl.echo = ""
 
-			try
-		{
-				__log("btn=" + btn.triggerEcho("123"));
-		}
-		catch (e)
-		{
-			exceptionCaught = true;
-		}
+        			try
+        		{
+        				__log("btn=" + btn.triggerEcho("123"));
+        		}
+        		catch (e)
+        		{
+        			exceptionCaught = true;
+        		}
 
-		expect(exceptionCaught).toBe(true);
+        		expect(exceptionCaught).toBe(true);
 
-		exceptionCaught = false;
+        		exceptionCaught = false;
 
-		try
-		{
-			__log("btn=" + btn.triggerEchoAsObject("123"));
-		}
-		catch (e)
-		{
-			exceptionCaught = true;
-		}
+        		try
+        		{
+        			__log("btn=" + btn.triggerEchoAsObject("123"));
+        		}
+        		catch (e)
+        		{
+        			exceptionCaught = true;
+        		}
 
-		expect(exceptionCaught).toBe(true);
-	});
+        		expect(exceptionCaught).toBe(true);
+        	});
+	}
 
 	it("TestThrowJavaScriptExceptionWhenPartiallyImplementedInterfaceIsUsed", function () {
 

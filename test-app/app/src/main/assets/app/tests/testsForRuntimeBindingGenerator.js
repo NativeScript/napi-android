@@ -109,8 +109,6 @@ describe("Tests for runtime binding generator", function () {
 
         var interfaces = clazz.getInterfaces();
 
-        console.log("{", interfaces);
-
         var expectedInterfaces = ["java.util.jar.Pack200$Packer", "java.util.Formattable", "java.util.Observer", "java.util.jar.Pack200$Unpacker", "com.tns.NativeScriptHashCodeProvider"];
 
         expect(interfaces.length).toBe(5);
