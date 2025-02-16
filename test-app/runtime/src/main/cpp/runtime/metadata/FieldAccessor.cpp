@@ -24,9 +24,8 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
     auto isStatic = fieldMetadata.isStatic;
 
     auto isPrimitiveType = fieldTypeName.size() == 1;
-    auto isFieldArray = fieldTypeName[0] == '[';
-
     if (fieldData->fid == nullptr) {
+        auto isFieldArray = fieldTypeName[0] == '[';
         auto fieldJniSig = isPrimitiveType
                            ? fieldTypeName
                            : (isFieldArray
@@ -45,7 +44,8 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
     }
 
     if (!isStatic) {
-        targetJavaObject = objectManager->GetJavaObjectByJsObject(target);
+        // Using fast, target is always the original *this*
+        targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;
@@ -53,7 +53,9 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                << "' because there is no corresponding Java object";
             throw NativeScriptException(ss.str());
         }
+
     }
+
 
     auto fieldId = fieldData->fid;
     auto clazz = fieldData->clazz;
@@ -228,7 +230,8 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
     }
 
     if (!isStatic) {
-        targetJavaObject = objectManager->GetJavaObjectByJsObject(target);
+        // Using fast, target is always the original *this*
+        targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;

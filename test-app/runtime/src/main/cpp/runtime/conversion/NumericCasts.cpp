@@ -34,9 +34,6 @@ void NumericCasts::CreateGlobalCastFunctions(napi_env env, napi_value globalObje
     napi_set_named_property(env, globalObject, "char", charFunc);
 }
 
-
-
-
 void NumericCasts::MarkAsLong(napi_env env, napi_value object, napi_value value) {
     MarkJsObject(env, object, CastType::Long, value);
 }

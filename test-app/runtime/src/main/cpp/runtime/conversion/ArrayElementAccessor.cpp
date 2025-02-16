@@ -149,8 +149,6 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
         napi_typeof(env, value, &ref_type);
 
         if (ref_type == napi_object || ref_type == napi_function || ref_type == napi_string) {
-            auto object = value;
-
             JsArgToArrayConverter argConverter(env, value, false, (int) Type::Null);
             if (argConverter.IsValid()) {
                 jobjectArray objArr = static_cast<jobjectArray>(arr);

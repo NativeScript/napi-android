@@ -19,7 +19,7 @@
 #include <sstream>
 #include "ConcurrentMap.h"
 
-
+//#define USE_HOST_OBJECT 1;
 
 namespace tns {
 
@@ -100,6 +100,8 @@ namespace tns {
         void AdjustAmountOfExternalAllocatedMemory();
 
         JSMethodCache* js_method_cache;
+
+        bool is_destroying;
 
     private:
         Runtime(JNIEnv* env, jobject runtime, int id);

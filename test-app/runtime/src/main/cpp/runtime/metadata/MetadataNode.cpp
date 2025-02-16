@@ -1114,14 +1114,20 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
 
     auto instanceFieldCount = *reinterpret_cast<uint16_t *>(curPtr);
     curPtr += sizeof(uint16_t);
+    auto proto_ref = napi_util::make_ref(env, prototype, 0);
     for (auto i = 0; i < instanceFieldCount; i++) {
         auto entry = MetadataReader::ReadInstanceFieldEntry(&curPtr);
         auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
+        fieldInfo->prototype = proto_ref;
         fieldInfo->metadata.declaringType = curType;
         napi_util::define_property(env, prototype, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                    fieldInfo);
+    }
+
+    if (instanceFieldCount == 0) {
+        napi_delete_reference(env, proto_ref);
     }
 
     auto kotlinPropertiesCount = *reinterpret_cast<uint16_t *>(curPtr);
@@ -1257,7 +1263,8 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
     MethodCallbackData *callbackData = nullptr;
 
     napi_value proto = napi_util::get_prototype(env, constructor);
-
+    napi_ref proto_ref = napi_util::make_ref(env, proto, 0);
+    auto fieldCount = 0;
     while (std::getline(s, line)) {
         std::stringstream tmp(line);
         tmp >> kind >> name >> signature >> paramCount;
@@ -1298,13 +1305,20 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
             }
             callbackData->candidates.push_back(std::move(entry));
         } else if (chKind == 'F') {
+            fieldCount++;
             entry.type = NodeType::Field;
             auto *fieldInfo = new FieldCallbackData(entry);
+            fieldInfo->prototype = proto_ref;
             napi_util::define_property(env, proto, entry.name.c_str(), nullptr,
                                        FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                        fieldInfo);
         }
     }
+
+    if (fieldCount == 0) {
+        napi_delete_reference(env, proto_ref);
+    }
+
     return instanceMethodData;
 }
 
@@ -1557,17 +1571,9 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
         }
 
         if (!fieldMetadata.isStatic) {
-            napi_value constructor;
-            napi_value prototype;
-            napi_get_named_property(env, jsThis, "constructor", &constructor);
-            if (!napi_util::is_null_or_undefined(env, constructor)) {
-                napi_get_named_property(env, constructor, "prototype", &prototype);
-                bool isHolder;
-                napi_strict_equals(env, prototype, jsThis, &isHolder);
-                if (isHolder) {
-                    return UNDEFINED;
-                }
-            }
+            bool isHolder = false;
+            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype),jsThis, &isHolder);
+            if (isHolder) return UNDEFINED;
         }
 
         return CallbackHandlers::GetJavaField(env, jsThis, fieldData);
@@ -1596,17 +1602,9 @@ napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback
 
 
         if (!fieldMetadata.isStatic) {
-            napi_value constructor;
-            napi_value prototype;
-            napi_get_named_property(env, jsThis, "constructor", &constructor);
-            if (!napi_util::is_null_or_undefined(env, constructor)) {
-                napi_get_named_property(env, constructor, "prototype", &prototype);
-                bool isHolder;
-                napi_strict_equals(env, prototype, jsThis, &isHolder);
-                if (isHolder) {
-                    return UNDEFINED;
-                }
-            }
+            bool isHolder = false;
+            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype),jsThis, &isHolder);
+            if (isHolder) return UNDEFINED;
         }
 
         if (fieldMetadata.getIsFinal()) {

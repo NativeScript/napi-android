@@ -26,6 +26,9 @@ namespace tns {
 
         JniLocalRef GetJavaObjectByJsObject(napi_value object, int* objectId = nullptr);
 
+
+        JniLocalRef GetJavaObjectByJsObjectFast(napi_value object);
+
         void UpdateCache(int objectID, jobject obj);
 
         jclass GetJavaClass(napi_value value);
@@ -35,7 +38,6 @@ namespace tns {
         int GetOrCreateObjectId(jobject object);
 
         napi_value GetJsObjectByJavaObject(int javaObjectID);
-        napi_value GetJsObjectByJavaObjectInternal(int javaObjectID);
 
         napi_value
         CreateJSWrapper(jint javaObjectID, const std::string &typeName);

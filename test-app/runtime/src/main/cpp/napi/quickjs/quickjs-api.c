@@ -136,6 +136,16 @@ typedef struct ExternalInfo {
     napi_finalize finalizeCallback; // size_t
 } ExternalInfo;
 
+typedef struct NapiHostObjectInfo {
+    void *data;
+    napi_ref ref;
+    napi_finalize finalize_cb;
+    bool is_array;
+    napi_ref getter;
+    napi_ref setter;
+} NapiHostObjectInfo;
+
+
 typedef struct JsAtoms {
     JSAtom napi_external;
     JSAtom registerFinalizer;
@@ -180,6 +190,7 @@ typedef struct napi_runtime__ {
     JSClassID constructorClassId; // uint32_t
     JSClassID functionClassId;    // uint32_t
     JSClassID externalClassId;    // uint32_t
+    JSClassID napiHostObjectClassId;
 } napi_runtime__;
 
 typedef struct napi_callback_info__ {
@@ -232,7 +243,7 @@ static void external_finalizer(JSRuntime *rt, JSValue val) {
     napi_env env = (napi_env) JS_GetRuntimeOpaque(rt);
     ExternalInfo *externalInfo = JS_GetOpaque(val, env->runtime->externalClassId);
     if (externalInfo->finalizeCallback) {
-        externalInfo->finalizeCallback(env, externalInfo->data, externalInfo->finalizeHint);
+     externalInfo->finalizeCallback(env, externalInfo->data, externalInfo->finalizeHint);
     }
     mi_free(externalInfo);
 }
@@ -840,6 +851,7 @@ napi_status napi_create_string_utf8(napi_env env,
     CHECK_ARG(result)
     CHECK_ARG(str)
 
+
     JSValue value = JS_NewStringLen(env->context, str,
                                     (length == NAPI_AUTO_LENGTH) ? strlen(str) : length);
 
@@ -851,6 +863,7 @@ napi_status napi_create_int32(napi_env env, int32_t value, napi_value *result) {
     CHECK_ARG(result)
 
     JSValue jsValue = JS_NewInt32(env->context, value);
+
     return CreateScopedResult(env, jsValue, result);
 }
 
@@ -2687,8 +2700,7 @@ napi_set_named_property(napi_env env, napi_value object, const char *utf8Name, n
     return napi_clear_last_error(env);
 }
 
-napi_status
-napi_get_named_property(napi_env env, napi_value object, const char *utf8Name, napi_value *result) {
+napi_status napi_get_named_property(napi_env env, napi_value object, const char *utf8Name, napi_value *result) {
     CHECK_ARG(env)
     CHECK_ARG(object)
     CHECK_ARG(utf8Name)
@@ -3347,6 +3359,7 @@ napi_wrap(napi_env env, napi_value jsObject, void *nativeObject, napi_finalize f
         return napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
     }
 
+    JS_SetOpaque(jsValue, externalInfo);
     JS_SetOpaque(external, externalInfo);
 
     JS_SetProperty(env->context, jsValue, env->atoms.napi_external, external);
@@ -3371,13 +3384,17 @@ napi_status napi_unwrap(napi_env env, napi_value jsObject, void **result) {
         return napi_set_last_error(env, napi_object_expected, NULL, 0, NULL);
     }
 
+    JSClassID classId;
+    void *data = JS_GetAnyOpaque(jsValue, &classId);
+    if (data != NULL) {
+        ExternalInfo *externalInfo = (ExternalInfo *) data;
+        *result = externalInfo->data;
+        return napi_ok;
+    }
+
     JSPropertyDescriptor descriptor;
 
     int isWrapped = JS_GetOwnProperty(env->context, &descriptor, jsValue, env->atoms.napi_external);
-
-    if (isWrapped == -1) {
-        return napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
-    }
 
     if (!isWrapped) {
         *result = NULL;
@@ -3386,16 +3403,10 @@ napi_status napi_unwrap(napi_env env, napi_value jsObject, void **result) {
 
     JSValue external = descriptor.value;
 
-    if (JS_IsException(external)) {
-        return napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
-    }
-
-    if (JS_IsObject(external)) {
-        ExternalInfo *externalInfo = (ExternalInfo *) JS_GetOpaque(external,
-                                                                   env->runtime->externalClassId);
-        if (externalInfo) {
-            *result = externalInfo->data;
-        }
+    ExternalInfo *externalInfo = (ExternalInfo *) JS_GetOpaque(external,
+                                                               env->runtime->externalClassId);
+    if (externalInfo) {
+        *result = externalInfo->data;
     }
 
     JS_FreeValue(env->context, descriptor.value);
@@ -3436,6 +3447,7 @@ napi_status napi_remove_wrap(napi_env env, napi_value jsObject, void **result) {
             }
             mi_free(externalInfo);
             JS_SetOpaque(external, NULL);
+            JS_SetOpaque(jsValue, NULL);
         }
 
         int status = JS_DeleteProperty(env->context, jsValue, env->atoms.napi_external, 0);
@@ -3464,7 +3476,7 @@ napi_add_finalizer(napi_env env, napi_value jsObject, void *nativeObject, napi_f
         return napi_set_last_error(env, napi_object_expected, NULL, 0, NULL);
     }
 
-    JSValue heldValue = JS_NewObject(env->context);
+    JSValue heldValue = JS_NewObjectClass(env->context, env->runtime->externalClassId);
     ExternalInfo *info = (ExternalInfo *) mi_malloc(sizeof(ExternalInfo));
 
     info->data = nativeObject;
@@ -3547,7 +3559,7 @@ napi_status napi_create_promise(napi_env env, napi_deferred *deferred, napi_valu
     (*deferred)->resolve = (napi_value) &resolving_funcs[0];
     (*deferred)->reject = (napi_value) &resolving_funcs[1];
 
-    JSValue heldValue = JS_NewObject(env->context);
+    JSValue heldValue = JS_NewObjectClass(env->context, env->runtime->externalClassId);
     ExternalInfo *info = (ExternalInfo *) mi_malloc(sizeof(ExternalInfo));
     info->data = deferred;
     info->finalizeCallback = deferred_finalize;
@@ -3692,11 +3704,188 @@ napi_status napi_run_script(napi_env env,
     return qjs_execute_script(env, script, NULL, result);
 }
 
+
+
+void host_object_finalizer(JSRuntime *rt, JSValue value) {
+    napi_env env = (napi_env) JS_GetRuntimeOpaque(rt);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(value, env->runtime->napiHostObjectClassId);
+    if (info->finalize_cb) {
+        info->finalize_cb(env, info->data, NULL);
+    }
+    if (info->is_array) {
+        napi_delete_reference(env, info->getter);
+        napi_delete_reference(env, info->setter);
+    }
+
+    napi_delete_reference(env, info->ref);
+    mi_free(info);
+}
+
+int host_object_set(JSContext *ctx, JSValue obj, JSAtom atom,
+                    JSValue value, JSValue receiver, int flags) {
+    napi_env env = (napi_env) JS_GetContextOpaque(ctx);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(obj, env->runtime->napiHostObjectClassId);
+    if (info != NULL) {
+        if (info->is_array) {
+            JSValue atom_val = JS_AtomToValue(ctx, atom);
+            JSValue argv[4] = {
+                    info->ref->value,
+                    atom_val,
+                    value,
+                    obj
+            };
+            JS_Call(ctx, info->setter->value,JS_UNDEFINED, 4, argv);
+            JS_FreeValue(ctx, atom_val);
+            return true;
+        }
+        return JS_SetProperty(ctx, info->ref->value, atom, JS_DupValue(ctx, value));
+    }
+    return true;
+}
+
+JSValue host_object_get(JSContext *ctx, JSValue obj, JSAtom atom, JSValue receiver) {
+    napi_env env = (napi_env) JS_GetContextOpaque(ctx);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(obj, env->runtime->napiHostObjectClassId);
+    if (info != NULL) {
+        if (info->is_array) {
+            JSValue atom_val = JS_AtomToValue(ctx, atom);
+            JSValue argv[3] = {
+                    info->ref->value,
+                    atom_val,
+                    obj
+            };
+            JSValue value = JS_Call(ctx, info->getter->value,JS_UNDEFINED,3, argv);
+            JS_FreeValue(ctx, atom_val);
+            return value;
+        }
+        return JS_GetProperty(ctx, info->ref->value, atom);
+    }
+    return JS_UNDEFINED;
+}
+
+int host_object_has(JSContext *ctx, JSValue obj, JSAtom atom) {
+    napi_env env = (napi_env) JS_GetContextOpaque(ctx);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(obj, env->runtime->napiHostObjectClassId);
+    if (info != NULL) {
+        return JS_HasProperty(ctx, info->ref->value, atom);
+    }
+    return false;
+}
+
+static int host_object_delete(JSContext *ctx, JSValue obj, JSAtom atom) {
+    napi_env env = (napi_env) JS_GetContextOpaque(ctx);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(obj, env->runtime->napiHostObjectClassId);
+    if (info != NULL) {
+        return JS_DeleteProperty(ctx, info->ref->value, atom, 0);
+    }
+    return true;
+}
+
+static int host_object_get_own_property_names(JSContext *ctx, JSPropertyEnum **ptab,
+                                              uint32_t *plen,
+                                              JSValue obj) {
+    napi_env env = (napi_env) JS_GetContextOpaque(ctx);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(obj, env->runtime->napiHostObjectClassId);
+    if (info != NULL) {
+        return JS_GetOwnPropertyNames(ctx, ptab, plen, info->ref->value, JS_GPN_STRING_MASK | JS_GPN_SYMBOL_MASK | JS_GPN_ENUM_ONLY);
+    }
+    return true;
+}
+
+static int host_object_get_own_property(JSContext *ctx, JSPropertyDescriptor *desc,
+                                        JSValue obj, JSAtom prop) {
+    napi_env env = (napi_env) JS_GetContextOpaque(ctx);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(obj, env->runtime->napiHostObjectClassId);
+    if (info != NULL) {
+        return JS_GetOwnProperty(ctx, desc, info->ref->value, prop);
+    }
+    return true;
+}
+
+static int host_object_define_own_property(JSContext *ctx, JSValue obj,
+                                           JSAtom prop, JSValue val,
+                                           JSValue getter, JSValue setter,
+                                           int flags) {
+    napi_env env = (napi_env) JS_GetContextOpaque(ctx);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(obj, env->runtime->napiHostObjectClassId);
+    if (info != NULL) {
+        return JS_DefineProperty(ctx, info->ref->value, prop, JS_DupValue(ctx, val), getter, setter, flags);
+    }
+    return true;
+}
+
+JSClassExoticMethods NapiHostObjectExoticMethods = {
+        .set_property = host_object_set,
+        .get_property = host_object_get,
+        .has_property = host_object_has,
+        .delete_property = host_object_delete,
+//    .get_own_property_names = host_object_get_own_property_names,
+//    .get_own_property = host_object_get_own_property,
+//    .define_own_property = host_object_define_own_property
+};
+
+
+napi_status napi_create_host_object(napi_env env, napi_value value, napi_finalize finalize, void* data, bool is_array, napi_value getter, napi_value setter, napi_value* result) {
+    CHECK_ARG(env);
+    CHECK_ARG(result);
+
+    napi_value constructor;
+    napi_get_named_property(env, value, "constructor", &constructor);
+
+    napi_value prototype;
+    napi_get_named_property(env, constructor, "prototype", &prototype);
+
+    JSValue jsValue = JS_NewObjectClass(env->context, env->runtime->napiHostObjectClassId);
+    JS_SetPrototype(env->context, jsValue, *((JSValue*) prototype));
+
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) mi_malloc(sizeof(NapiHostObjectInfo));
+    info->data = data;
+    if (finalize) {
+        info->finalize_cb = finalize;
+    } else {
+        info->finalize_cb = NULL;
+    }
+    info->is_array = is_array;
+
+    if (is_array) {
+        if (getter) napi_create_reference(env, getter, 1, &info->getter);
+        if (setter) napi_create_reference(env, setter, 1, &info->setter);
+    }
+
+    napi_create_reference(env, value, 1, &info->ref);
+
+    JS_SetOpaque(jsValue, info);
+    return CreateScopedResult(env, jsValue, result);
+}
+
+napi_status napi_get_host_object_data(napi_env env, napi_value object, void** data) {
+    CHECK_ARG(env);
+    CHECK_ARG(object);
+    CHECK_ARG(data);
+
+    JSValue jsValue = *((JSValue *) object);
+
+
+    if (!JS_IsObject(jsValue)) {
+        return napi_set_last_error(env, napi_object_expected, NULL, 0, NULL);
+    }
+
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) JS_GetOpaque(jsValue, env->runtime->napiHostObjectClassId);
+    if (info) {
+        *data = info->data;
+    } else {
+        *data = NULL;
+    }
+
+    return napi_clear_last_error(env);
+}
+
 /**
  * --------------------------------
  *             JS RUNTIME
  * --------------------------------
  */
+
 
 
 
@@ -3720,15 +3909,20 @@ napi_status qjs_create_runtime(napi_runtime *runtime) {
     (*runtime)->constructorClassId = 0;
     (*runtime)->functionClassId = 0;
     (*runtime)->externalClassId = 0;
+    (*runtime)->napiHostObjectClassId = 0;
 
     JSClassDef ExternalClassDef = {"ExternalInfo", external_finalizer, NULL, NULL, NULL};
     JSClassDef FunctionClassDef = {"FunctionInfo", function_finalizer, NULL, NULL, NULL};
     JSClassDef ConstructorClassDef = {"ConstructorInfo", function_finalizer, NULL, NULL, NULL};
+    JSClassDef NapiHostObjectClassDef = {"NapiHostObject", host_object_finalizer, NULL, NULL, &NapiHostObjectExoticMethods};
 
+
+    JS_NewClassID((*runtime)->runtime, &(*runtime)->napiHostObjectClassId);
     JS_NewClassID((*runtime)->runtime, &(*runtime)->constructorClassId);
     JS_NewClassID((*runtime)->runtime, &(*runtime)->functionClassId);
     JS_NewClassID((*runtime)->runtime, &(*runtime)->externalClassId);
 
+    JS_NewClass((*runtime)->runtime, (*runtime)->napiHostObjectClassId, &NapiHostObjectClassDef);
     JS_NewClass((*runtime)->runtime, (*runtime)->externalClassId, &ExternalClassDef);
     JS_NewClass((*runtime)->runtime, (*runtime)->functionClassId, &FunctionClassDef);
     JS_NewClass((*runtime)->runtime, (*runtime)->constructorClassId, &ConstructorClassDef);
@@ -3825,7 +4019,7 @@ napi_status qjs_create_napi_env(napi_env *env, napi_runtime runtime) {
     JS_SetClassProto(context, runtime->externalClassId, JS_NewObject(context));
     JS_SetClassProto(context, runtime->functionClassId, JS_NewObject(context));
     JS_SetClassProto(context, runtime->constructorClassId, JS_NewObject(context));
-
+    JS_SetClassProto(context, runtime->napiHostObjectClassId, JS_NewObject(context));
     JSValue globalValue = JS_GetGlobalObject(context);
 
     JSValue gc = JS_NewCFunction(context, JSRunGCCallback, "gc", 0);

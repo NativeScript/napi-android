@@ -24,7 +24,7 @@ JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, napi_value arg,
     }
 }
 
-JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, size_t argc, napi_value* argv,
+JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, size_t argc, napi_value *argv,
                                              bool hasImplementationObject)
         : m_arr(nullptr), m_argsAsObject(nullptr), m_argsLen(0), m_isValid(false), m_error(Error()),
           m_return_type(static_cast<int>(Type::Null)) {
@@ -107,7 +107,19 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
     } else if (argType == napi_object || argType == napi_function) {
         napi_value jsObj = arg;
 
-        auto castType = NumericCasts::GetCastType(env, jsObj);
+
+        CastType castType = CastType::None;
+#ifdef USE_HOST_OBJECT
+        void *data;
+        napi_get_host_object_data(env, jsObj, &data);
+        if (data) {
+            castType = CastType::None;
+        } else {
+            castType = NumericCasts::GetCastType(env, jsObj);
+        }
+#else
+        castType = NumericCasts::GetCastType(env, jsObj);
+#endif
 
         napi_value castValue;
         jchar charValue;
@@ -237,43 +249,50 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     }
 
                     if (isArrayBuffer || isDataView || isTypedArray) {
-                        obj = JsArgConverter::GetByteBuffer(env, jsObj, isArrayBuffer, isTypedArray, isDataView);
+                        obj = JsArgConverter::GetByteBuffer(env, jsObj, isArrayBuffer, isTypedArray,
+                                                            isDataView);
                     }
                 }
 
-                napi_value privateValue;
-                napi_get_named_property(env, jsObj, PROP_KEY_NULL_NODE_NAME, &privateValue);
 
-                if (!napi_util::is_null_or_undefined(env, privateValue)) {
-                    void* data;
-                    napi_get_value_external(env, privateValue, &data);
+#ifdef USE_HOST_OBJECT
+                if (!data) {
+#endif
+                    napi_value privateValue;
+                    napi_get_named_property(env, jsObj, PROP_KEY_NULL_NODE_NAME, &privateValue);
+                    if (!napi_util::is_null_or_undefined(env, privateValue)) {
+                        void *data;
+                        napi_get_value_external(env, privateValue, &data);
+                        auto node = reinterpret_cast<MetadataNode *>(data);
+                        if (node == nullptr) {
+                            s << "Cannot get type of the null argument at index " << index;
+                            success = false;
+                            break;
+                        }
 
-                    auto node = reinterpret_cast<MetadataNode *>(data);
+                        auto type = node->GetName();
+                        auto nullObjName = "com/tns/NullObject";
+                        auto nullObjCtorSig = "(Ljava/lang/Class;)V";
 
-                    if (node == nullptr) {
-                        s << "Cannot get type of the null argument at index " << index;
-                        success = false;
-                        break;
+                        jclass nullClazz = jEnv.FindClass(nullObjName);
+                        jmethodID ctor = jEnv.GetMethodID(nullClazz, "<init>", nullObjCtorSig);
+                        jclass clazzToNull = jEnv.FindClass(type);
+                        jobject nullObjType = jEnv.NewObject(nullClazz, ctor, clazzToNull);
+
+                        if (nullObjType != nullptr) {
+                            SetConvertedObject(jEnv, index, nullObjType, false);
+                        } else {
+                            SetConvertedObject(jEnv, index, nullptr);
+                        }
+
+                        success = true;
+                        return success;
                     }
 
-                    auto type = node->GetName();
-                    auto nullObjName = "com/tns/NullObject";
-                    auto nullObjCtorSig = "(Ljava/lang/Class;)V";
-
-                    jclass nullClazz = jEnv.FindClass(nullObjName);
-                    jmethodID ctor = jEnv.GetMethodID(nullClazz, "<init>", nullObjCtorSig);
-                    jclass clazzToNull = jEnv.FindClass(type);
-                    jobject nullObjType = jEnv.NewObject(nullClazz, ctor, clazzToNull);
-
-                    if (nullObjType != nullptr) {
-                        SetConvertedObject(jEnv, index, nullObjType, false);
-                    } else {
-                        SetConvertedObject(jEnv, index, nullptr);
-                    }
-
-                    success = true;
-                    return success;
+#ifdef USE_HOST_OBJECT
                 }
+#endif
+
 
                 success = !obj.IsNull();
                 if (success) {
@@ -316,8 +335,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     if (!success) {
                         napi_value objStr;
                         napi_coerce_to_string(env, jsObj, &objStr);
-                        const char * objStrValue = napi_util::get_string_value(env, objStr);
-                        s << "Cannot marshal JavaScript argument " << objStrValue << " at index " << index
+                        const char *objStrValue = napi_util::get_string_value(env, objStr);
+                        s << "Cannot marshal JavaScript argument " << objStrValue << " at index "
+                          << index
                           << " to Java type.";
                     }
                 }
@@ -379,7 +399,7 @@ jobjectArray JsArgToArrayConverter::ToJavaArray() {
 
         JniLocalRef tmpArr(
                 jEnv.NewObjectArray(m_argsLen, JsArgToArrayConverter::JAVA_LANG_OBJECT_CLASS,
-                                   nullptr));
+                                    nullptr));
         m_arr = (jobjectArray) jEnv.NewGlobalRef(tmpArr);
 
         for (int i = 0; i < m_argsLen; i++) {

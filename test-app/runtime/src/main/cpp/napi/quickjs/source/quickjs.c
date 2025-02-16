@@ -10243,7 +10243,7 @@ int JS_SetOpaque(JSValue obj, void *opaque)
     if (JS_VALUE_GET_TAG(obj) == JS_TAG_OBJECT) {
         p = JS_VALUE_GET_OBJ(obj);
         // User code can't set the opaque of internal objects.
-        if (p->class_id >= JS_CLASS_INIT_COUNT) {
+        if (p->class_id >= JS_CLASS_INIT_COUNT || p->class_id == JS_CLASS_OBJECT) {
             p->u.opaque = opaque;
             return 0;
         }

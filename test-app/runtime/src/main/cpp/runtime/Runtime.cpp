@@ -380,6 +380,7 @@ void Runtime::DestroyRuntime() {
     CallbackHandlers::RemoveEnvEntries(env);
     tns::GlobalHelpers::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
+    is_destroying = true;
     delete this->m_objectManager;
     js_free_napi_env(env);
     Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
@@ -392,6 +393,7 @@ void Runtime::DestroyRuntime() {
 }
 
 bool Runtime::NotifyGC(JNIEnv *jEnv, jobject obj, jintArray object_ids) {
+    if (this->is_destroying) return true;
     m_objectManager->OnGarbageCollected(jEnv, object_ids);
     bool success = __sync_bool_compare_and_swap(&m_runGC, false, true);
     return success;
@@ -414,6 +416,7 @@ void Runtime::AdjustAmountOfExternalAllocatedMemory() {
 }
 
 bool Runtime::TryCallGC() {
+    if (this->is_destroying) return true;
     napi_value global;
     napi_get_global(env, &global);
     if (!m_gcFunc) {

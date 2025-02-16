@@ -15,6 +15,7 @@ struct FieldCallbackData {
     MetadataEntry metadata;
     jfieldID fid;
     jclass clazz;
+    napi_ref prototype;
 };
 
 }

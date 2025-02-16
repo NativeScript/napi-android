@@ -234,7 +234,6 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
         int objectId = -1;
 
         callerJavaObject = objectManager->GetJavaObjectByJsObject(caller, &objectId);
-
         isSuper = objectManager->GetIsSuper(objectId, caller);
 
         if (callerJavaObject.IsNull()) {
@@ -1054,7 +1053,7 @@ int CallbackHandlers::GetArrayLength(napi_env env, napi_value arr) {
 
     JEnv jEnv;
 
-    auto javaArr = objectManager->GetJavaObjectByJsObject(arr);
+    auto javaArr = objectManager->GetJavaObjectByJsObjectFast(arr);
 
     auto length = jEnv.GetArrayLength(javaArr);
 

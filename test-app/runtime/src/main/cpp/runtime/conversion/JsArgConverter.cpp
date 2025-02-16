@@ -139,20 +139,37 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             index);
                 }
             } else {
-                auto castType = NumericCasts::GetCastType(m_env, arg);
 
-                napi_value castValue = NumericCasts::GetCastValue(m_env, arg);
+                CastType castType = CastType::None;
+
+#ifdef USE_HOST_OBJECT
+                void *data;
+                napi_get_host_object_data(env, arg, &data);
+                if (data) {
+                    castType = CastType::None;
+                } else {
+                    castType = NumericCasts::GetCastType(env, arg);
+                }
+#else
+                castType = NumericCasts::GetCastType(m_env, arg);
+#endif
+
+                napi_value castValue;
+                napi_valuetype valueType = napi_undefined;
+                if (castType != CastType::None) {
+                    castValue = NumericCasts::GetCastValue(m_env, arg);
+                    if (castValue != nullptr) {
+                        napi_typeof(env, castValue, &valueType);
+                    }
+
+                }
+
                 JniLocalRef obj;
 
                 auto runtime = Runtime::GetRuntime(m_env);
                 auto objectManager = runtime->GetObjectManager();
 
                 JEnv jEnv;
-
-                napi_valuetype valueType = napi_undefined;
-                if (castValue != nullptr) {
-                    napi_typeof(env, castValue, &valueType);
-                }
 
                 switch (castType) {
                     case CastType::Char:
@@ -245,13 +262,19 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             }
                         }
 
-                        napi_value nullNode;
-                        napi_get_named_property(env, arg, PROP_KEY_NULL_NODE_NAME, &nullNode);
-                        if (!napi_util::is_null_or_undefined(env, nullNode)) {
-                            SetConvertedObject(index, nullptr);
-                            success = true;
-                            break;
+#ifdef USE_HOST_OBJECT
+                        if (!data) {
+#endif
+                            napi_value nullNode;
+                            napi_get_named_property(env, arg, PROP_KEY_NULL_NODE_NAME, &nullNode);
+                            if (!napi_util::is_null_or_undefined(env, nullNode)) {
+                                SetConvertedObject(index, nullptr);
+                                success = true;
+                                break;
+                            }
+#ifdef USE_HOST_OBJECT
                         }
+#endif
 
                         success = !obj.IsNull();
 

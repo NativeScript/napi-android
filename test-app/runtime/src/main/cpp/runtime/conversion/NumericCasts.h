@@ -23,11 +23,19 @@ namespace tns {
         inline static CastType GetCastType(napi_env env, napi_value object) {
             CastType ret = CastType::None;
 
+#ifdef USE_HOST_OBJECT
+            void *data;
+            napi_get_host_object_data(env, object, &data);
+            if (data != nullptr) return ret;
+#endif
+
             napi_value hidden;
 
-            napi_get_named_property(env, object, s_castMarker, &hidden);
+            bool hasProperty;
+            napi_has_named_property(env, object, s_castMarker, &hasProperty);
 
-            if (!napi_util::is_null_or_undefined(env, hidden)) {
+            if (hasProperty) {
+                napi_get_named_property(env, object, s_castMarker, &hidden);
                 int32_t castType;
                 napi_get_value_int32(env, hidden, &castType);
                 ret = static_cast<CastType>(castType);
@@ -60,7 +68,7 @@ namespace tns {
         static void
         MarkJsObject(napi_env env, napi_value object, CastType castType, napi_value value);
 
-        static const char * s_castMarker;
+        static const char *s_castMarker;
     };
 }
 
