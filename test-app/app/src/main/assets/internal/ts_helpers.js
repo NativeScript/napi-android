@@ -37,20 +37,20 @@
     // this way we now support both implementations in typescript generated constructors:
     // 1: super(); return __native(this);
     // 2: return super() || this;
-//    if (thiz.__container__) {
-//    if (__useHostObjects) {
-//    for (var prop in thiz) {
-//            if (thiz.hasOwnProperty(prop)) {
-//              thiz.__proto__[prop] = thiz[prop];
-//              delete thiz[prop];
-//            }
-//       }
-//    }
+    //    if (thiz.__container__) {
+    //    if (__useHostObjects) {
+    //    for (var prop in thiz) {
+    //            if (thiz.hasOwnProperty(prop)) {
+    //              thiz.__proto__[prop] = thiz[prop];
+    //              delete thiz[prop];
+    //            }
+    //       }
+    //    }
 
-   return thiz;
-//    } else {
-//      return thiz;
-//    }
+    return thiz;
+    //    } else {
+    //      return thiz;
+    //    }
   };
 
   var __extends = function (Child, Parent) {
@@ -261,12 +261,70 @@
     }
     return target[prop];
   };
-})();
-globalThis.getErrorStack = (err) => {
-  if (err) return err.stack;
-  const stack = new Error("").stack;
-  const lines = stack.split("\n");
-  // Line 2 results in invalid stack if not replaced when doing typescript extend.
-  lines[2] = "  at extend(native)";
-  return lines.join("\n");
+
+  function findInPrototypeChain(obj, prop) {
+    while (obj) {
+      if (obj.hasOwnProperty(prop)) {
+        return Object.getOwnPropertyDescriptor(obj, prop);
+      }
+      obj = Object.getPrototypeOf(obj);
+    }
+    return undefined;
+  }
+
+globalThis.__prepareHostObject = function (hostObject, jsThis) {
+//    const prototype = Object.getPrototypeOf(jsThis);
+//    Object.setPrototypeOf(hostObject, prototype);
+     Object.defineProperty(hostObject, "super", {
+              get: () => jsThis["super"],
+    });
 };
+ 
+  const EXTERNAL_PROP = "[[external]]";
+  const REFERENCE_PROP_JSC = "[[jsc_reference_info]]";
+
+  function __createNativeProxy(object, objectId) {
+    object["#jid"] = objectId;
+    const proxy = new Proxy(object, {
+      get: function (target, prop) {
+        if (prop === "#jid") return objectId;
+        if (prop === EXTERNAL_PROP) return this[EXTERNAL_PROP];
+        if (prop === REFERENCE_PROP_JSC) return this[REFERENCE_PROP_JSC];
+        if (target.__is__javaArray) {
+          return global.getNativeArrayProp(target, prop, target);
+        }
+        return target[prop];
+      },
+      set: function (target, prop, value) {
+        if (prop === EXTERNAL_PROP) {
+          this[EXTERNAL_PROP] = value;
+          return true;
+        }
+
+        if (prop === REFERENCE_PROP_JSC) {
+          this[REFERENCE_PROP_JSC] = value;
+        }
+
+        if (prop === "#jid") return true;
+        if (target.__is__javaArray && !isNaN(prop)) {
+          target.setValueAtIndex(parseInt(prop), value);
+          return true;
+        }
+
+        target[prop] = value;
+        return true;
+      },
+    });
+    return proxy;
+  }
+  globalThis.__createNativeProxy = __createNativeProxy;
+
+  globalThis.getErrorStack = (err) => {
+    if (err) return err.stack;
+    const stack = new Error("").stack;
+    const lines = stack.split("\n");
+    // Line 2 results in invalid stack if not replaced when doing typescript extend.
+    lines[2] = "  at extend(native)";
+    return lines.join("\n");
+  };
+})();

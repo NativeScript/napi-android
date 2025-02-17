@@ -3877,50 +3877,21 @@ napi_create_host_object(napi_env env, napi_value value, napi_finalize finalize, 
     auto *hostInfo = new v8impl::NapiHostObject(env, is_array, finalize, data, v8Value, v8Getter,
                                                 v8Setter);
 
+
     hostObject->SetAlignedPointerInInternalField(0, hostInfo);
 
-    // Set the prototype of the host object to the prototype of the value's constructor
+    // Set the prototype of the host object to the prototype of the value
     v8::Local<v8::Object> valueObject = v8Value.As<v8::Object>();
-    v8::Local<v8::Value> prototype;
+    hostObject->SetPrototype(context, valueObject->GetPrototype());
 
-    if (valueObject->Get(context,
-                         v8::String::NewFromUtf8(isolate, "constructor").ToLocalChecked()).ToLocal(
-            &prototype) && prototype->IsObject()) {
-        v8::Local<v8::Object> constructor = prototype.As<v8::Object>();
-        v8::Local<v8::Value> prototypeValue;
-        if (constructor->Get(context, v8::String::NewFromUtf8(isolate,
-                                                              "prototype").ToLocalChecked()).ToLocal(
-                &prototypeValue) && prototypeValue->IsObject()) {
-            hostObject->SetPrototype(context, prototypeValue).FromJust();
-
-            v8::Local<v8::Object> prototypeObject = prototypeValue.As<v8::Object>();
-
-            v8::Local<v8::Array> propertyNames = valueObject->GetPropertyNames(context).ToLocalChecked();
-
-            for (uint32_t i = 0; i < propertyNames->Length(); ++i) {
-                v8::Local<v8::Value> key;
-                if (propertyNames->Get(context, i).ToLocal(&key)) {
-                    v8::String::Utf8Value utf8_key(isolate, key);
-                    std::string property_name(*utf8_key);
-                    // Skip the property named "super"
-                    if (property_name == "super") {
-                        continue;
-                    }
-
-                    v8::Local<v8::Value> value;
-                    if (valueObject->Get(context, key).ToLocal(&value)) {
-                        if (value->IsFunction()) {
-                            hostObject->Set(context, key, value).FromMaybe(false);
-                        }
-                    }
-                }
-            }
-
-
+    v8::Local<v8::String> superPropertyName = v8::String::NewFromUtf8(isolate, "super").ToLocalChecked();
+    hostObject->SetAccessor(context, superPropertyName, [](v8::Local<v8::Name> property, const v8::PropertyCallbackInfo<v8::Value>& info) {
+        v8::Local<v8::Object> jsThis = info.Data().As<v8::Object>();
+        v8::Local<v8::Value> superValue;
+        if (jsThis->Get(info.GetIsolate()->GetCurrentContext(), property).ToLocal(&superValue)) {
+            info.GetReturnValue().Set(superValue);
         }
-    }
-
-
+    }, nullptr, valueObject);
 
     // Wrap the host object in a napi_value
     *result = v8impl::JsValueFromV8LocalValue(hostObject);

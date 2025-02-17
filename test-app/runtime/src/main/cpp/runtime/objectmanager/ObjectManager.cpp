@@ -63,56 +63,6 @@ void ObjectManager::Init(napi_env env) {
                             napi_util::get_true(env));
     m_jsObjectCtor = napi_util::make_ref(env, jsObjectCtor, 1);
 
-    static const char *proxyFunctionScript = R"((function () {
-	  const EXTERNAL_PROP = "[[external]]";
-      const REFERENCE_PROP_JSC = "[[jsc_reference_info]]";
-	  return function (object, objectId, isArray) {
-        object["#jid"] = objectId;
-        const proxy = new Proxy(object, {
-		  get: function(target, prop) {
-            if (prop === "isProxy") return true;
-			if (prop === "#jid") return objectId;
-			if (prop === EXTERNAL_PROP) return this[EXTERNAL_PROP];
-            if (prop === REFERENCE_PROP_JSC) return this[REFERENCE_PROP_JSC];
-			if (target.__is__javaArray) {
-			  return global.getNativeArrayProp(target, prop, target);
-			}
-			return target[prop];
-		  },
-		  set: function(target, prop, value) {
-			if (prop === EXTERNAL_PROP) {
-			  this[EXTERNAL_PROP] = value;
-			  return true;
-			};
-
-            if (prop === REFERENCE_PROP_JSC) {
-                this[REFERENCE_PROP_JSC] = value;
-            }
-
-			if (prop === "#jid") return true;
-			if (target.__is__javaArray && !isNaN(prop)) {
-			  target.setValueAtIndex(parseInt(prop), value);
-			  return true;
-			}
-
-			target[prop] = value;
-			return true;
-		  },
-		});
-		return proxy;
-	  };
-	})();)";
-
-#ifdef USE_HOST_OBJECT
-    napi_set_named_property(env, napi_util::global(env), "__useHostObjects", napi_util::get_true(env));
-#endif
-
-    napi_value jsObjectProxyCreator;
-    napi_value scriptValue;
-    napi_create_string_utf8(env, proxyFunctionScript, strlen(proxyFunctionScript), &scriptValue);
-    js_execute_script(env, scriptValue, "<ns_proxy_script>", &jsObjectProxyCreator);
-    napi_ref ref = napi_util::make_ref(env, jsObjectProxyCreator);
-    this->m_jsObjectProxyCreator = ref;
 }
 
 ObjectManager::~ObjectManager() {
@@ -158,6 +108,12 @@ napi_value ObjectManager::GetOrCreateProxyWeak(jint javaObjectID, napi_value ins
     napi_value argv[2];
     argv[0] = instance;
     napi_create_int32(m_env, javaObjectID, &argv[1]);
+
+    if (!this->m_jsObjectProxyCreator) {
+        napi_value jsObjectProxyCreator;
+        napi_get_named_property(m_env, napi_util::global(m_env), "__createNativeProxy", &jsObjectProxyCreator);
+        this->m_jsObjectProxyCreator = napi_util::make_ref(m_env, jsObjectProxyCreator);
+    }
 
     napi_call_function(m_env, napi_util::global(m_env),
                        napi_util::get_ref_value(m_env, this->m_jsObjectProxyCreator),
@@ -218,6 +174,12 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
     napi_value argv[2];
     argv[0] = instance;
     napi_create_int32(m_env, javaObjectID, &argv[1]);
+
+    if (!this->m_jsObjectProxyCreator) {
+        napi_value jsObjectProxyCreator;
+        napi_get_named_property(m_env, napi_util::global(m_env), "__createNativeProxy", &jsObjectProxyCreator);
+        this->m_jsObjectProxyCreator = napi_util::make_ref(m_env, jsObjectProxyCreator);
+    }
 
     napi_call_function(m_env, napi_util::global(m_env),
                        napi_util::get_ref_value(m_env, this->m_jsObjectProxyCreator),
@@ -303,11 +265,13 @@ JniLocalRef ObjectManager::GetJavaObjectByJsObjectFast(napi_value object) {
 
 #ifdef USE_HOST_OBJECT
     napi_get_host_object_data(m_env, object, &data);
+    if (data) {
+        auto info = (JSObjectProxyData *) data;
+        return {GetJavaObjectByID(info->javaObjectId), true};
+    }
 #endif
 
-    if (data == nullptr) {
-        napi_unwrap(m_env, object, &data);
-    }
+    napi_unwrap(m_env, object, &data);
 
     if (data) {
         auto info = reinterpret_cast<JSInstanceInfo*>(data);
