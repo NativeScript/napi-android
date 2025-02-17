@@ -229,6 +229,10 @@ if (QUICKJS)
     endif ()
 endif ()
 
+if (USE_HOST_OBJECTS)
+    add_compile_definitions(NativeScript, PRIVATE USE_HOST_OBJECT)
+endif()
+
 # if("${ANDROID_ABI}" MATCHES "armeabi-v7a$" OR "${ANDROID_ABI}" MATCHES "x86$")
 #     # On API Level 19 and lower we need to link with android_support
 #     # because it contains some implementation of functions such as "strtoll" and "strtoul"

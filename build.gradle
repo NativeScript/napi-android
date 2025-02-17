@@ -18,6 +18,8 @@ def onlyX86 = project.hasProperty("onlyX86")
 def useCCache = !project.hasProperty("noCCache")
 def hasNdkVersion = project.hasProperty("ndkVersion")
 
+def hasHostObjects = project.hasProperty("useHostObjects")
+
 if (hasNdkVersion) {
     println "Using NDK version " + ndkVersion
 }
@@ -205,6 +207,10 @@ def getAssembleReleaseBuildArguments = { ->
 
     if (hasEngine) {
         arguments.add("-Pengine=${engine}")
+    }
+
+    if (hasHostObjects) {
+         arguments.add("-PuseHostObjects")
     }
 
     arguments += ["--warning-mode", "all"]

@@ -7,6 +7,8 @@ if (hasEngine) {
     jsEngine = engine
 }
 
+def hasHostObjects = project.hasProperty("useHostObjects")
+
 printf("Compiling NativeScript with %s.\n", jsEngine)
 
 def optimized = project.hasProperty("optimized")
@@ -120,6 +122,10 @@ android {
 
                if (useCCache) {
                    arguments.add("-DUSE_CCACHE=true")
+               }
+
+               if (hasHostObjects) {
+                   arguments.add("-DUSE_HOST_OBJECTS=true")
                }
 
                if (jsEngine == "QUICKJS") {
