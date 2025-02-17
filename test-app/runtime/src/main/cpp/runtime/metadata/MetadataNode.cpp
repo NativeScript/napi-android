@@ -59,7 +59,8 @@ napi_value MetadataNode::CreateArrayObjectConstructor(napi_env env) {
 }
 
 napi_value MetadataNode::CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
-                                                 const std::string &proxyClassName, int javaObjectID) {
+                                                 const std::string &proxyClassName,
+                                                 int javaObjectID) {
     napi_value extInstance = nullptr;
 
     auto cacheData = GetCachedExtendedClassData(env, proxyClassName);
@@ -801,7 +802,7 @@ bool MetadataNode::IsJavascriptKeyword(const std::string &word) {
                     "transient", "true", "try", "typeof", "var", "void", "volatile", "while",
                     "with", "yield"};
 
-        keywords = set < string > (kw, kw + sizeof(kw) / sizeof(kw[0]));
+        keywords = set<string>(kw, kw + sizeof(kw) / sizeof(kw[0]));
     }
 
     return keywords.find(word) != keywords.end();
@@ -881,7 +882,7 @@ napi_value MetadataNode::PackageGetterCallback(napi_env env, napi_callback_info 
     }
 }
 
-void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const MetadataTreeNode* treeNode,
+void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const MetadataTreeNode *treeNode,
                                                      napi_value interface) {
     if (napi_util::is_undefined(env, interface) || napi_util::is_null(env, interface)) {
         return;
@@ -954,7 +955,7 @@ napi_value MetadataNode::SymbolHasInstanceCallback(napi_env env, napi_callback_i
 }
 
 
-std::string MetadataNode::GetJniClassName(const MetadataTreeNode * node) {
+std::string MetadataNode::GetJniClassName(const MetadataTreeNode *node) {
     std::stack<string> s;
 
     while (node != nullptr && !node->name.empty()) {
@@ -1124,7 +1125,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
             fieldInfo->ownsPrototype = true;
             owned = true;
         }
-        fieldInfo->prototype = proto_ref;
+        fieldInfo->prototype = napi_util::make_ref(env, prototype, 0);
         fieldInfo->metadata.declaringType = curType;
         napi_util::define_property(env, prototype, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
@@ -1206,6 +1207,8 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
         auto entry = MetadataReader::ReadStaticFieldEntry(&curPtr);
         auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
+        fieldInfo->prototype = nullptr;
+        fieldInfo->ownsPrototype = false;
         napi_value method;
         napi_util::define_property(env, constructor, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
@@ -1586,7 +1589,8 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
 
         if (!fieldMetadata.isStatic) {
             bool isHolder = false;
-            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype),jsThis, &isHolder);
+            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype), jsThis,
+                               &isHolder);
             if (isHolder) return UNDEFINED;
         }
 
@@ -1617,7 +1621,8 @@ napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback
 
         if (!fieldMetadata.isStatic) {
             bool isHolder = false;
-            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype),jsThis, &isHolder);
+            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype), jsThis,
+                               &isHolder);
             if (isHolder) return UNDEFINED;
         }
 
