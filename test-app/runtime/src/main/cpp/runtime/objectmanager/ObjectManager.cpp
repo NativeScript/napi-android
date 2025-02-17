@@ -503,14 +503,30 @@ napi_value ObjectManager::JSObjectConstructorCallback(napi_env env, napi_callbac
 
 void ObjectManager::ReleaseObjectNow(napi_env env, int javaObjectId) {
     if (javaObjectId < 0) return;
-    ObjectManager *objMgr = Runtime::GetRuntime(env)->GetObjectManager();
-    objMgr->m_idToProxy.erase(javaObjectId);
+    auto rt = Runtime::GetRuntime(env);
+    if (rt->is_destroying) return;
+    ObjectManager *objMgr = rt->GetObjectManager();
+
+    auto found = objMgr->m_idToProxy.find(javaObjectId);
+    if (found != objMgr->m_idToProxy.end()) {
+        napi_delete_reference(env, found->second);
+        objMgr->m_idToProxy.erase(javaObjectId);
+    }
+
+    found = objMgr->m_idToObject.find(javaObjectId);
+    if (found != objMgr->m_idToObject.end()) {
+        napi_delete_reference(env, found->second);
+        objMgr->m_idToObject.erase(javaObjectId);
+    }
+
+    Runtime::GetRuntime(env)->js_method_cache->cleanupObject(javaObjectId);
+
     auto itFound = objMgr->m_weakObjectIds.find(javaObjectId);
     if (itFound == objMgr->m_weakObjectIds.end()) {
-        objMgr->m_weakObjectIds.emplace(javaObjectId);
         JEnv jEnv;
         jEnv.CallVoidMethod(objMgr->m_javaRuntimeObject, objMgr->MAKE_INSTANCE_WEAK_METHOD_ID,
                             javaObjectId);
+        objMgr->m_weakObjectIds.emplace(javaObjectId);
     }
 }
 
