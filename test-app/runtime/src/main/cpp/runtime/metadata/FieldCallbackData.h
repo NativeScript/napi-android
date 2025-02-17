@@ -16,6 +16,7 @@ struct FieldCallbackData {
     jfieldID fid;
     jclass clazz;
     napi_ref prototype;
+    bool ownsPrototype;
 };
 
 }

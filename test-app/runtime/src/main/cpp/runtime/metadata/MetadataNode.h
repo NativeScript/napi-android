@@ -8,6 +8,7 @@
 #include "MetadataReader.h"
 #include "Runtime.h"
 
+#include "FieldCallbackData.h"
 using namespace tns;
 
 class MetadataNode {
@@ -293,6 +294,7 @@ private:
     struct MetadataNodeCache {
         robin_hood::unordered_map<MetadataTreeNode *, CtorCacheData> CtorFuncCache;
         robin_hood::unordered_map<std::string, MetadataNode::ExtendedClassCacheData> ExtendedCtorFuncCache;
+        std::vector<FieldCallbackData *> fieldCallbackData;
     };
 
     static bool s_profilerEnabled;

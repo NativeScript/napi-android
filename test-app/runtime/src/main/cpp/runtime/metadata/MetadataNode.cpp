@@ -1115,15 +1115,23 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     auto instanceFieldCount = *reinterpret_cast<uint16_t *>(curPtr);
     curPtr += sizeof(uint16_t);
     auto proto_ref = napi_util::make_ref(env, prototype, 0);
+    bool owned = false;
     for (auto i = 0; i < instanceFieldCount; i++) {
         auto entry = MetadataReader::ReadInstanceFieldEntry(&curPtr);
         auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
+        if (!owned) {
+            fieldInfo->ownsPrototype = true;
+            owned = true;
+        }
         fieldInfo->prototype = proto_ref;
         fieldInfo->metadata.declaringType = curType;
         napi_util::define_property(env, prototype, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                    fieldInfo);
+
+        MetadataNode::GetMetadataNodeCache(env)->fieldCallbackData.push_back(fieldInfo);
+
     }
 
     if (instanceFieldCount == 0) {
@@ -1202,6 +1210,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
         napi_util::define_property(env, constructor, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                    fieldInfo);
+        MetadataNode::GetMetadataNodeCache(env)->fieldCallbackData.push_back(fieldInfo);
     }
 
 
@@ -1279,7 +1288,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
         entry.sig = signature;
         entry.paramCount = paramCount;
         entry.isStatic = false;
-
+        bool owned = false;
         if (chKind == 'M') {
             if (entry.name != lastMethodName) {
                 entry.type = NodeType::Method;
@@ -1308,10 +1317,15 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
             fieldCount++;
             entry.type = NodeType::Field;
             auto *fieldInfo = new FieldCallbackData(entry);
+            if (!owned) {
+                fieldInfo->ownsPrototype = true;
+                owned = true;
+            }
             fieldInfo->prototype = proto_ref;
             napi_util::define_property(env, proto, entry.name.c_str(), nullptr,
                                        FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                        fieldInfo);
+            MetadataNode::GetMetadataNodeCache(env)->fieldCallbackData.push_back(fieldInfo);
         }
     }
 
@@ -2072,6 +2086,13 @@ void MetadataNode::onDisposeEnv(napi_env env) {
                 }
             }
             it->ExtendedCtorFuncCache.clear();
+
+            for (const auto &entry: it->fieldCallbackData) {
+                if (entry->ownsPrototype) {
+                    napi_delete_reference(env, entry->prototype);
+                }
+                delete entry;
+            }
         }
         s_metadata_node_cache.Remove(env);
         delete it;
