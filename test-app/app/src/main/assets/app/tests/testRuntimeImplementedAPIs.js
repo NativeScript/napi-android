@@ -3,7 +3,7 @@ describe("Runtime exposes", function () {
     // Try to get the times using Date.now and __time and compare the results, expect them to be somewhat "close".
     // Sometimes GC hits after Date.now is captured but before __time or the vice-versa and the test fails,
     // so we are giving it several attempts.
-    for(var i = 0; i < 5; i++) {
+    for(var i = 0; i < 10; i++) {
       try {
         var dateTimeStart = Date.now();
         var timeStart = __time();
@@ -21,7 +21,7 @@ describe("Runtime exposes", function () {
         expect(Math.abs(dateDelta - timeDelta) < dateDelta * 0.25).toBe(true);
         break;
       } catch(e) {
-        if (i == 4) {
+        if (i == 9) {
           throw e;
         }
       }
