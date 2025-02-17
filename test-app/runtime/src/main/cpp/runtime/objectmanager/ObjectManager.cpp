@@ -548,6 +548,15 @@ void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {
     int *cppArray = jenv.GetIntArrayElements(object_ids, nullptr);
     for (jsize i = 0; i < length; i++) {
         int javaObjectId = cppArray[i];
+
+        auto itFound2 = this->m_idToProxy.find(javaObjectId);
+        if (itFound2 != this->m_idToProxy.end()) {
+            if (itFound2->second != nullptr) {
+                napi_delete_reference(m_env, itFound2->second);
+            }
+            this->m_idToProxy.erase(javaObjectId);
+        }
+
         auto itFound = this->m_idToObject.find(javaObjectId);
         if (itFound != this->m_idToObject.end()) {
             napi_delete_reference(m_env, itFound->second);
@@ -555,13 +564,6 @@ void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {
             this->m_weakObjectIds.erase(javaObjectId);
             Runtime::GetRuntime(m_env)->js_method_cache->cleanupObject(javaObjectId);
             DEBUG_WRITE("JS Object released for object id: %d", javaObjectId);
-        }
-        auto itFound2 = this->m_idToProxy.find(javaObjectId);
-        if (itFound2 != this->m_idToProxy.end()) {
-            if (itFound2->second != nullptr) {
-                napi_delete_reference(m_env, itFound2->second);
-            }
-            this->m_idToProxy.erase(javaObjectId);
         }
 
     }
