@@ -24,7 +24,7 @@ namespace tns {
 
         void Init(napi_env env);
 
-        JniLocalRef GetJavaObjectByJsObject(napi_value object, int* objectId = nullptr);
+        JniLocalRef GetJavaObjectByJsObject(napi_value object, int *objectId = nullptr);
 
 
         JniLocalRef GetJavaObjectByJsObjectFast(napi_value object);
@@ -42,7 +42,8 @@ namespace tns {
         napi_value
         CreateJSWrapper(jint javaObjectID, const std::string &typeName);
 
-        napi_value CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance);
+        napi_value
+        CreateJSWrapper(jint javaObjectID, const std::string &typeName, jobject instance);
 
         napi_value GetOrCreateProxy(jint javaObjectID, napi_value instance);
 
@@ -95,28 +96,6 @@ namespace tns {
             jclass ObjectClazz;
         };
 
-        struct JSObjectFinalizerHint {
-            JSObjectFinalizerHint(ObjectManager *_thisPtr, JSInstanceInfo *_jsInfo,
-                                  napi_ref _target)
-                    :
-                    thisPtr(_thisPtr), jsInfo(_jsInfo), target(_target) {
-            }
-
-            ObjectManager *thisPtr;
-            JSInstanceInfo *jsInfo;
-            napi_ref target;
-        };
-
-        struct JSObjectProxyData {
-            JSObjectProxyData(ObjectManager *_thisPtr, uint32_t _javaObjectId)
-                    :
-                    thisPtr(_thisPtr), javaObjectId(_javaObjectId) {
-            }
-
-            ObjectManager *thisPtr;
-            uint32_t javaObjectId;
-        };
-
 
         JSInstanceInfo *GetJSInstanceInfo(napi_value object);
 
@@ -127,7 +106,8 @@ namespace tns {
 
         static void JSObjectFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint);
 
-        static void JSObjectProxyFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint);
+        static void
+        JSObjectProxyFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint);
 
         jweak GetJavaObjectByID(uint32_t javaObjectID);
 

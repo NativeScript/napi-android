@@ -284,10 +284,8 @@ globalThis.__prepareHostObject = function (hostObject, jsThis) {
   const REFERENCE_PROP_JSC = "[[jsc_reference_info]]";
 
   function __createNativeProxy(object, objectId) {
-    object["#jid"] = objectId;
     const proxy = new Proxy(object, {
       get: function (target, prop) {
-        if (prop === "#jid") return objectId;
         if (prop === EXTERNAL_PROP) return this[EXTERNAL_PROP];
         if (prop === REFERENCE_PROP_JSC) return this[REFERENCE_PROP_JSC];
         if (target.__is__javaArray) {
@@ -305,7 +303,6 @@ globalThis.__prepareHostObject = function (hostObject, jsThis) {
           this[REFERENCE_PROP_JSC] = value;
         }
 
-        if (prop === "#jid") return true;
         if (target.__is__javaArray && !isNaN(prop)) {
           target.setValueAtIndex(parseInt(prop), value);
           return true;
