@@ -9,6 +9,7 @@
 #include "quicks-runtime.h"
 #include "mutex"
 #include <map>
+#include "ConcurrentMap.h"
 
 class JSR {
 public:
@@ -21,7 +22,7 @@ public:
         js_mutex.unlock();
     }
 
-    static std::unordered_map<napi_env, JSR *> env_to_jsr_cache;
+    static tns::SimpleMap<napi_env, JSR *> env_to_jsr_cache;
 };
 
 class NapiScope {

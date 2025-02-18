@@ -789,6 +789,7 @@ napi_status napi_delete_reference(napi_env env, napi_ref ref) {
 
     if (!JS_IsUndefined(ref->value)) {
         JS_FreeValue(env->context, ref->value);
+        ref->value = JSUndefined;
     }
 
     LIST_REMOVE(ref, node);

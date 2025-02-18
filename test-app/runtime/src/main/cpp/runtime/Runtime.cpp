@@ -371,6 +371,7 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
+    is_destroying = true;
     MetadataNode::onDisposeEnv(env);
     ArgConverter::onDisposeEnv(env);
     this->js_method_cache->cleanupCache();
@@ -380,7 +381,6 @@ void Runtime::DestroyRuntime() {
     CallbackHandlers::RemoveEnvEntries(env);
     tns::GlobalHelpers::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
-    is_destroying = true;
     delete this->m_objectManager;
     js_free_napi_env(env);
     Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
