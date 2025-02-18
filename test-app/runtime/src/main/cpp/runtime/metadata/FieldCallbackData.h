@@ -17,7 +17,7 @@ namespace tns {
         jfieldID fid;
         jclass clazz;
         napi_ref prototype;
-        bool ownsPrototype;
+        bool ownsPrototype = false;
     };
 
 }

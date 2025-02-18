@@ -500,11 +500,9 @@ napi_value ObjectManager::JSObjectConstructorCallback(napi_env env, napi_callbac
 }
 
 void ObjectManager::ReleaseObjectNow(napi_env env, int javaObjectId) {
-    if (javaObjectId < 0) return;
     auto rt = Runtime::GetRuntime(env);
     if (rt->is_destroying) return;
     ObjectManager *objMgr = rt->GetObjectManager();
-
 
     auto itFound = objMgr->m_weakObjectIds.find(javaObjectId);
     if (itFound == objMgr->m_weakObjectIds.end()) {

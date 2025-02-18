@@ -99,7 +99,7 @@ namespace tns {
 
         JSMethodCache* js_method_cache;
 
-        bool is_destroying;
+        bool is_destroying = false;
 
     private:
         Runtime(JNIEnv* env, jobject runtime, int id);
