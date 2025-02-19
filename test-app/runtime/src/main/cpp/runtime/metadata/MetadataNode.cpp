@@ -1125,7 +1125,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
             fieldInfo->ownsPrototype = true;
             owned = true;
         }
-        fieldInfo->prototype = napi_util::make_ref(env, prototype, 0);
+        fieldInfo->prototype = proto_ref;
         fieldInfo->metadata.declaringType = curType;
         napi_util::define_property(env, prototype, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
@@ -1135,7 +1135,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
 
     }
 
-    if (instanceFieldCount == 0) {
+    if (!owned) {
         napi_delete_reference(env, proto_ref);
     }
 
@@ -1276,7 +1276,7 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
 
     napi_value proto = napi_util::get_prototype(env, constructor);
     napi_ref proto_ref = napi_util::make_ref(env, proto, 0);
-    auto fieldCount = 0;
+    bool owned = false;
     while (std::getline(s, line)) {
         std::stringstream tmp(line);
         tmp >> kind >> name >> signature >> paramCount;
@@ -1291,7 +1291,6 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
         entry.sig = signature;
         entry.paramCount = paramCount;
         entry.isStatic = false;
-        bool owned = false;
         if (chKind == 'M') {
             if (entry.name != lastMethodName) {
                 entry.type = NodeType::Method;
@@ -1317,7 +1316,6 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
             }
             callbackData->candidates.push_back(std::move(entry));
         } else if (chKind == 'F') {
-            fieldCount++;
             entry.type = NodeType::Field;
             auto *fieldInfo = new FieldCallbackData(entry);
             if (!owned) {
@@ -1328,11 +1326,12 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
             napi_util::define_property(env, proto, entry.name.c_str(), nullptr,
                                        FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                        fieldInfo);
+
             MetadataNode::GetMetadataNodeCache(env)->fieldCallbackData.push_back(fieldInfo);
         }
     }
 
-    if (fieldCount == 0) {
+    if (!owned) {
         napi_delete_reference(env, proto_ref);
     }
 
