@@ -80,7 +80,9 @@ std::string transformJSObject(napi_env env, napi_value object) {
         if (napi_util::is_of_type(env, toStringFunc, napi_function)) {
             napi_value result;
             napi_call_function(env, object, toStringFunc, 0, nullptr, &result);
-            return napi_util::get_string_value(env, result);
+            auto value = ArgConverter::ConvertToString(env, result);
+            auto hasCustomToStringImplementation = value.find("[object Object]") == std::string::npos;
+            if (hasCustomToStringImplementation) return value;
         }
     }
     // If no custom toString method, stringify the object
