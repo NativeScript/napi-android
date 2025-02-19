@@ -1115,17 +1115,10 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
 
     auto instanceFieldCount = *reinterpret_cast<uint16_t *>(curPtr);
     curPtr += sizeof(uint16_t);
-    auto proto_ref = napi_util::make_ref(env, prototype, 0);
-    bool owned = false;
     for (auto i = 0; i < instanceFieldCount; i++) {
         auto entry = MetadataReader::ReadInstanceFieldEntry(&curPtr);
         auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
-        if (!owned) {
-            fieldInfo->ownsPrototype = true;
-            owned = true;
-        }
-        fieldInfo->prototype = proto_ref;
         fieldInfo->metadata.declaringType = curType;
         napi_util::define_property(env, prototype, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
@@ -1133,10 +1126,6 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
 
         MetadataNode::GetMetadataNodeCache(env)->fieldCallbackData.push_back(fieldInfo);
 
-    }
-
-    if (!owned) {
-        napi_delete_reference(env, proto_ref);
     }
 
     auto kotlinPropertiesCount = *reinterpret_cast<uint16_t *>(curPtr);
@@ -1207,8 +1196,6 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
         auto entry = MetadataReader::ReadStaticFieldEntry(&curPtr);
         auto &fieldName = entry.getName();
         auto fieldInfo = new FieldCallbackData(entry);
-        fieldInfo->prototype = nullptr;
-        fieldInfo->ownsPrototype = false;
         napi_value method;
         napi_util::define_property(env, constructor, fieldName.c_str(), nullptr,
                                    FieldAccessorGetterCallback, FieldAccessorSetterCallback,
@@ -1275,8 +1262,6 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
     MethodCallbackData *callbackData = nullptr;
 
     napi_value proto = napi_util::get_prototype(env, constructor);
-    napi_ref proto_ref = napi_util::make_ref(env, proto, 0);
-    bool owned = false;
     while (std::getline(s, line)) {
         std::stringstream tmp(line);
         tmp >> kind >> name >> signature >> paramCount;
@@ -1318,21 +1303,12 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetInstanceMembers
         } else if (chKind == 'F') {
             entry.type = NodeType::Field;
             auto *fieldInfo = new FieldCallbackData(entry);
-            if (!owned) {
-                fieldInfo->ownsPrototype = true;
-                owned = true;
-            }
-            fieldInfo->prototype = proto_ref;
             napi_util::define_property(env, proto, entry.name.c_str(), nullptr,
                                        FieldAccessorGetterCallback, FieldAccessorSetterCallback,
                                        fieldInfo);
 
             MetadataNode::GetMetadataNodeCache(env)->fieldCallbackData.push_back(fieldInfo);
         }
-    }
-
-    if (!owned) {
-        napi_delete_reference(env, proto_ref);
     }
 
     return instanceMethodData;
@@ -1591,10 +1567,17 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
         }
 
         if (!fieldMetadata.isStatic) {
-            bool isHolder = false;
-            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype), jsThis,
-                               &isHolder);
-            if (isHolder) return UNDEFINED;
+            napi_value constructor;
+            napi_value prototype;
+            napi_get_named_property(env, jsThis, "constructor", &constructor);
+            if (!napi_util::is_null_or_undefined(env, constructor)) {
+                napi_get_named_property(env, constructor, "prototype", &prototype);
+                bool isHolder;
+                napi_strict_equals(env, prototype, jsThis, &isHolder);
+                if (isHolder) {
+                    return UNDEFINED;
+                }
+            }
         }
 
         return CallbackHandlers::GetJavaField(env, jsThis, fieldData);
@@ -1623,10 +1606,17 @@ napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback
 
 
         if (!fieldMetadata.isStatic) {
-            bool isHolder = false;
-            napi_strict_equals(env, napi_util::get_ref_value(env, fieldData->prototype), jsThis,
-                               &isHolder);
-            if (isHolder) return UNDEFINED;
+            napi_value constructor;
+            napi_value prototype;
+            napi_get_named_property(env, jsThis, "constructor", &constructor);
+            if (!napi_util::is_null_or_undefined(env, constructor)) {
+                napi_get_named_property(env, constructor, "prototype", &prototype);
+                bool isHolder;
+                napi_strict_equals(env, prototype, jsThis, &isHolder);
+                if (isHolder) {
+                    return UNDEFINED;
+                }
+            }
         }
 
         if (fieldMetadata.getIsFinal()) {
@@ -2096,9 +2086,6 @@ void MetadataNode::onDisposeEnv(napi_env env) {
             it->ExtendedCtorFuncCache.clear();
 
             for (const auto &entry: it->fieldCallbackData) {
-                if (entry->ownsPrototype) {
-                    napi_delete_reference(env, entry->prototype);
-                }
                 delete entry;
             }
         }

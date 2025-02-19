@@ -8,16 +8,13 @@ namespace tns {
     struct FieldCallbackData {
         FieldCallbackData(MetadataEntry metadata)
                 :
-                metadata(metadata), fid(nullptr), clazz(nullptr), prototype(nullptr),
-                ownsPrototype(false) {
+                metadata(metadata), fid(nullptr), clazz(nullptr) {
 
         }
 
         MetadataEntry metadata;
         jfieldID fid;
         jclass clazz;
-        napi_ref prototype;
-        bool ownsPrototype = false;
     };
 
 }
