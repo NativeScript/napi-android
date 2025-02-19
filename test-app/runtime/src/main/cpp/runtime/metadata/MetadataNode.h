@@ -174,7 +174,7 @@ private:
 
     static void SetInnerTypes(napi_env env, napi_value constructor, MetadataTreeNode *treeNode);
 
-    static napi_value SetInnerTypeCallback(napi_env env, napi_callback_info info);
+    static napi_value InnerTypeGetterCallback(napi_env env, napi_callback_info info);
 
     static napi_value NullValueOfCallback(napi_env env, napi_callback_info info);
 

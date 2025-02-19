@@ -1490,24 +1490,28 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
 void MetadataNode::SetInnerTypes(napi_env env, napi_value constructor, MetadataTreeNode *treeNode) {
     if (treeNode->children != nullptr) {
         const auto &children = *treeNode->children;
+        std::vector<std::string> childNames(children.size());
+
         for (auto curChild: children) {
-            bool hasProperty;
-            napi_has_named_property(env, constructor, curChild->name.c_str(), &hasProperty);
-            if (!hasProperty) {
+            bool hasOwnProperty = false;
+            napi_value childName;
+            napi_create_string_utf8(env, curChild->name.c_str(), curChild->name.size(), &childName);
+            napi_has_own_property(env, constructor, childName, &hasOwnProperty);
+            if (!hasOwnProperty) {
                 napi_util::define_property(env, constructor, curChild->name.c_str(), nullptr,
-                                           SetInnerTypeCallback, nullptr, curChild);
+                                           InnerTypeGetterCallback, nullptr, curChild);
             }
         }
     }
 }
 
-napi_value MetadataNode::SetInnerTypeCallback(napi_env env, napi_callback_info info) {
+napi_value MetadataNode::InnerTypeGetterCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(0)
     try {
         auto curChild = reinterpret_cast<MetadataTreeNode *>(data);
         auto childNode = GetOrCreateInternal(curChild);
         auto cache = GetMetadataNodeCache(env);
-        auto itFound = cache->CtorFuncCache.find(curChild);
+        auto itFound = cache->CtorFuncCache.find(childNode->m_treeNode);
         if (itFound != cache->CtorFuncCache.end()) {
             auto value = napi_util::get_ref_value(env, itFound->second.constructorFunction);
             if (!napi_util::is_null_or_undefined(env, value)) return value;
