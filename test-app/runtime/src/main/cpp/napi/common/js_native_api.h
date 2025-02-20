@@ -538,6 +538,8 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_object_seal(napi_env env,
 NAPI_EXTERN napi_status NAPI_CDECL napi_create_host_object(napi_env env, napi_value value, napi_finalize finalize, void* data, bool is_array, napi_value getter, napi_value setter, napi_value* result);
 
 NAPI_EXTERN napi_status NAPI_CDECL napi_get_host_object_data(napi_env env, napi_value object, void** data);
+
+NAPI_EXTERN napi_status NAPI_CDECL napi_is_host_object(napi_env env, napi_value object, bool* result);
 #endif
 
 #endif // NAPI_VERSION >= 8

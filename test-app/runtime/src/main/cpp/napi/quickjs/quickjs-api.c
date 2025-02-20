@@ -3159,7 +3159,8 @@ napi_get_cb_info(napi_env env, napi_callback_info callbackInfo, size_t *argc, na
         callbackInfo->argc ? callbackInfo->argc : *argc;
 
         for (; i < min; ++i) {
-            CreateScopedResult(env, JS_DupValue(env->context, callbackInfo->argv[i]), &argv[i]);
+            argv[i] = (napi_value) &callbackInfo->argv[i];
+//            CreateScopedResult(env, JS_DupValue(env->context, callbackInfo->argv[i]), &argv[i]);
         }
 
         if (i < *argc) {
@@ -3174,7 +3175,8 @@ napi_get_cb_info(napi_env env, napi_callback_info callbackInfo, size_t *argc, na
     }
 
     if (thisArg) {
-        CreateScopedResult(env, JS_DupValue(env->context, callbackInfo->thisArg), thisArg);
+        *thisArg = (napi_value) &callbackInfo->thisArg;
+        //CreateScopedResult(env, JS_DupValue(env->context, callbackInfo->thisArg), thisArg);
     }
 
     if (data) {
@@ -3912,6 +3914,27 @@ napi_status napi_get_host_object_data(napi_env env, napi_value object, void **da
     return napi_clear_last_error(env);
 }
 
+napi_status napi_is_host_object(napi_env env, napi_value object, bool* result) {
+    CHECK_ARG(env);
+    CHECK_ARG(object);
+
+    JSValue jsValue = *((JSValue *) object);
+
+    if (!JS_IsObject(jsValue)) {
+        return napi_set_last_error(env, napi_object_expected, NULL, 0, NULL);
+    }
+
+   void* data = JS_GetOpaque(jsValue,
+                                                                   env->runtime->napiHostObjectClassId);
+    if (data != NULL) {
+        *result = true;
+    } else {
+        *result = false;
+    }
+
+    return napi_clear_last_error(env);
+}
+
 /**
  * --------------------------------
  *             JS RUNTIME
@@ -3936,7 +3959,7 @@ napi_status qjs_create_runtime(napi_runtime *runtime) {
     JS_SetDumpFlags((*runtime)->runtime, JS_DUMP_LEAKS);
 #endif
 
-    JS_SetMaxStackSize((*runtime)->runtime, 1024 * 1024 * 1024);
+    JS_SetMaxStackSize((*runtime)->runtime, 0);
 
     (*runtime)->constructorClassId = 0;
     (*runtime)->functionClassId = 0;
