@@ -3757,8 +3757,12 @@ int host_object_set(JSContext *ctx, JSValue obj, JSAtom atom,
                     value,
                     obj
             };
-            JS_Call(ctx, info->setter->value, JS_UNDEFINED, 4, argv);
+            JSValue result = JS_Call(ctx, info->setter->value, JS_UNDEFINED, 4, argv);
+
             JS_FreeValue(ctx, atom_val);
+
+            if (JS_IsException(result) || JS_HasException(ctx)) return -1;
+
             return true;
         }
         return JS_SetProperty(ctx, info->ref->value, atom, JS_DupValue(ctx, value));
