@@ -3942,3 +3942,18 @@ napi_status napi_get_host_object_data(napi_env env, napi_value object, void **da
 
     return napi_ok;
 }
+
+
+napi_status napi_is_host_object(napi_env env, napi_value object, bool* result) {
+    v8::Local<v8::Object> v8Value = v8::Local<v8::Object>::Cast(
+            v8impl::V8LocalValueFromJsValue(object));
+
+    if (v8Value->InternalFieldCount() != 4) {
+        *result = false;
+        return napi_ok;
+    }
+
+    *result = true;
+
+    return napi_ok;
+}
