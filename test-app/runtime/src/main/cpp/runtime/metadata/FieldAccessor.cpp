@@ -248,20 +248,24 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
         switch (fieldTypeName[0]) {
             case 'Z': { // bool
                 // TODO: validate value is a boolean before calling
+                bool boolValue = napi_util::is_of_type(env, value, napi_boolean)
+                                 ? napi_util::get_bool(env, value) : false;
                 if (isStatic) {
-                    jEnv.SetStaticBooleanField(clazz, fieldId, napi_util::get_bool(env, value));
+                    jEnv.SetStaticBooleanField(clazz, fieldId, boolValue);
                 } else {
                     jEnv.SetBooleanField(targetJavaObject, fieldId,
-                                         napi_util::get_bool(env, value));
+                                         boolValue);
                 }
                 break;
             }
             case 'B': { // byte
                 // TODO: validate value is a byte before calling
+                jbyte intValue = !napi_util::is_of_type(env, value, napi_number)
+                                 ? napi_util::get_int32(env, value) : 0;
                 if (isStatic) {
-                    jEnv.SetStaticByteField(clazz, fieldId, napi_util::get_int32(env, value));
+                    jEnv.SetStaticByteField(clazz, fieldId, intValue);
                 } else {
-                    jEnv.SetByteField(targetJavaObject, fieldId, napi_util::get_int32(env, value));
+                    jEnv.SetByteField(targetJavaObject, fieldId, intValue);
                 }
                 break;
             }
@@ -280,19 +284,23 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
             }
             case 'S': { // short
                 // TODO: validate value is a short before calling
+                short shortValue = !napi_util::is_of_type(env, value, napi_number)
+                                   ? napi_util::get_int32(env, value) : 0;
                 if (isStatic) {
-                    jEnv.SetStaticShortField(clazz, fieldId, napi_util::get_int32(env, value));
+                    jEnv.SetStaticShortField(clazz, fieldId, shortValue);
                 } else {
-                    jEnv.SetShortField(targetJavaObject, fieldId, napi_util::get_int32(env, value));
+                    jEnv.SetShortField(targetJavaObject, fieldId, shortValue);
                 }
                 break;
             }
             case 'I': { // int
                 // TODO: validate value is a int before calling
+                int intValue = napi_util::is_of_type(env, value, napi_number)
+                               ? napi_util::get_int32(env, value) : 0;
                 if (isStatic) {
-                    jEnv.SetStaticIntField(clazz, fieldId, napi_util::get_int32(env, value));
+                    jEnv.SetStaticIntField(clazz, fieldId, intValue);
                 } else {
-                    jEnv.SetIntField(targetJavaObject, fieldId, napi_util::get_int32(env, value));
+                    jEnv.SetIntField(targetJavaObject, fieldId, intValue);
                 }
                 break;
             }
@@ -306,22 +314,26 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
                 break;
             }
             case 'F': { // float
+                float floatValue = napi_util::is_of_type(env, value, napi_number)
+                                   ? napi_util::get_number(env,
+                                                           value) : 0.0;
                 if (isStatic) {
                     jEnv.SetStaticFloatField(clazz, fieldId,
-                                             static_cast<jfloat>(napi_util::get_number(env,
-                                                                                       value)));
+                                             static_cast<jfloat>(floatValue));
                 } else {
                     jEnv.SetFloatField(targetJavaObject, fieldId,
-                                       static_cast<jfloat>(napi_util::get_number(env, value)));
+                                       static_cast<jfloat>(floatValue));
                 }
                 break;
             }
             case 'D': { // double
+                double doubleValue = napi_util::is_of_type(env, value, napi_number)
+                                     ? napi_util::get_number(env,
+                                                             value) : 0.0;
                 if (isStatic) {
-                    jEnv.SetStaticDoubleField(clazz, fieldId, napi_util::get_number(env, value));
+                    jEnv.SetStaticDoubleField(clazz, fieldId, doubleValue);
                 } else {
-                    jEnv.SetDoubleField(targetJavaObject, fieldId,
-                                        napi_util::get_number(env, value));
+                    jEnv.SetDoubleField(targetJavaObject, fieldId, doubleValue);
                 }
                 break;
             }
