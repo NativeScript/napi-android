@@ -1567,15 +1567,21 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
         }
 
         if (!fieldMetadata.isStatic) {
-            napi_value constructor;
-            napi_value prototype;
-            napi_get_named_property(env, jsThis, "constructor", &constructor);
-            if (!napi_util::is_null_or_undefined(env, constructor)) {
-                napi_get_named_property(env, constructor, "prototype", &prototype);
-                bool isHolder;
-                napi_strict_equals(env, prototype, jsThis, &isHolder);
-                if (isHolder) {
-                    return UNDEFINED;
+            bool is__this__;
+            napi_has_named_property(env, jsThis, "__napi::this", &is__this__);
+            if (!is__this__) {
+                napi_value constructor;
+                napi_value prototype;
+                napi_get_named_property(env, jsThis, "constructor", &constructor);
+                if (!napi_util::is_null_or_undefined(env, constructor)) {
+                    napi_get_named_property(env, constructor, "prototype", &prototype);
+                    bool isHolder;
+                    napi_strict_equals(env, prototype, jsThis, &isHolder);
+                    if (isHolder) {
+                        return UNDEFINED;
+                    } else {
+                        napi_set_named_property(env, jsThis, "__napi::this", napi_util::get_true(env));
+                    }
                 }
             }
         }
@@ -1606,15 +1612,21 @@ napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback
 
 
         if (!fieldMetadata.isStatic) {
-            napi_value constructor;
-            napi_value prototype;
-            napi_get_named_property(env, jsThis, "constructor", &constructor);
-            if (!napi_util::is_null_or_undefined(env, constructor)) {
-                napi_get_named_property(env, constructor, "prototype", &prototype);
-                bool isHolder;
-                napi_strict_equals(env, prototype, jsThis, &isHolder);
-                if (isHolder) {
-                    return UNDEFINED;
+            bool is__this__;
+            napi_has_named_property(env, jsThis, "__napi::this", &is__this__);
+            if (!is__this__) {
+                napi_value constructor;
+                napi_value prototype;
+                napi_get_named_property(env, jsThis, "constructor", &constructor);
+                if (!napi_util::is_null_or_undefined(env, constructor)) {
+                    napi_get_named_property(env, constructor, "prototype", &prototype);
+                    bool isHolder;
+                    napi_strict_equals(env, prototype, jsThis, &isHolder);
+                    if (isHolder) {
+                        return UNDEFINED;
+                    } else {
+                        napi_set_named_property(env, jsThis, "__napi::this", napi_util::get_true(env));
+                    }
                 }
             }
         }
