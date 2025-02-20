@@ -40,10 +40,10 @@ public:
     }
 
     ~NapiScope() {
-        js_unlock_env(env_);
         if (napiHandleScope_) {
             napi_close_handle_scope(env_, napiHandleScope_);
         }
+        js_unlock_env(env_);
     }
 
 private:
