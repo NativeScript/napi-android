@@ -83,6 +83,8 @@ namespace tns {
 
         bool GetIsSuper(int objectId, napi_value value);
 
+        bool IsHostObject(napi_value object);
+
     private:
         static napi_value JSObjectConstructorCallback(napi_env env, napi_callback_info info);
 

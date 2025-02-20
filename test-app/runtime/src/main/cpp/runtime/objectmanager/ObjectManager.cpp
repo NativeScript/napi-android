@@ -252,6 +252,15 @@ ObjectManager::JSInstanceInfo *ObjectManager::GetJSInstanceInfo(napi_value objec
     return GetJSInstanceInfoFromRuntimeObject(object);
 }
 
+bool ObjectManager::IsHostObject(napi_value object) {
+#ifdef USE_HOST_OBJECT
+    bool isHostObject;
+    napi_is_host_object(m_env, object, &isHostObject);
+    return isHostObject;
+#endif
+    return false;
+}
+
 ObjectManager::JSInstanceInfo *
 ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
     napi_value jsInfo;
