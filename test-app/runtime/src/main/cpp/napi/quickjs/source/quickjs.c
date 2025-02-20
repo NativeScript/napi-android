@@ -431,6 +431,13 @@ struct JSContext {
     JSValue (*eval_internal)(JSContext *ctx, JSValue this_obj,
                              const char *input, size_t input_len,
                              const char *filename, int flags, int scope_idx);
+
+    JSValue regexp_left_ctx; // RegExp.leftContext
+    JSValue regexp_right_ctx; // RegExp.rightContext
+    JSValue regexp_last_match_str;
+    int64_t regexp_last_match_start;
+    int64_t regexp_last_match_end;
+
     void *user_opaque;
 };
 
@@ -2336,6 +2343,12 @@ JSContext *JS_NewContextRaw(JSRuntime *rt)
     ctx->error_ctor = JS_NULL;
     ctx->error_back_trace = JS_UNDEFINED;
     ctx->error_prepare_stack = JS_UNDEFINED;
+    ctx->regexp_left_ctx = JS_UNDEFINED;
+    ctx->regexp_right_ctx = JS_UNDEFINED;
+    ctx->regexp_last_match_str = JS_UNDEFINED;
+    ctx->regexp_last_match_start = -1;
+    ctx->regexp_last_match_end = -1;
+
     ctx->error_stack_trace_limit = 10;
     init_list_head(&ctx->loaded_modules);
 
@@ -2535,6 +2548,10 @@ void JS_FreeContext(JSContext *ctx)
     JS_FreeValue(ctx, ctx->regexp_ctor);
     JS_FreeValue(ctx, ctx->function_ctor);
     JS_FreeValue(ctx, ctx->function_proto);
+    
+    JS_FreeValue(ctx, ctx->regexp_left_ctx);
+    JS_FreeValue(ctx, ctx->regexp_right_ctx);
+    JS_FreeValue(ctx, ctx->regexp_last_match_str);
 
     js_free_shape_null(ctx->rt, ctx->array_shape);
 
@@ -44260,6 +44277,11 @@ static JSValue js_regexp_exec(JSContext *ctx, JSValue this_val,
                 goto fail;
             }
         }
+
+        JS_FreeValue(ctx, ctx->regexp_last_match_str);
+        ctx->regexp_last_match_str = JS_DupValue(ctx, argv[0]);
+        ctx->regexp_last_match_start = (capture[0] - str_buf) >> shift;
+        ctx->regexp_last_match_end = (capture[1] - str_buf) >> shift;
     }
     ret = obj;
     obj = JS_UNDEFINED;
@@ -45101,8 +45123,28 @@ done:
     return A;
 }
 
+static JSValue js_regexp_get_leftContext(JSContext *ctx, JSValue this_val) {
+    if (ctx->regexp_last_match_start >= 0) {
+        JS_FreeValue(ctx, ctx->regexp_left_ctx);
+        ctx->regexp_left_ctx = js_sub_string(ctx, JS_VALUE_GET_STRING(ctx->regexp_last_match_str), 0, ctx->regexp_last_match_start);
+        ctx->regexp_last_match_start = -1; // Reset to avoid recomputation
+    }
+    return JS_DupValue(ctx, ctx->regexp_left_ctx);
+}
+
+static JSValue js_regexp_get_rightContext(JSContext *ctx, JSValue this_val) {
+    if (ctx->regexp_last_match_end >= 0) {
+        JS_FreeValue(ctx, ctx->regexp_right_ctx);
+        ctx->regexp_right_ctx = js_sub_string(ctx, JS_VALUE_GET_STRING(ctx->regexp_last_match_str), ctx->regexp_last_match_end, JS_VALUE_GET_STRING(ctx->regexp_last_match_str)->len);
+        ctx->regexp_last_match_end = -1; // Reset to avoid recomputation
+    }
+    return JS_DupValue(ctx, ctx->regexp_right_ctx);
+}
+
 static const JSCFunctionListEntry js_regexp_funcs[] = {
     JS_CFUNC_DEF("escape", 1, js_regexp_escape ),
+    JS_CGETSET_DEF("leftContext", js_regexp_get_leftContext, NULL),
+    JS_CGETSET_DEF("rightContext", js_regexp_get_rightContext, NULL),
     JS_CGETSET_DEF("[Symbol.species]", js_get_this, NULL ),
 };
 
