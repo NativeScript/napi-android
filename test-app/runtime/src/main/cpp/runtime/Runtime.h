@@ -205,6 +205,7 @@ namespace tns {
 
             auto methodIt = it->second.find(methodName);
             if (methodIt != it->second.end()) {
+                if (!methodIt->second) return nullptr;
                 napi_value m = napi_util::get_ref_value(env, methodIt->second);
                 if (napi_util::is_null_or_undefined(env, m)) {
                     napi_delete_reference(env, methodIt->second);
