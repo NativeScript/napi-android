@@ -36,7 +36,6 @@ describe('native timer', () => {
         let calls = 0;
         const itv = setInterval(() => {
             calls++;
-            console.log("{ CALLS", calls);
         }, 100);
         setTimeout(() => {
             clearInterval(itv);

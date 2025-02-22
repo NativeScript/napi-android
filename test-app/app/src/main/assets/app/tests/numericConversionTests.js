@@ -331,9 +331,6 @@ describe("Tests numeric conversions and constructor/method resolutions", functio
 
 				__log("TEST: TestIfNeedsToReturnLongItAlwaysReturnsLong3");
 
-
-				console.log("LOADED CLASS", com.tns.tests.NumericConversions);
-
 				var N = com.tns.tests.NumericConversions.extend({
 					hasToReturnLong : function(val) {
 						return val;
