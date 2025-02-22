@@ -2,14 +2,15 @@
 #include "js_runtime.h"
 
 using namespace facebook::jsi;
+std::unordered_map<napi_env, JSR*> JSR::env_to_jsr_cache;
 
 typedef struct napi_runtime__ {
     JSR* hermes;
-} NapiRuntime;
+} napi_runtime__;
 
 JSR::JSR() {
     hermes::vm::RuntimeConfig config =
-            hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).build();
+            hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withES6Class(true).withES6Promise(true).withArrayBuffer(true).withEnableEval(true).build();
     threadSafeRuntime = facebook::hermes::makeThreadSafeHermesRuntime(config);
 
     facebook::jsi::Function abc = facebook::jsi::Function::createFromHostFunction(threadSafeRuntime->getUnsafeRuntime(), facebook::jsi::PropNameID::forAscii(threadSafeRuntime->getUnsafeRuntime(), "directFunction"), 0, [](Runtime& rt, const Value& thisVal, const Value* args, size_t count) -> Value {
@@ -20,13 +21,10 @@ JSR::JSR() {
 
     rt = (facebook::hermes::HermesRuntime *)&threadSafeRuntime->getUnsafeRuntime();
 }
-std::unordered_map<napi_env, JSR*> JSR::env_to_jsr_cache;
 
 napi_status js_create_runtime(napi_runtime* runtime) {
     if (runtime == nullptr) return napi_invalid_arg;
-
-    *runtime = static_cast<napi_runtime>(malloc(sizeof(napi_runtime__)));
-
+    *runtime = new napi_runtime__();
     (*runtime)->hermes = new JSR();
 
     return napi_ok;
@@ -53,9 +51,9 @@ napi_status js_unlock_env(napi_env env) {
 }
 napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
+    runtime->hermes->rt->createNapiEnv( env);
     JSR::env_to_jsr_cache.insert(std::make_pair(*env, runtime->hermes));
-
-    return runtime->hermes->rt->createNapiEnv( env);
+    return napi_ok;
 }
 
 napi_status js_set_runtime_flags(const char* flags) {
@@ -71,8 +69,7 @@ napi_status js_free_runtime(napi_runtime runtime) {
     runtime->hermes->threadSafeRuntime.reset();
     runtime->hermes->rt = nullptr;
     delete runtime->hermes;
-
-    free(runtime);
+    delete runtime;
 
     return napi_ok;
 }

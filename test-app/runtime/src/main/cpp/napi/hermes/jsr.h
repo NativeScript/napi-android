@@ -17,9 +17,11 @@ public:
     facebook::hermes::HermesRuntime* rt;
     std::recursive_mutex js_mutex;
     void lock() {
+        threadSafeRuntime->lock();
         js_mutex.lock();
     }
     void unlock() {
+        threadSafeRuntime->unlock();
         js_mutex.unlock();
     }
 
