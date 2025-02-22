@@ -92,13 +92,13 @@
             Array.prototype.slice.call(arguments, 1)
           );
         } else {
-          thiz = new (Function.prototype.bind.apply(
+          thiz  = new (Function.prototype.bind.apply(
             Extended,
             [null].concat(Array.prototype.slice.call(arguments, 1))
           ))();
         }
       } else {
-        thiz = new Extended();
+        thiz  = new Extended();
       }
       return thiz;
     };
@@ -107,10 +107,17 @@
       var Extended = extend(thiz);
       thiz.__container__ = true;
       if (args && args.length > 0) {
-        thiz = new (Function.prototype.bind.apply(
-          Extended,
-          [null].concat(args)
-        ))();
+       if (typeof Extended !== "function") {
+                thiz = Reflect.construct(
+                  Extended,
+                  [null].concat(args)
+                );
+         } else {
+              thiz  = new (Function.prototype.bind.apply(
+                        Extended,
+                        [null].concat(args)
+                      ))();
+         }
       } else {
         thiz = new Extended();
       }
