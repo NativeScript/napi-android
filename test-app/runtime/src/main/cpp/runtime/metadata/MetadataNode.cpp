@@ -1352,21 +1352,24 @@ napi_value MetadataNode::GetConstructorFunctionInternal(napi_env env, MetadataTr
     auto cache = GetMetadataNodeCache(env);
     auto itFound = cache->CtorFuncCache.find(treeNode);
     if (itFound != cache->CtorFuncCache.end()) {
-        instanceMethodsCallbackData = itFound->second.instanceMethodCallbacks;
         if (itFound->second.constructorFunction != nullptr) {
             auto value = napi_util::get_ref_value(env, itFound->second.constructorFunction);
             if (!napi_util::is_null_or_undefined(env, value)) {
+                instanceMethodsCallbackData = itFound->second.instanceMethodCallbacks;
                 return value;
             }
         }
     }
 
     if (itFound != cache->CtorFuncCache.end()) {
+#ifndef __JSC__
+        for (auto data: itFound->second.instanceMethodCallbacks) {
+            delete data;
+        }
+#endif
+        itFound->second.instanceMethodCallbacks.clear();
         if (itFound->second.constructorFunction != nullptr) {
             napi_delete_reference(env, itFound->second.constructorFunction);
-        }
-        for (const auto &data: itFound->second.instanceMethodCallbacks) {
-            delete data;
         }
         cache->CtorFuncCache.erase(itFound);
     }
