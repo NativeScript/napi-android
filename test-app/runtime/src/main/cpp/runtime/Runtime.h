@@ -28,7 +28,7 @@ namespace tns {
 
         ~Runtime();
 
-        static Runtime* GetRuntime(int runtimeId);
+        static Runtime *GetRuntime(int runtimeId);
 
         inline static Runtime *GetRuntime(napi_env env) {
             auto runtime = env_to_runtime_cache.at(env);
@@ -44,17 +44,25 @@ namespace tns {
 
         static void Init(JavaVM *vm);
 
-        static void Init(JNIEnv* _env, jobject obj, int runtimeId, jstring filesPath, jstring nativeLibsDir, jboolean verboseLoggingEnabled, jboolean isDebuggable, jstring packageName, jobjectArray args, jstring callingDir, int maxLogcatObjectSize, bool forceLog);
+        static void
+        Init(JNIEnv *_env, jobject obj, int runtimeId, jstring filesPath, jstring nativeLibsDir,
+             jboolean verboseLoggingEnabled, jboolean isDebuggable, jstring packageName,
+             jobjectArray args, jstring callingDir, int maxLogcatObjectSize, bool forceLog);
 
-        void Init(JNIEnv* env, jstring filesPath, jstring nativeLibsDir, bool verboseLoggingEnabled, bool isDebuggable, jstring packageName, jobjectArray args, jstring callingDir, int maxLogcatObjectSize, bool forceLog);
+        void Init(JNIEnv *env, jstring filesPath, jstring nativeLibsDir, bool verboseLoggingEnabled,
+                  bool isDebuggable, jstring packageName, jobjectArray args, jstring callingDir,
+                  int maxLogcatObjectSize, bool forceLog);
 
         jobject GetJavaRuntime() const;
 
         void DestroyRuntime();
 
-        void RunModule(JNIEnv* _env, jobject obj, jstring scriptFile);
+        void RunModule(JNIEnv *_env, jobject obj, jstring scriptFile);
+
         void RunModule(const char *moduleName);
+
         void RunWorker(jstring scriptFile);
+
         jobject RunScript(JNIEnv *_env, jobject obj, jstring scriptFile);
 
         std::string ReadFileText(const std::string &filePath);
@@ -71,9 +79,9 @@ namespace tns {
 
         int GetId();
 
-        static ObjectManager* GetObjectManager(napi_env env);
+        static ObjectManager *GetObjectManager(napi_env env);
 
-        ObjectManager* GetObjectManager() const;
+        ObjectManager *GetObjectManager() const;
 
         napi_env GetNapiEnv();
 
@@ -84,26 +92,40 @@ namespace tns {
         }
 
         void Lock();
+
         void Unlock();
 
-        static Runtime* Current();
+        static Runtime *Current();
 
-        jobject ConvertJsValueToJavaObject(JEnv& env, napi_value value, int classReturnType);
-        jint GenerateNewObjectId(JNIEnv* env, jobject obj);
-        void CreateJSInstanceNative(JNIEnv* _env, jobject obj, jobject javaObject, jint javaObjectID, jstring className);
-        jobject CallJSMethodNative(JNIEnv* _env, jobject obj, jint javaObjectID, jclass claz, jstring methodName,jint retType, jboolean isConstructor, jobjectArray packagedArgs);
-        void PassExceptionToJsNative(JNIEnv* env, jobject obj, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded);
-        void PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_value stackTrace, napi_value filename, int lineno);
+        jobject ConvertJsValueToJavaObject(JEnv &env, napi_value value, int classReturnType);
+
+        jint GenerateNewObjectId(JNIEnv *env, jobject obj);
+
+        void
+        CreateJSInstanceNative(JNIEnv *_env, jobject obj, jobject javaObject, jint javaObjectID,
+                               jstring className);
+
+        jobject CallJSMethodNative(JNIEnv *_env, jobject obj, jint javaObjectID, jclass claz,
+                                   jstring methodName, jint retType, jboolean isConstructor,
+                                   jobjectArray packagedArgs);
+
+        void
+        PassExceptionToJsNative(JNIEnv *env, jobject obj, jthrowable exception, jstring message,
+                                jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded);
+
+        void PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_value stackTrace,
+                                                          napi_value filename, int lineno);
 
         void AdjustAmountOfExternalAllocatedMemory();
 
-        JSMethodCache* js_method_cache;
+        JSMethodCache *js_method_cache;
 
         bool is_destroying = false;
 
     private:
-        Runtime(JNIEnv* env, jobject runtime, int id);
-        static napi_value GlobalAccessorCallback(napi_env env, napi_callback_info  info);
+        Runtime(JNIEnv *env, jobject runtime, int id);
+
+        static napi_value GlobalAccessorCallback(napi_env env, napi_callback_info info);
 
         int m_id;
         jobject m_runtime;
@@ -112,16 +134,16 @@ namespace tns {
         napi_env env;
         napi_handle_scope global_scope;
 
-        MessageLoopTimer* m_loopTimer;
+        MessageLoopTimer *m_loopTimer;
         int64_t m_lastUsedMemory;
         napi_ref m_gcFunc;
         volatile bool m_runGC;
 
 
-        ObjectManager* m_objectManager;
+        ObjectManager *m_objectManager;
 
         ArrayBufferHelper m_arrayBufferHelper;
-        
+
         bool m_isMainThread;
 
         ModuleInternal m_module;
@@ -140,13 +162,13 @@ namespace tns {
 
         static int m_mainLooper_fd[2];
 
-        static tns::ConcurrentMap<int, Runtime*> id_to_runtime_cache;
+        static tns::ConcurrentMap<int, Runtime *> id_to_runtime_cache;
 
-        static robin_hood::unordered_map<napi_env, Runtime*> env_to_runtime_cache;
+        static robin_hood::unordered_map<napi_env, Runtime *> env_to_runtime_cache;
 
-        static tns::ConcurrentMap<std::thread::id, Runtime*> thread_id_to_rt_cache;
+        static tns::ConcurrentMap<std::thread::id, Runtime *> thread_id_to_rt_cache;
 
-        static Runtime* s_main_rt;
+        static Runtime *s_main_rt;
         static std::thread::id s_main_thread_id;
 
 
@@ -162,17 +184,18 @@ namespace tns {
     class JSMethodCache {
     public:
 
-        explicit JSMethodCache(Runtime* _rt): rt(_rt) {}
+        explicit JSMethodCache(Runtime *_rt) : rt(_rt) {}
 
         ~JSMethodCache() {
             cleanupCache();
         }
 
-        void cacheMethod(int javaObjectId, const std::string& methodName, napi_value jsMethod) {
-            methodCache[javaObjectId][methodName] = napi_util::make_ref(rt->GetNapiEnv(), jsMethod, 0 );
+        void cacheMethod(int javaObjectId, const std::string &methodName, napi_value jsMethod) {
+            methodCache[javaObjectId][methodName] = napi_util::make_ref(rt->GetNapiEnv(), jsMethod,
+                                                                        0);
         }
 
-        napi_value getCachedMethod(int javaObjectId, const std::string& methodName) {
+        napi_value getCachedMethod(int javaObjectId, const std::string &methodName) {
             napi_env env = rt->GetNapiEnv();
 
             auto it = methodCache.find(javaObjectId);
@@ -184,6 +207,8 @@ namespace tns {
             if (methodIt != it->second.end()) {
                 napi_value m = napi_util::get_ref_value(env, methodIt->second);
                 if (napi_util::is_null_or_undefined(env, m)) {
+                    napi_delete_reference(env, methodIt->second);
+                    it->second.erase(methodIt->first);
                     return nullptr;
                 }
                 return m;
@@ -195,28 +220,30 @@ namespace tns {
         void cleanupObject(int javaObjectId) {
             auto it = methodCache.find(javaObjectId);
             if (it != methodCache.end()) {
-                for (auto& methodEntry : it->second) {
+                for (auto &methodEntry: it->second) {
                     napi_delete_reference(rt->GetNapiEnv(), methodEntry.second);
+                    it->second.erase(methodEntry.first);
                 }
+                methodCache.erase(it);
             }
         }
 
         void cleanupCache() {
             JEnv env;
-            for (auto& classEntry : methodCache) {
-                for (auto& methodEntry : classEntry.second) {
+            for (auto &classEntry: methodCache) {
+                for (auto &methodEntry: classEntry.second) {
                     if (methodEntry.second != nullptr) {
                         napi_delete_reference(rt->GetNapiEnv(), methodEntry.second);
                     }
+                    classEntry.second.erase(methodEntry.first);
                 }
+                methodCache.erase(classEntry.first);
             }
-            methodCache.clear();
         }
 
 
     private:
-        Runtime* rt;
-        robin_hood::unordered_map<int, int> javaObjectId_to_methodCacheIdx;
+        Runtime *rt;
         robin_hood::unordered_map<int, robin_hood::unordered_map<std::string, napi_ref>> methodCache;
 
     };
