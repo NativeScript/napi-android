@@ -310,7 +310,7 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 void MetadataNode::SetInstanceMetadata(napi_env env, napi_value object, MetadataNode *node) {
     auto cache = GetMetadataNodeCache(env);
     napi_value external;
-    napi_create_external(env, node, nullptr, nullptr, &external);
+    napi_create_external(env, node, [](napi_env env, void*d1,void*d2){}, node, &external);
     napi_set_named_property(env, object, "#instance_metadata", external);
 //    napi_wrap(env, object, node, nullptr, nullptr, nullptr);
 }
@@ -1525,7 +1525,7 @@ napi_value MetadataNode::NullObjectAccessorGetterCallback(napi_env env, napi_cal
         if (!value) {
             auto node = reinterpret_cast<MetadataNode *>(data);
             napi_value external;
-            napi_create_external(env, node, nullptr, nullptr, &external);
+            napi_create_external(env, node, [](napi_env env, void* d1, void*d2) {}, node, &external);
             napi_set_named_property(env, jsThis, PROP_KEY_NULL_NODE_NAME, external);
 
             napi_util::napi_set_function(env,

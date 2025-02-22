@@ -179,8 +179,10 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
     auto data = new JSInstanceInfo(javaObjectID, nullptr);
 
     napi_value external;
-    napi_create_external(m_env, data, JSObjectProxyFinalizerCallback, nullptr, &external);
+    napi_create_external(m_env, data, JSObjectProxyFinalizerCallback, data, &external);
     napi_set_named_property(m_env, proxy, "[[external]]", external);
+
+
 #endif
 
     auto javaObjectIdFound = m_weakObjectIds.find(javaObjectID);
@@ -194,6 +196,7 @@ napi_value ObjectManager::GetOrCreateProxy(jint javaObjectID, napi_value instanc
     }
 
     m_idToProxy.emplace(javaObjectID, napi_util::make_ref(m_env, proxy, 0));
+
     return proxy;
 }
 
@@ -384,11 +387,11 @@ void ObjectManager::Link(napi_value object, uint32_t javaObjectID, jclass clazz)
     napi_ref objectHandle = napi_util::make_ref(m_env, object, 1);
 
     napi_value jsInfo;
-    napi_create_external(m_env, jsInstanceInfo, JSObjectFinalizerCallback, nullptr, &jsInfo);
+    napi_create_external(m_env, jsInstanceInfo, JSObjectFinalizerCallback, jsInstanceInfo, &jsInfo);
     napi_set_named_property(m_env, object, PRIVATE_JSINFO, jsInfo);
 
     // Wrapped but does not handle data lifecycle. only used for fast access.
-    napi_wrap(m_env, object, jsInstanceInfo, [](napi_env env, void *data, void *hint) {}, nullptr,
+    napi_wrap(m_env, object, jsInstanceInfo, [](napi_env env, void *data, void *hint) {}, jsInstanceInfo,
               nullptr);
 
     m_idToObject.emplace(javaObjectID, objectHandle);
@@ -401,9 +404,9 @@ bool ObjectManager::CloneLink(napi_value src, napi_value dest) {
 
     if (success) {
         napi_value external;
-        napi_create_external(m_env, jsInfo, nullptr, nullptr, &external);
+        napi_create_external(m_env, jsInfo, [](napi_env env, void* d1, void*d2) {}, jsInfo, &external);
         napi_set_named_property(m_env, dest, PRIVATE_JSINFO, external);
-        napi_wrap(m_env, dest, jsInfo, [](napi_env env, void *data, void *hint) {}, nullptr,
+        napi_wrap(m_env, dest, jsInfo, [](napi_env env, void *data, void *hint) {}, jsInfo,
                   nullptr);
     }
 
@@ -440,28 +443,44 @@ string ObjectManager::GetClassName(jclass clazz) {
 
 void
 ObjectManager::JSObjectFinalizerCallback(napi_env env, void *finalizeData, void *finalizeHint) {
-    auto data = reinterpret_cast<JSInstanceInfo *>(finalizeData);
+    #ifdef __HERMES__
+        if (finalizeHint == nullptr) return;
+        auto data = reinterpret_cast<JSInstanceInfo *>(finalizeHint);
+    #else
+        if (finalizeData == nullptr) return;
+        auto data = reinterpret_cast<JSInstanceInfo *>(finalizeData);
+    #endif
+
     DEBUG_WRITE("JS Object finalizer called for object id: %d", data->JavaObjectID);
     delete data;
 }
 
 void ObjectManager::JSObjectProxyFinalizerCallback(napi_env env, void *finalizeData,
                                                    void *finalizeHint) {
+
+#ifdef __HERMES__
+    if (finalizeHint == nullptr) return;
+    auto state = reinterpret_cast<JSInstanceInfo *>(finalizeHint);
+#else
     if (finalizeData == nullptr) return;
     auto state = reinterpret_cast<JSInstanceInfo *>(finalizeData);
+#endif
+
     auto rt = Runtime::GetRuntime(env);
     if (rt && !rt->is_destroying) {
+
         auto objManager = rt->GetObjectManager();
         auto itFound = objManager->m_weakObjectIds.find(state->JavaObjectID);
+
+        DEBUG_WRITE("JS Proxy finalizer called for object id: %d", state->JavaObjectID);
         if (itFound == objManager->m_weakObjectIds.end()) {
             objManager->m_weakObjectIds.emplace(state->JavaObjectID);
             JEnv jEnv;
             jEnv.CallVoidMethod(objManager->m_javaRuntimeObject,
                                 objManager->MAKE_INSTANCE_WEAK_METHOD_ID,
                                 state->JavaObjectID);
-        }
 
-        DEBUG_WRITE("JS Proxy finalizer called for object id: %d", state->JavaObjectID);
+        }
     }
     delete state;
 }
