@@ -8,7 +8,9 @@
 using namespace tns;
 
 void JSONObjectHelper::RegisterFromFunction(napi_env env, napi_value value) {
-    if (!napi_util::is_of_type(env, value, napi_function)) {
+    napi_valuetype type;
+    napi_typeof(env, value, &type);
+    if (type != napi_function && type != napi_object) {
         return;
     }
 
