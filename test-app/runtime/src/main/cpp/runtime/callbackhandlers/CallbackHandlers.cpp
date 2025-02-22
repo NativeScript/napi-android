@@ -970,13 +970,19 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
     JEnv jEnv(_jEnv);
     napi_value result;
     napi_value method;
-    auto runtime = Runtime::GetRuntime(env);
 
+#ifndef __HERMES__
+    auto runtime = Runtime::GetRuntime(env);
     method = runtime->js_method_cache->getCachedMethod(javaObjectId,methodName);
     if (!method) {
+#endif
         napi_get_named_property(env, jsObject, methodName.c_str(), &method);
-        runtime->js_method_cache->cacheMethod(javaObjectId, methodName, method);
+#ifndef __HERMES__
+        if (!napi_util::is_null_or_undefined(env, method)) {
+            runtime->js_method_cache->cacheMethod(javaObjectId, methodName, method);
+        }
     }
+#endif
 
     if (method == nullptr || !napi_util::is_of_type(env, method, napi_function)) {
         stringstream ss;
