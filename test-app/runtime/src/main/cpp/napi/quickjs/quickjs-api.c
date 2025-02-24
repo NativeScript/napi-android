@@ -183,6 +183,7 @@ typedef struct napi_env__ {
     ExternalInfo *gcBefore;
     ExternalInfo *gcAfter;
     int js_enter_state;
+    int64_t usedMemory;
 } napi_env__;
 
 typedef struct napi_runtime__ {
@@ -3651,6 +3652,19 @@ napi_status napi_is_promise(napi_env env,
     return napi_clear_last_error(env);
 }
 
+NAPI_EXTERN napi_status NAPI_CDECL napi_adjust_external_memory(
+        napi_env env, int64_t change_in_bytes, int64_t *adjusted_value) {
+    size_t cur = JS_GetGCThreshold(env->runtime->runtime);
+    if (cur != env->usedMemory && change_in_bytes < 0)
+        return napi_ok; // don't update, changed after GC
+    int64_t new = cur - change_in_bytes;
+    if (new < 0) new = 0;
+    JS_SetGCThreshold(env->runtime->runtime, new);
+    env->usedMemory = new;
+    *adjusted_value = new;
+    return napi_ok;
+}
+
 
 /**
  * --------------------------------------
@@ -3918,7 +3932,7 @@ napi_status napi_get_host_object_data(napi_env env, napi_value object, void **da
     return napi_clear_last_error(env);
 }
 
-napi_status napi_is_host_object(napi_env env, napi_value object, bool* result) {
+napi_status napi_is_host_object(napi_env env, napi_value object, bool *result) {
     CHECK_ARG(env);
     CHECK_ARG(object);
 
@@ -3928,8 +3942,8 @@ napi_status napi_is_host_object(napi_env env, napi_value object, bool* result) {
         return napi_set_last_error(env, napi_object_expected, NULL, 0, NULL);
     }
 
-   void* data = JS_GetOpaque(jsValue,
-                                                                   env->runtime->napiHostObjectClassId);
+    void *data = JS_GetOpaque(jsValue,
+                              env->runtime->napiHostObjectClassId);
     if (data != NULL) {
         *result = true;
     } else {

@@ -2479,6 +2479,9 @@ static void JS_MarkContext(JSRuntime *rt, JSContext *ctx,
     JS_MarkValue(rt, ctx->regexp_ctor, mark_func);
     JS_MarkValue(rt, ctx->function_ctor, mark_func);
     JS_MarkValue(rt, ctx->function_proto, mark_func);
+    JS_MarkValue(rt, ctx->regexp_last_match_str, mark_func);
+    JS_MarkValue(rt, ctx->regexp_right_ctx, mark_func);
+    JS_MarkValue(rt, ctx->regexp_left_ctx, mark_func);
 
     if (ctx->array_shape)
         mark_func(rt, &ctx->array_shape->header);

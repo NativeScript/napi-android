@@ -54,6 +54,7 @@ napi_status js_execute_pending_jobs(napi_env env) {
 
 napi_status
 js_adjust_external_memory(napi_env env, int64_t changeInBytes, int64_t *externalMemory) {
+    napi_adjust_external_memory(env, changeInBytes, externalMemory);
     return napi_ok;
 }
 
