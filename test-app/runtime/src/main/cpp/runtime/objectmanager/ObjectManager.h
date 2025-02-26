@@ -20,7 +20,7 @@ namespace tns {
     public:
         ObjectManager(jobject javaRuntimeObject);
 
-        ~ObjectManager();
+        void OnDisposeEnv();
 
         void Init(napi_env env);
 

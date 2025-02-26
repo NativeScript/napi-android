@@ -166,7 +166,7 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     napi_handle_scope handleScope;
     napi_open_handle_scope(env, &handleScope);
 
-    env_to_runtime_cache.emplace(env, this);
+    env_to_runtime_cache.Insert(env, this);
 
     napi_value global;
     napi_get_global(env, &global);
@@ -341,6 +341,7 @@ ObjectManager *Runtime::GetObjectManager() const {
 }
 
 Runtime::~Runtime() {
+    delete this->m_objectManager;
     delete this->m_loopTimer;
 
 #ifdef __V8__
@@ -371,20 +372,21 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
+    DEBUG_WRITE_FORCE("%s", "DESTROYING RUNTIME NOW");
     is_destroying = true;
     MetadataNode::onDisposeEnv(env);
     ArgConverter::onDisposeEnv(env);
+    tns::GlobalHelpers::onDisposeEnv(env);
     this->js_method_cache->cleanupCache();
     delete this->js_method_cache;
     this->m_module.DeInit();
     Console::onDisposeEnv(env);
     CallbackHandlers::RemoveEnvEntries(env);
-    tns::GlobalHelpers::onDisposeEnv(env);
+    this->m_objectManager->OnDisposeEnv();
     napi_close_handle_scope(env, this->global_scope);
-    delete this->m_objectManager;
     Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
     id_to_runtime_cache.Remove(m_id);
-    env_to_runtime_cache.erase(env);
+    env_to_runtime_cache.Remove(env);
     js_free_napi_env(env);
 
 #ifndef __V8__
@@ -679,7 +681,7 @@ void Runtime::Unlock() {
 JavaVM *Runtime::java_vm = nullptr;
 jmethodID Runtime::GET_USED_MEMORY_METHOD_ID = nullptr;
 tns::ConcurrentMap<int, Runtime *> Runtime::id_to_runtime_cache;
-robin_hood::unordered_map<napi_env, Runtime *> Runtime::env_to_runtime_cache;
+tns::ConcurrentMap<napi_env, Runtime *> Runtime::env_to_runtime_cache;
 bool Runtime::s_mainThreadInitialized = false;
 int Runtime::m_androidVersion = Runtime::GetAndroidVersion();
 ALooper *Runtime::m_mainLooper = nullptr;

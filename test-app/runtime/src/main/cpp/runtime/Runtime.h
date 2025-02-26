@@ -31,20 +31,16 @@ namespace tns {
         static Runtime *GetRuntime(int runtimeId);
 
         inline static Runtime *GetRuntime(napi_env env) {
-            auto runtime = env_to_runtime_cache.at(env);
+            auto runtime = env_to_runtime_cache.Get(env);
+            if (runtime) return runtime;
 
-            if (runtime == nullptr) {
-                std::stringstream ss;
-                ss << "Cannot find runtime for napi_env: " << env;
-                throw NativeScriptException(ss.str());
-            }
-
-            return runtime;
+            std::stringstream ss;
+            ss << "Cannot find runtime for napi_env: " << env;
+            throw NativeScriptException(ss.str());
         }
 
         inline static Runtime *GetRuntimeUnchecked(napi_env env) {
-            auto runtime = env_to_runtime_cache.at(env);
-            return runtime;
+            return env_to_runtime_cache.Get(env);
         }
 
         static void Init(JavaVM *vm);
@@ -169,7 +165,7 @@ namespace tns {
 
         static tns::ConcurrentMap<int, Runtime *> id_to_runtime_cache;
 
-        static robin_hood::unordered_map<napi_env, Runtime *> env_to_runtime_cache;
+        static tns::ConcurrentMap<napi_env, Runtime *> env_to_runtime_cache;
 
         static tns::ConcurrentMap<std::thread::id, Runtime *> thread_id_to_rt_cache;
 

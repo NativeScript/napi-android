@@ -64,7 +64,8 @@ void ObjectManager::Init(napi_env env) {
     m_jsObjectCtor = napi_util::make_ref(env, jsObjectCtor, 1);
 }
 
-ObjectManager::~ObjectManager() {
+
+void ObjectManager::OnDisposeEnv() {
     JEnv jEnv;
     if (this->m_jsObjectCtor) napi_delete_reference(m_env, this->m_jsObjectCtor);
     if (this->m_jsObjectProxyCreator) napi_delete_reference(m_env, this->m_jsObjectProxyCreator);
