@@ -42,6 +42,11 @@ namespace tns {
             return runtime;
         }
 
+        inline static Runtime *GetRuntimeUnchecked(napi_env env) {
+            auto runtime = env_to_runtime_cache.at(env);
+            return runtime;
+        }
+
         static void Init(JavaVM *vm);
 
         static void
