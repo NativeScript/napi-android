@@ -101,12 +101,12 @@ Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
 Runtime *Runtime::GetRuntime(int runtimeId) {
     auto runtime = id_to_runtime_cache.Get(runtimeId);
 
-
     if (runtime == nullptr) {
         stringstream ss;
         ss << "Cannot find runtime for id:" << runtimeId;
         throw NativeScriptException(ss.str());
     }
+
     return runtime;
 }
 
@@ -382,10 +382,10 @@ void Runtime::DestroyRuntime() {
     tns::GlobalHelpers::onDisposeEnv(env);
     napi_close_handle_scope(env, this->global_scope);
     delete this->m_objectManager;
-    js_free_napi_env(env);
     Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
     id_to_runtime_cache.Remove(m_id);
     env_to_runtime_cache.erase(env);
+    js_free_napi_env(env);
 
 #ifndef __V8__
     js_free_runtime(rt);

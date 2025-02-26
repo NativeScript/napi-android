@@ -466,7 +466,7 @@ void ObjectManager::JSObjectProxyFinalizerCallback(napi_env env, void *finalizeD
     auto state = reinterpret_cast<JSInstanceInfo *>(finalizeData);
 #endif
 
-    auto rt = Runtime::GetRuntime(env);
+    auto rt = Runtime::GetRuntimeUnchecked(env);
     if (rt && !rt->is_destroying) {
 
         auto objManager = rt->GetObjectManager();
@@ -528,8 +528,8 @@ napi_value ObjectManager::JSObjectConstructorCallback(napi_env env, napi_callbac
 }
 
 void ObjectManager::ReleaseObjectNow(napi_env env, int javaObjectId) {
-    auto rt = Runtime::GetRuntime(env);
-    if (rt->is_destroying) return;
+    auto rt = Runtime::GetRuntimeUnchecked(env);
+    if (!rt || rt->is_destroying) return;
     ObjectManager *objMgr = rt->GetObjectManager();
 
     auto itFound = objMgr->m_weakObjectIds.find(javaObjectId);
@@ -588,12 +588,18 @@ void ObjectManager::OnGarbageCollected(JNIEnv *jEnv, jintArray object_ids) {
     jsize length = jenv.GetArrayLength(object_ids);
     int *cppArray = jenv.GetIntArrayElements(object_ids, nullptr);
     for (jsize i = 0; i < length; i++) {
+        auto rt = Runtime::GetRuntimeUnchecked(m_env);
+        if (rt && rt->is_destroying) return;
         int javaObjectId = cppArray[i];
         auto itFound = this->m_idToObject.find(javaObjectId);
         if (itFound != this->m_idToObject.end()) {
             napi_delete_reference(m_env, itFound->second);
             this->m_idToObject.erase(javaObjectId);
-            Runtime::GetRuntime(m_env)->js_method_cache->cleanupObject(javaObjectId);
+
+            if (rt && !rt->is_destroying) {
+                rt->js_method_cache->cleanupObject(javaObjectId);
+            }
+
             DEBUG_WRITE("JS Object released for object id: %d", javaObjectId);
             // auto found = this->m_idToProxy.find(javaObjectId);
             // if (found != this->m_idToProxy.end()) {
