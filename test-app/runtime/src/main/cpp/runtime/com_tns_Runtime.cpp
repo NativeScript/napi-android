@@ -64,15 +64,15 @@ Runtime* TryGetRuntime(int runtimeId) {
     try {
         runtime = Runtime::GetRuntime(runtimeId);
     } catch (NativeScriptException& e) {
-        e.ReThrowToJava(runtime->GetNapiEnv());
+        e.ReThrowToJava(nullptr);
     } catch (std::exception e) {
         stringstream ss;
         ss << "Error: c++ exception: " << e.what() << endl;
         NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToJava(runtime->GetNapiEnv());
+        nsEx.ReThrowToJava(nullptr);
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToJava(runtime->GetNapiEnv());
+        nsEx.ReThrowToJava(nullptr);
     }
     return runtime;
 }
