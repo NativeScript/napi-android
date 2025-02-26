@@ -243,7 +243,7 @@ describe("TNS require", function () {
 
     it("shouldn't load invalid JSON file", function () {
         require("./RequireJsonCorruptFile1");
-        expect(TNSGetOutput()).toMatch(/JSON Parse error|Unexpected token s in JSON at position 1$|JSON Parse error: Unable to parse JSON string$|No identifiers allowed directly after numeric literal$|Unexpected non-whitespace character/);
+        expect(TNSGetOutput()).toMatch(/unexpected data at the end|JSON Parse error|Unexpected token s in JSON at position 1$|JSON Parse error: Unable to parse JSON string$|No identifiers allowed directly after numeric literal$|Unexpected non-whitespace character/);
     });
 
     it("when using global in a module global should be defined", function () {
