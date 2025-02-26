@@ -2506,25 +2506,23 @@ napi_status napi_get_all_property_names(napi_env env,
     JSValue proto = JS_DupValue(env->context, jsValue);
 
     while (!JS_IsNull(proto)) {
-
         JSPropertyEnum *tab = NULL;
         uint32_t len = 0;
 
         JS_GetOwnPropertyNames(env->context, &tab, &len, proto, get_filter);
+
         for (uint32_t i = 0; i < len; i++) {
             JSValue name = JS_AtomToValue(env->context, tab[i].atom);
-
             JS_SetPropertyInt64(env->context, array, i, name);
-            JS_FreeAtom(env->context, tab[i].atom);
         }
 
-        js_free(env->context, tab);
+        JS_FreePropertyEnum(env->context, tab, len);
+
+        // Free the prototype.
+        JS_FreeValue(env->context, proto);
 
         if (key_mode == napi_key_include_prototypes) {
-            JSValue nextProto = JS_GetPrototype(env->context, proto);
-            // Free the prototype.
-            JS_FreeValue(env->context, proto);
-            proto = nextProto;
+            proto = JS_GetPrototype(env->context, proto);
         } else {
             proto = JS_NULL;
         }
@@ -4231,7 +4229,7 @@ napi_status qjs_free_napi_env(napi_env env) {
 
     // Free Context
     JS_FreeContext(env->context);
-
+    
 
     return napi_clear_last_error(env);
 }
