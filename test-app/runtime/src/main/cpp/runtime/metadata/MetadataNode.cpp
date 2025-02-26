@@ -1570,7 +1570,7 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
         }
 
         if (!fieldMetadata.isStatic) {
-            bool is__this__;
+            bool is__this__ = false;
             napi_has_named_property(env, jsThis, "__napi::this", &is__this__);
             if (!is__this__) {
                 napi_value constructor;
@@ -1605,7 +1605,7 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
 
     return UNDEFINED;
 }
-
+napi_ref propRef = nullptr;
 napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback_info info) {
     NAPI_CALLBACK_BEGIN(1);
 
@@ -1613,9 +1613,8 @@ napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback
         auto fieldData = reinterpret_cast<FieldCallbackData *>(data);
         auto &fieldMetadata = fieldData->metadata;
 
-
         if (!fieldMetadata.isStatic) {
-            bool is__this__;
+            bool is__this__ = false;
             napi_has_named_property(env, jsThis, "__napi::this", &is__this__);
             if (!is__this__) {
                 napi_value constructor;
