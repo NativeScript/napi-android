@@ -1852,15 +1852,15 @@ void CallbackHandlers::TerminateWorkerThread(napi_env env) {
     try {
         Runtime::GetRuntime(env)->DestroyRuntime();
     } catch (NativeScriptException &e) {
-        e.ReThrowToNapi(env);
+        e.ReThrowToJava(nullptr);
     } catch (std::exception e) {
         std::stringstream ss;
         ss << "Error: c++ exception: " << e.what() << std::endl;
         NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToNapi(env);
+        nsEx.ReThrowToJava(nullptr);
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToNapi(env);
+        nsEx.ReThrowToJava(nullptr);
     }
 
 }
