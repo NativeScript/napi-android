@@ -4,6 +4,10 @@
 
 <h1 align="center">Node-API Android Runtime for NativeScript</h1>
 
+![NPM Version (with dist tag)](https://img.shields.io/npm/v/%40nativescript%2Fandroid/napi-v8?style=for-the-badge&logo=nativescript)
+![NPM Version (with dist tag)](https://img.shields.io/npm/v/%40nativescript%2Fandroid/napi-quickjs?style=for-the-badge&logo=nativescript)
+![NPM Version (with dist tag)](https://img.shields.io/npm/v/%40nativescript%2Fandroid/napi-hermes?style=for-the-badge&logo=nativescript)
+![NPM Version (with dist tag)](https://img.shields.io/npm/v/%40nativescript%2Fandroid/napi-jsc?style=for-the-badge&logo=nativescript)
 
 
 [NativeScript](https://www.nativescript.org/) is an open-source framework for building truly native mobile applications using JavaScript. This repository contains the source code for the Node-API based Android Runtime used by NativeScript.
