@@ -10,7 +10,7 @@
 
 The Android Runtime is a key component of the NativeScript framework. It is responsible for executing JavaScript code on Android devices. The runtime is built on top of [Node-API](https://nodejs.org/api/n-api.html) and provides a way to interact with the Android platform APIs from JavaScript.
 
-The new runtime is based on the Node-API and is designed to be more stable, faster, and easier to maintain. It also supports multiple JavaScript engines, including V8, QuickJS, Hermes, and JavaScriptCore.
+The new runtime is based on the Node-API and is designed to be more stable, faster, and easier to maintain. It also supports multiple JavaScript engines, including [V8](https://v8.dev/), [QuickJS](https://github.com/quickjs-ng/quickjs/), [Hermes](https://github.com/facebook/hermes), and [JavaScriptCore](https://docs.webkit.org/Deep%20Dive/JSC/JavaScriptCore.html).
 
 <!-- TOC depthFrom:2 -->
 
