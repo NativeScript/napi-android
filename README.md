@@ -93,8 +93,6 @@ You can pass in `QUICKJS`, `HERMES`, `JSC` or `V8` to compile the runtime with t
 - The build process includes building of the runtime package (both optimized and with unstripped v8 symbol table), as well as all supplementary tools used for the android builds: metadata-generator, binding-generator, metadata-generator, static-binding-generator
 - The result of the build will be in the dist\_[engine] folder. For example if you are building with V8, the result will be in the dist_v8 folder.
 
-  `Note:` To cut the build time in half and package only the optimized (stripped) version of the runtime package comment out 'tasks.generateRuntimeAar.execute()' in the [build.gradle](https://github.com/NativeScript/android-runtime/blob/v3.0.0-rc.1/build.gradle#L114) script.
-
 ## How to Run Tests
 
 - Go to subfolder test-app after you built the runtime.
@@ -116,11 +114,11 @@ You can change the JS engine used by the runtime by setting the `jsEngine` prope
 
 ## Contribute
 
-We love PRs! Check out the [contributing guidelines](CONTRIBUTING.md). If you want to contribute, but you are not sure where to start - look for [issues labeled `help wanted`](https://github.com/NativeScript/android-runtime/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22).
+We love PRs! Check out the [contributing guidelines](CONTRIBUTING.md). If you want to contribute, but you are not sure where to start - look for [issues labeled `help wanted`](https://github.com/NativeScript/napi-android/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22).
 
 ## Get Help
 
-Please, use [github issues](https://github.com/NativeScript/android-runtime/issues) strictly for [reporting bugs](CONTRIBUTING.md#reporting-bugs) or [requesting features](CONTRIBUTING.md#requesting-new-features). For general questions and support, check out [Stack Overflow](https://stackoverflow.com/questions/tagged/nativescript) or ask our experts in [NativeScript community on Discord](https://nativescript.org/discord).
+Please, use [github issues](https://github.com/NativeScript/napi-android/issues) strictly for [reporting bugs](CONTRIBUTING.md#reporting-bugs) or [requesting features](CONTRIBUTING.md#requesting-new-features). For general questions and support, check out [Stack Overflow](https://stackoverflow.com/questions/tagged/nativescript) or ask our experts in [NativeScript community on Discord](https://nativescript.org/discord).
 
 ## License
 
