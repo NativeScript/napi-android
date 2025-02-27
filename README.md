@@ -120,7 +120,7 @@ We love PRs! Check out the [contributing guidelines](CONTRIBUTING.md). If you wa
 
 ## Get Help
 
-Please, use [github issues](https://github.com/NativeScript/android-runtime/issues) strictly for [reporting bugs](CONTRIBUTING.md#reporting-bugs) or [requesting features](CONTRIBUTING.md#requesting-new-features). For general questions and support, check out [Stack Overflow](https://stackoverflow.com/questions/tagged/nativescript) or ask our experts in [NativeScript community Slack channel](http://developer.telerik.com/wp-login.php?action=slack-invitation).
+Please, use [github issues](https://github.com/NativeScript/android-runtime/issues) strictly for [reporting bugs](CONTRIBUTING.md#reporting-bugs) or [requesting features](CONTRIBUTING.md#requesting-new-features). For general questions and support, check out [Stack Overflow](https://stackoverflow.com/questions/tagged/nativescript) or ask our experts in [NativeScript community on Discord](https://nativescript.org/discord).
 
 ## License
 
