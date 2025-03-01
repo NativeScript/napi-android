@@ -68,15 +68,23 @@ include_directories(
         src/main/cpp/runtime/jsonhelper
         src/main/cpp/runtime/version
         src/main/cpp/runtime/weakref
+
+        src/main/cpp/modules
+        src/main/cpp/modules/url
 )
 
-# Search for all CPP files in runtime/ directory and add them to our sourcess
+# Search for all CPP files in runtime/ directory and add them to our sources
 file(GLOB_RECURSE RUNTIME_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/*.cpp"
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/**/*.cpp"
 )
 
-set(SOURCES ${RUNTIME_FILES})
+file (GLOB_RECURSE MODULE_FILES
+        "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/*.cpp"
+        "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/**/*.cpp"
+)
+
+set(SOURCES ${RUNTIME_FILES} ${MODULE_FILES})
 
 if (QUICKJS)
     add_subdirectory(${PROJECT_SOURCE_DIR}/src/main/cpp/napi/quickjs/mimalloc-dev mimalloc)
