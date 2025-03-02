@@ -194,7 +194,7 @@ napi_value URL::New(napi_env env, napi_callback_info info) {
     }
 
     url_aggregator url;
-    std::string url_string(url_buffer.data());
+    std::string_view url_string_view(url_buffer.data(), url_buffer.size());
 
     if (argc > 1) {
         // Handle base URL
@@ -209,16 +209,15 @@ napi_value URL::New(napi_env env, napi_callback_info info) {
             return nullptr;
         }
 
-        std::string base_string(base_buffer.data());
-        std::string_view base_string_view(base_string);
+        std::string_view base_string_view(base_buffer.data(), base_buffer.size());
 
-        if (!can_parse(url_string, &base_string_view)) {
+        if (!can_parse(url_string_view, &base_string_view)) {
             napi_throw_type_error(env, nullptr, "Invalid URL");
             return nullptr;
         }
 
         auto base_url = ada::parse<ada::url_aggregator>(base_string_view, nullptr);
-        auto result = ada::parse<ada::url_aggregator>(url_string, &base_url.value());
+        auto result = ada::parse<ada::url_aggregator>(url_string_view, &base_url.value());
 
         if (!result) {
             napi_throw_type_error(env, nullptr, "Invalid URL");
@@ -226,7 +225,7 @@ napi_value URL::New(napi_env env, napi_callback_info info) {
         }
         url = result.value();
     } else {
-        auto result = ada::parse<ada::url_aggregator>(url_string, nullptr);
+        auto result = ada::parse<ada::url_aggregator>(url_string_view, nullptr);
         if (!result) {
             napi_throw_type_error(env, nullptr, "Invalid URL");
             return nullptr;
