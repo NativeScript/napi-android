@@ -30,7 +30,7 @@ namespace tns {
             if (value == nullptr) return napi_util::null(env);
 
             JEnv jenv;
-            auto chars = jenv.GetStringUTFChars(value, NULL);
+            auto chars = jenv.GetStringUTFChars(value,JNI_FALSE);
             auto length = jenv.GetStringUTFLength(value);
             auto jsString = convertToJsString(env, chars, length);
             jenv.ReleaseStringUTFChars(value, chars);
@@ -57,11 +57,7 @@ namespace tns {
             if (s == nullptr) {
                 return {};
             } else {
-                size_t str_len;
-                napi_get_value_string_utf8(env, s, nullptr, 0, &str_len);
-                std::string str(str_len, '\0');
-                napi_get_value_string_utf8(env, s, &str[0], str_len + 1, &str_len);
-                return str;
+                return napi_util::get_string_value(env, s);
             }
         }
 

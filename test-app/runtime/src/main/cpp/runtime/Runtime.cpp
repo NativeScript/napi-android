@@ -35,6 +35,8 @@
 #include "JsV8InspectorClient.h"
 #endif
 
+#include "NSRuntimeModules.h"
+
 using namespace tns;
 using namespace std;
 
@@ -230,6 +232,7 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 
     ArgConverter::Init(env);
 
+    NSRuntimeModules::Init(env);
 
     m_objectManager->Init(env);
 

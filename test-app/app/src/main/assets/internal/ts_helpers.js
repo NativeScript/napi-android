@@ -92,13 +92,13 @@
             Array.prototype.slice.call(arguments, 1)
           );
         } else {
-          thiz  = new (Function.prototype.bind.apply(
+          thiz = new (Function.prototype.bind.apply(
             Extended,
             [null].concat(Array.prototype.slice.call(arguments, 1))
           ))();
         }
       } else {
-        thiz  = new Extended();
+        thiz = new Extended();
       }
       return thiz;
     };
@@ -107,17 +107,14 @@
       var Extended = extend(thiz);
       thiz.__container__ = true;
       if (args && args.length > 0) {
-       if (typeof Extended !== "function") {
-                thiz = Reflect.construct(
-                  Extended,
-                  [null].concat(args)
-                );
-         } else {
-              thiz  = new (Function.prototype.bind.apply(
-                        Extended,
-                        [null].concat(args)
-                      ))();
-         }
+        if (typeof Extended !== "function") {
+          thiz = Reflect.construct(Extended, [null].concat(args));
+        } else {
+          thiz = new (Function.prototype.bind.apply(
+            Extended,
+            [null].concat(args)
+          ))();
+        }
       } else {
         thiz = new Extended();
       }
@@ -279,14 +276,14 @@
     return undefined;
   }
 
-globalThis.__prepareHostObject = function (hostObject, jsThis) {
-//    const prototype = Object.getPrototypeOf(jsThis);
-//    Object.setPrototypeOf(hostObject, prototype);
-     Object.defineProperty(hostObject, "super", {
-              get: () => jsThis["super"],
+  globalThis.__prepareHostObject = function (hostObject, jsThis) {
+    //    const prototype = Object.getPrototypeOf(jsThis);
+    //    Object.setPrototypeOf(hostObject, prototype);
+    Object.defineProperty(hostObject, "super", {
+      get: () => jsThis["super"],
     });
-};
- 
+  };
+
   const EXTERNAL_PROP = "[[external]]";
   const REFERENCE_PROP_JSC = "[[jsc_reference_info]]";
 
@@ -331,4 +328,66 @@ globalThis.__prepareHostObject = function (hostObject, jsThis) {
     lines[2] = "  at extend(native)";
     return lines.join("\n");
   };
+
+  if (globalThis.URL) {
+    const BLOB_STORE = new Map();
+    URL.createObjectURL = function (object, options = null) {
+      try {
+        if (object instanceof Blob || object instanceof File) {
+          const id = java.util.UUID.randomUUID().toString();
+          const ret = `blob:nativescript/${id}`;
+          BLOB_STORE.set(ret, {
+            blob: object,
+            type: object?.type,
+            ext: options?.ext,
+          });
+          return ret;
+        }
+      } catch (error) {
+        return null;
+      }
+      return null;
+    };
+    URL.revokeObjectURL = function (url) {
+      BLOB_STORE.delete(url);
+    };
+    const InternalAccessor = class {};
+    InternalAccessor.getData = function (url) {
+      return BLOB_STORE.get(url);
+    };
+    URL.InternalAccessor = InternalAccessor;
+    Object.defineProperty(URL.prototype, "searchParams", {
+      get() {
+        if (this._searchParams == null) {
+          this._searchParams = new URLSearchParams(this.search);
+          Object.defineProperty(this._searchParams, "_url", {
+            enumerable: false,
+            writable: false,
+            value: this,
+          });
+          this._searchParams._append = this._searchParams.append;
+          this._searchParams.append = function (name, value) {
+            this._append(name, value);
+            this._url.search = this.toString();
+          };
+          this._searchParams._delete = this._searchParams.delete;
+          this._searchParams.delete = function (name) {
+            this._delete(name);
+            this._url.search = this.toString();
+          };
+          this._searchParams._set = this._searchParams.set;
+          this._searchParams.set = function (name, value) {
+            this._set(name, value);
+            this._url.search = this.toString();
+          };
+          this._searchParams._sort = this._searchParams.sort;
+          this._searchParams.sort = function () {
+            this._sort();
+            this._url.search = this.toString();
+          };
+        }
+        return this._searchParams;
+      },
+    });
+  }
 })();
