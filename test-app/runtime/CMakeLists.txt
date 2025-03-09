@@ -61,7 +61,6 @@ include_directories(
         src/main/cpp/runtime/objectmanager
         src/main/cpp/runtime/performance
         src/main/cpp/runtime/profiler
-        src/main/cpp/runtime/robinhood
         src/main/cpp/runtime/sighandler
         src/main/cpp/runtime/timers
         src/main/cpp/runtime/util
@@ -99,13 +98,31 @@ if (QUICKJS)
             src/main/cpp/napi/quickjs/quickjs-api.c
             src/main/cpp/napi/quickjs/jsr.cpp
 
+
     )
     include_directories(
             src/main/cpp/napi/quickjs
             src/main/cpp/napi/quickjs/source
+            src/main/cpp/napi/quickjs/napi-new
             src/main/cpp/napi/common
             # mimalloc
             src/main/cpp/napi/quickjs/mimalloc-dev/include
+    )
+
+endif ()
+
+
+if (PRIMJS)
+    set(SOURCES ${SOURCES}
+            src/main/cpp/napi/primjs/jsr.cpp
+            src/main/cpp/napi/primjs/code_cache.cc
+            src/main/cpp/napi/primjs/primjs-api.cc
+            src/main/cpp/napi/primjs/napi_env.cc
+    )
+    include_directories(
+            src/main/cpp/napi/primjs
+            src/main/cpp/napi/primjs/include
+            src/main/cpp/napi/common
     )
 
 endif ()
@@ -114,6 +131,17 @@ if (HERMES)
     include_directories(
          src/main/cpp/napi/hermes
          src/main/cpp/napi/hermes/include
+         src/main/cpp/napi/common
+    )
+    set(SOURCES ${SOURCES}
+        src/main/cpp/napi/hermes/jsr.cpp
+      )
+endif ()
+
+if (SHERMES)
+    include_directories(
+         src/main/cpp/napi/hermes
+         src/main/cpp/napi/hermes/include_shermes
          src/main/cpp/napi/common
     )
     set(SOURCES ${SOURCES}
@@ -214,6 +242,13 @@ MESSAGE(STATUS "# CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS})
 target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${ANDROID_ABI}/libzip.a)
 #target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${ANDROID_ABI}/libclang_rt.asan-aarch64-android.so)
 
+if (SHERMES)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/shermes/${ANDROID_ABI}/libhermesvm.so)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/shermes/${ANDROID_ABI}/libjsi.so)
+    add_compile_definitions(NativeScript, PRIVATE __HERMES__)
+    add_compile_definitions(NativeScript, PRIVATE __SHERMES__)
+endif ()
+
 if (HERMES)
     target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libhermes.so)
     target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libjsi.so)
@@ -228,6 +263,12 @@ endif ()
 if (V8)
     target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/v8/${ANDROID_ABI}/libv8_monolith.a)
     add_compile_definitions(NativeScript, PRIVATE __V8__)
+endif ()
+
+if (PRIMJS)
+    # target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libnapi.so)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libquick.so)
+    add_compile_definitions(NativeScript, PRIVATE __PRIMJS__)
 endif ()
 
 if (QUICKJS)
@@ -266,10 +307,10 @@ if (QUICKJS)
     else ()
         target_link_libraries(NativeScript ${system-log} ${system-z} ${system-android})
     endif ()
-elseif (HERMES)
+elseif (HERMES OR SHERMES)
     find_package(fbjni REQUIRED CONFIG)
     target_link_libraries(NativeScript ${system-log} ${system-z} fbjni::fbjni ${system-android})
-elseif (JSC OR V8)
+elseif (JSC OR V8 OR PRIMJS)
     target_link_libraries(NativeScript ${system-log} ${system-z} ${system-android})
 endif ()
 
