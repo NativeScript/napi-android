@@ -375,7 +375,6 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
-    DEBUG_WRITE_FORCE("%s", "DESTROYING RUNTIME NOW");
     is_destroying = true;
     MetadataNode::onDisposeEnv(env);
     ArgConverter::onDisposeEnv(env);
