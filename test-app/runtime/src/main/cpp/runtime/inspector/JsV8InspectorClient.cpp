@@ -432,11 +432,13 @@ void JsV8InspectorClient::registerModules() {
     success = global->Set(context, tns::ConvertToV8String(isolate, "__inspectorTimestamp"), func).FromMaybe(false);
     assert(success);
 
-    TryCatch tc(isolate);
     Runtime::GetRuntime(env)->RunModule("inspector_modules");
-
-    if(tc.HasCaught()) {
-        throw NativeScriptException("Error loading inspector modules");
+    bool pendingException;
+    napi_is_exception_pending(env, &pendingException);
+    if (pendingException) {
+        napi_value exception;
+        napi_get_and_clear_last_exception(env, &exception);
+        throw NativeScriptException("Error running inspector modules");
     }
 }
 
