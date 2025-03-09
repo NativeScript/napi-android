@@ -10,8 +10,7 @@ typedef struct napi_runtime__ {
 
 JSR::JSR() {
     hermes::vm::RuntimeConfig config =
-            hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).withES6Class(
-                    true).withES6Promise(true).withArrayBuffer(true).withEnableEval(true).build();
+            hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).build();
     threadSafeRuntime = facebook::hermes::makeThreadSafeHermesRuntime(config);
 
     facebook::jsi::Function abc = facebook::jsi::Function::createFromHostFunction(

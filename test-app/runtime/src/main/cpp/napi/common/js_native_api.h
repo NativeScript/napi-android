@@ -2,7 +2,10 @@
 #define SRC_JS_NATIVE_API_H_
 
 #include "js_native_api_types.h"
-#include <uchar.h>
+
+#if !defined __cplusplus || (defined(_MSC_VER) && _MSC_VER < 1900)
+typedef uint16_t char16_t;
+#endif
 
 EXTERN_C_START
 
@@ -459,7 +462,7 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_get_date_value(napi_env env,
 // Add finalizer for pointer
 NAPI_EXTERN napi_status NAPI_CDECL napi_add_finalizer(napi_env env,
                                                       napi_value js_object,
-                                                      void *finalize_data,
+                                                      void *native_object,
                                                       napi_finalize finalize_cb,
                                                       void *finalize_hint,
                                                       napi_ref *result);
