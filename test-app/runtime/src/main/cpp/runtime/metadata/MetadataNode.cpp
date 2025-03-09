@@ -310,7 +310,7 @@ napi_value MetadataNode::GetImplementationObject(napi_env env, napi_value object
 void MetadataNode::SetInstanceMetadata(napi_env env, napi_value object, MetadataNode *node) {
     auto cache = GetMetadataNodeCache(env);
     napi_value external;
-    napi_create_external(env, node, [](napi_env env, void*d1,void*d2){}, node, &external);
+    napi_create_external(env, node, [](napi_env env, void *d1, void *d2) {}, node, &external);
     napi_set_named_property(env, object, "#instance_metadata", external);
 //    napi_wrap(env, object, node, nullptr, nullptr, nullptr);
 }
@@ -728,7 +728,7 @@ string MetadataNode::GetName() {
 
 MetadataNode *MetadataNode::GetOrCreate(const string &className) {
     MetadataNode *node = nullptr;
-
+    
     auto it = s_name2NodeCache.find(className);
 
     if (it == s_name2NodeCache.end()) {
@@ -752,8 +752,25 @@ MetadataNode *MetadataNode::GetOrCreateInternal(MetadataTreeNode *treeNode) {
     if (it != s_treeNode2NodeCache.end()) {
         result = it->second;
     } else {
-        result = new MetadataNode(treeNode);
+            auto name = GetJniClassName(treeNode);
+            if (!name.empty()) {
+                auto it2 = s_name2NodeCache.find(name);
+                if ( it2 != s_name2NodeCache.end()) {
+                    result = it2->second;
+                }
+            }
 
+            if (!result) {
+                result = new MetadataNode(treeNode);
+                s_treeNode2NodeCache.emplace(treeNode, result);
+                if (!result->m_name.empty()) {
+                    s_name2NodeCache.emplace(result->m_name, result);
+                }
+            }
+    }
+
+    auto found = s_treeNode2NodeCache.find(treeNode);
+    if (found == s_treeNode2NodeCache.end()) {
         s_treeNode2NodeCache.emplace(treeNode, result);
     }
 
@@ -905,7 +922,7 @@ void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const Metadat
     napi_value method;
     napi_create_function(env, "hasInstance", NAPI_AUTO_LENGTH, SymbolHasInstanceCallback, clazz,
                          &method);
-
+   
     napi_property_descriptor desc = {
             nullptr, // utf8name
             hasInstance,      // name
@@ -1528,7 +1545,8 @@ napi_value MetadataNode::NullObjectAccessorGetterCallback(napi_env env, napi_cal
         if (!value) {
             auto node = reinterpret_cast<MetadataNode *>(data);
             napi_value external;
-            napi_create_external(env, node, [](napi_env env, void* d1, void*d2) {}, node, &external);
+            napi_create_external(env, node, [](napi_env env, void *d1, void *d2) {}, node,
+                                 &external);
             napi_set_named_property(env, jsThis, PROP_KEY_NULL_NODE_NAME, external);
 
             napi_util::napi_set_function(env,
@@ -1583,7 +1601,8 @@ napi_value MetadataNode::FieldAccessorGetterCallback(napi_env env, napi_callback
                     if (isHolder) {
                         return UNDEFINED;
                     } else {
-                        napi_set_named_property(env, jsThis, "__napi::this", napi_util::get_true(env));
+                        napi_set_named_property(env, jsThis, "__napi::this",
+                                                napi_util::get_true(env));
                     }
                 }
             }
@@ -1627,7 +1646,8 @@ napi_value MetadataNode::FieldAccessorSetterCallback(napi_env env, napi_callback
                     if (isHolder) {
                         return UNDEFINED;
                     } else {
-                        napi_set_named_property(env, jsThis, "__napi::this", napi_util::get_true(env));
+                        napi_set_named_property(env, jsThis, "__napi::this",
+                                                napi_util::get_true(env));
                     }
                 }
             }
