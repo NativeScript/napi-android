@@ -445,6 +445,13 @@ void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
     JEnv jEnv(_jEnv);
     string filePath = ArgConverter::jstringToString(scriptFile);
     m_module.Load(env, filePath);
+    bool pendingException;
+    napi_is_exception_pending(env, &pendingException);
+    if (pendingException) {
+        napi_value error = nullptr;
+        napi_get_and_clear_last_exception(env, &error);
+        throw NativeScriptException(env, error, string("Error running module at path: ") + filePath);
+    }
 }
 
 void Runtime::RunModule(const char *moduleName) {
