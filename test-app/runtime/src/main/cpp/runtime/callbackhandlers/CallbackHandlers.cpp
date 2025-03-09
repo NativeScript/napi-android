@@ -706,9 +706,6 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
 }
 
 napi_value CallbackHandlers::RunOnMainThreadCallback(napi_env env, napi_callback_info info) {
-
-    NapiScope scope(env);
-
     size_t argc = 1;
     napi_value args[1];
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
@@ -973,12 +970,12 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
 
 #ifndef __HERMES__
     auto runtime = Runtime::GetRuntime(env);
-    method = runtime->js_method_cache->getCachedMethod(javaObjectId,methodName);
+    method = runtime->js_method_cache->getCachedMethod(javaObjectId, methodName);
     if (!method) {
 #endif
         napi_get_named_property(env, jsObject, methodName.c_str(), &method);
 #ifndef __HERMES__
-        if (!napi_util::is_null_or_undefined(env, method)) {
+        if (napi_util::is_of_type(env, method, napi_function)) {
             runtime->js_method_cache->cacheMethod(javaObjectId, methodName, method);
         }
     }
@@ -1121,7 +1118,6 @@ void CallbackHandlers::PostCallback(napi_env env, napi_callback_info info,
 
 napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info info) {
     if (android_get_device_api_level() >= 24) {
-        NapiScope scope(env);
         InitChoreographer();
 
         size_t argc = 2;
@@ -1182,7 +1178,6 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
 
 napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_info info) {
     if (android_get_device_api_level() >= 24) {
-        NapiScope scope(env);
         InitChoreographer();
 
         size_t argc = 1;
