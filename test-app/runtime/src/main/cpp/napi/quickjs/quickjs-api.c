@@ -2895,7 +2895,7 @@ napi_set_property_descriptor(napi_env env, napi_value object, napi_property_desc
     } else if (descriptor.method) {
         flags |= JS_PROP_HAS_VALUE;
         napi_value function = NULL;
-        napi_create_function(env, NULL, 0, descriptor.method, descriptor.data, &function);
+        napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH, descriptor.method, descriptor.data, &function);
         if (function) {
             value = *((JSValue *) function);
         }
@@ -2903,7 +2903,7 @@ napi_set_property_descriptor(napi_env env, napi_value object, napi_property_desc
         if (descriptor.getter) {
             napi_value getter = NULL;
             flags |= JS_PROP_HAS_GET;
-            napi_create_function(env, NULL, 0, descriptor.getter, descriptor.data, &getter);
+            napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH, descriptor.getter, descriptor.data, &getter);
             if (getter) {
                 getterValue = *((JSValue *) getter);
             }
@@ -2912,7 +2912,7 @@ napi_set_property_descriptor(napi_env env, napi_value object, napi_property_desc
         if (descriptor.setter) {
             napi_value setter = NULL;
             flags |= JS_PROP_HAS_SET;
-            napi_create_function(env, NULL, 0, descriptor.setter, descriptor.data, &setter);
+            napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH, descriptor.setter, descriptor.data, &setter);
             if (setter) {
                 setterValue = *((JSValue *) setter);
             }
@@ -3009,6 +3009,8 @@ napi_status napi_call_function(napi_env env, napi_value thisValue, napi_value fu
         for (size_t i = 0; i < argc; ++i) {
             args[i] = *((JSValue *) argv[i]);
         }
+
+
         returnValue = JS_Call(env->context, jsFunction, jsThis, (int) argc,
                               args);
         if (argc > 8) mi_free(args);
@@ -3054,12 +3056,15 @@ CallCFunction(JSContext *context, JSValueConst thisVal, int argc, JSValueConst *
     struct napi_callback_info__ callbackInfo = {JSUndefined, thisVal, argv, functionInfo->data,
                                                 argc};
 
+
     napi_handle_scope__ handleScope;
     handleScope.type = HANDLE_STACK_ALLOCATED;
     handleScope.handleCount = 0;
     handleScope.escapeCalled = false;
     SLIST_INIT(&handleScope.handleList);
     LIST_INSERT_HEAD(&env->handleScopeList, &handleScope, node);
+
+
 
     napi_value result = functionInfo->callback(env, &callbackInfo);
 
@@ -3132,15 +3137,9 @@ napi_create_function(napi_env env, const char *utf8name, size_t length, napi_cal
     RETURN_STATUS_IF_FALSE(!JS_IsException(functionValue), napi_pending_exception)
 
     if (utf8name && strcmp(utf8name, "") != 0) {
-        int returnStatus = JS_DefinePropertyValue(env->context, functionValue, env->atoms.name,
+        JS_DefinePropertyValue(env->context, functionValue, env->atoms.name,
                                                   JS_NewString(env->context, utf8name),
                                                   JS_PROP_CONFIGURABLE);
-
-        if (TRUTHY(returnStatus == -1)) {
-            JS_FreeValue(env->context, functionValue);
-
-            return napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
-        }
     }
 
     return CreateScopedResult(env, functionValue, result);
