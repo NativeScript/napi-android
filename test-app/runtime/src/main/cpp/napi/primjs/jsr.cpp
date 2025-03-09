@@ -14,6 +14,7 @@ napi_status js_create_runtime(napi_runtime *runtime) {
     LEPUSRuntime* rt = LEPUS_NewRuntimeWithMode(0);
     LEPUS_SetRuntimeInfo(rt, "Lynx_LepusNG");
     _runtime->context = LEPUS_NewContext(rt);
+    LEPUS_SetMaxStackSize(_runtime->context, 1024 * 1024 * 1024);
     _runtime->runtime = rt;
     *runtime = _runtime;
 
