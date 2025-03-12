@@ -1271,10 +1271,27 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
             throw NativeScriptException("Worker should be called as a constructor!");
         }
 
-        if (argc != 1 || !napi_util::is_of_type(env, argv[0], napi_string)) {
+        napi_valuetype value_type;
+        napi_typeof(env, argv[0], &value_type);
+
+        if (argc != 1 || (value_type != napi_string && value_type != napi_object) ) {
             throw NativeScriptException(
-                    "Worker should be called with one string parameter (name of file to run)!");
+                    "Worker should be called with one parameter (name of file to run) or a URL to the file");
         }
+
+        napi_value workerFilePath;
+        std::string baseurl_str;
+        if (value_type == napi_object) {
+            napi_get_named_property(env, argv[0], "href", &workerFilePath);
+            if (napi_util::is_null_or_undefined(env, workerFilePath)) {
+                throw NativeScriptException(
+                        "Worker should be called with one parameter (name of file to run) or a URL to the file");
+            }
+        } else {
+            workerFilePath = argv[0];
+        }
+
+
 
         napi_value global;
         napi_get_global(env, &global);
@@ -1290,8 +1307,17 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
             currentDir = currentDir.substr(fileSchema.length());
         }
 
-        std::string workerPath = ArgConverter::ConvertToString(env, argv[0]);
+        std::string workerPath = ArgConverter::ConvertToString(env, workerFilePath);
+
+        if (workerPath.compare(0, fileSchema.length(), fileSchema) == 0) {
+            workerPath = workerPath.substr(fileSchema.length());
+            auto workerPathPrefix = workerPath.substr(0, 1) == "/" ? "~" : "~/";
+            workerPath = workerPathPrefix  + workerPath;
+        }
+
         DEBUG_WRITE("Worker Path: %s, Current Dir: %s", workerPath.c_str(), currentDir.c_str());
+
+
 
         // Will throw if path is invalid or doesn't exist
         ModuleInternal::CheckFileExists(env, workerPath, currentDir);
@@ -1306,7 +1332,7 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         DEBUG_WRITE("Called Worker constructor id=%d", workerId);
 
         JEnv jEnv;
-        JniLocalRef filePath(ArgConverter::ConvertToJavaString(env, argv[0]));
+        JniLocalRef filePath(jEnv.NewStringUTF(workerPath.c_str()));
         JniLocalRef dirPath(jEnv.NewStringUTF(currentDir.c_str()));
         jEnv.CallStaticVoidMethod(RUNTIME_CLASS, INIT_WORKER_METHOD_ID, (jstring) filePath,
                                   (jstring) dirPath, workerId);
