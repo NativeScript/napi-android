@@ -219,6 +219,24 @@ void ModuleInternal::CheckFileExists(napi_env env, const std::string& path, cons
     jEnv.CallStaticObjectMethod(MODULE_CLASS, RESOLVE_PATH_METHOD_ID, (jstring) jsModulename, (jstring) jsBaseDir);
 }
 
+napi_value ModuleInternal::LoadInternalModule(napi_env env, const std::string& moduleName) {
+    if (moduleName == "url") {
+        napi_value moduleObj;
+        napi_create_object(env, &moduleObj);
+        napi_value url;
+        napi_value exports;
+        napi_create_object(env, &exports);
+        napi_get_named_property(env, napi_util::global(env), "URL", &url);
+        napi_set_named_property(env, exports, "URL", url);
+        napi_set_named_property(env, moduleObj, "exports", exports);
+        napi_util::napi_set_function(env, exports, "pathToFileURL", [](napi_env env, napi_callback_info info) -> napi_value {
+            return ArgConverter::convertToJsString(env, "file://");
+        });
+        return moduleObj;
+    }
+    return nullptr;
+}
+
 napi_value ModuleInternal::LoadImpl(napi_env env, const std::string& moduleName, const std::string& baseDir, bool& isData) {
     auto pathKind = GetModulePathKind(moduleName);
     auto cachePathKey = (pathKind == ModulePathKind::Global) ? moduleName : (baseDir + "*" + moduleName);
@@ -228,6 +246,13 @@ napi_value ModuleInternal::LoadImpl(napi_env env, const std::string& moduleName,
     DEBUG_WRITE(">>LoadImpl cachePathKey=%s", cachePathKey.c_str());
 
     auto it = m_loadedModules.find(cachePathKey);
+
+    /**
+     * Load internal modules like url,fs etc directly if someone does
+     * require('url');
+     */
+    napi_value moduleObj = ModuleInternal::LoadInternalModule(env, moduleName);
+    if (moduleObj) return moduleObj;
 
     if (it == m_loadedModules.end()) {
         std::string path;
@@ -240,6 +265,10 @@ napi_value ModuleInternal::LoadImpl(napi_env env, const std::string& moduleName,
             path.replace(pos, sys_lib.length(), "");
         } else if (Util::EndsWith(moduleName, ".so")) {
             path = "lib" + moduleName;
+        } else if (Util::EndsWith(moduleName, ".node")) {
+            std::string libName = moduleName;
+            Util::ReplaceAll(libName, ".node", "");
+            path = "lib" + libName + ".so";
         } else {
             JEnv jenv;
             JniLocalRef jsModulename(jenv.NewStringUTF(moduleName.c_str()));

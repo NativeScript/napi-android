@@ -54,6 +54,7 @@ class ModuleInternal {
         };
 
         static napi_value RequireCallback(napi_env env, napi_callback_info info);
+        static napi_value LoadInternalModule(napi_env env, const std::string& moduleName);
 
         static napi_value RequireNativeCallback(napi_env env, napi_callback_info info);
 
