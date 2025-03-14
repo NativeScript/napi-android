@@ -764,6 +764,9 @@ public class Runtime {
     }
 
     public void notifyGc(int[] objectIds) {
+        for (int id: objectIds) {
+                weakInstances.remove(id);
+        }
         notifyGc(runtimeId, objectIds);
     }
 
