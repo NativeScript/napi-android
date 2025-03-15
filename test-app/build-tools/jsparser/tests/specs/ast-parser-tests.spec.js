@@ -229,6 +229,43 @@ describe("parser/js_parser tests", function () {
                 let bindings = bindingsContent[0].split('*');
                 let implInterfacesStr = bindings[bindings.length - 1];
 
+                expect(implInterfacesStr).toBeDefined();
+                expect(implInterfacesStr.length).toBeGreaterThan(0);
+
+                let implInterfaces = implInterfacesStr.split(',');
+
+                let expectedInterfaces = [
+                    "android.view.View.OnClickListener"
+                ];
+
+                for (let i in expectedInterfaces) {
+                    expect(implInterfaces.indexOf(expectedInterfaces[i])).toBeGreaterThan(-1);
+                }
+
+                done();
+            });
+        });
+
+        it("SWC: Generate valid metadata for bindings from a transpiled typescript file where multiple interfaces are implemented using a decorator", function (done) {
+            let input = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case2", "app")),
+                generatedJavaClassesRoot = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case2", "src", "main", "java"));
+
+            clearOutput();
+
+            execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
+                console.log(stdout);
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    return done.fail(error);
+                }
+
+                logExecResult(stdout, stderr)
+
+                let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
+
+                let bindings = bindingsContent[0].split('*');
+                let implInterfacesStr = bindings[bindings.length - 1];
+
                 console.log(bindings)
 
                 expect(implInterfacesStr).toBeDefined();
@@ -237,10 +274,46 @@ describe("parser/js_parser tests", function () {
                 let implInterfaces = implInterfacesStr.split(',');
 
                 let expectedInterfaces = [
-                    "java.util.jar.Pack200.Unpacker",
-                    "java.util.Formattable",
-                    "java.util.Observer",
-                    "java.util.jar.Pack200.Packer"
+                    "android.view.View.OnClickListener"
+                ];
+
+                for (let i in expectedInterfaces) {
+                    expect(implInterfaces.indexOf(expectedInterfaces[i])).toBeGreaterThan(-1);
+                }
+
+                done();
+            });
+        });
+
+        it("SWC: Generate valid metadata for bindings from a transpiled typescript file where multiple interfaces are implemented using a decorator", function (done) {
+            let input = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case3", "app")),
+                generatedJavaClassesRoot = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case3", "src", "main", "java"));
+
+            clearOutput();
+
+            execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
+                console.log(stdout);
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    return done.fail(error);
+                }
+
+                logExecResult(stdout, stderr)
+
+                let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
+
+                let bindings = bindingsContent[0].split('*');
+                let implInterfacesStr = bindings[bindings.length - 1];
+
+                console.log(bindings)
+
+                expect(implInterfacesStr).toBeDefined();
+                expect(implInterfacesStr.length).toBeGreaterThan(0);
+
+                let implInterfaces = implInterfacesStr.split(',');
+
+                let expectedInterfaces = [
+                    "android.view.View.OnClickListener",
                 ];
 
                 for (let i in expectedInterfaces) {
