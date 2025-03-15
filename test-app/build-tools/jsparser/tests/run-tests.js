@@ -1,11 +1,19 @@
+let fs;
+try {
+    fs = require('fs');
+} catch (e) { 
+    
+}
 (function () {
     let { spawnSync, execSync } = require('child_process');
 
-    console.log("Installing JavaScript parser test dependencies.");
+    if (!fs.existsSync('node_modules')) {
+        console.log("Installing JavaScript parser test dependencies.");
 
-    let npmInstallResult = execSync('npm install');
+        let npmInstallResult = execSync('npm install');
 
-    console.log(npmInstallResult.toString());
+        console.log(npmInstallResult.toString());
+    }
 
     console.log("Executing JavaScript parser tests using Jasmine.");
 
