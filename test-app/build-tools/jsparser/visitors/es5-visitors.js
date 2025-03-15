@@ -46,6 +46,12 @@ var es5_visitors = (function() {
         if (types.isIdentifier(path) && path.node.name === "__extends") {
             traverseTsExtend(path, config);
         }
+
+        if (types.isIdentifier(path) && path.node.name.includes("swc_inherit_polyfill") && types.isMemberExpression(path.container)) {
+            traverseTsInherit(path, config);
+        }
+
+
         // Maybe it's not a good idea to expose this scenario because it can be explicitly covered
         // //anchor is JavaProxy (optional)
         // var customDecoratorName = config.extendDecoratorName === undefined ? defaultExtendDecoratorName : config.extendDecoratorName;
@@ -106,12 +112,18 @@ var es5_visitors = (function() {
             return;
         }
 
+
         var overriddenMethodNames = _getOverriddenMethodsTypescript(path, 3);
 
         var extendPath = _getParent(path, 3, config);
         var declaredClassName = "";
+        
+
 
         var typescriptClassExtendSuperCallLocation = getTypeScriptExtendSuperCallLocation(extendPath, config);
+        
+        console.log("LOCATION", typescriptClassExtendSuperCallLocation);
+
         var extendParent = _getParent(path, 1, config);
 
         if (types.isCallExpression(extendParent)) {
@@ -164,7 +176,93 @@ var es5_visitors = (function() {
         } else {
             var lineToWrite;
 
-            lineToWrite = _generateLineToWrite("", extendClass, overriddenMethodNames, { file: config.filePath, line: typescriptClassExtendSuperCallLocation.line, column: typescriptClassExtendSuperCallLocation.column, className: declaredClassName }, "", implementedInterfaces);
+            lineToWrite = _generateLineToWrite("", extendClass, overriddenMethodNames, { file: config.filePath, line: path.node.loc.end.line, column: path.node.loc.start.column + 1, className: declaredClassName }, "", implementedInterfaces);
+
+            if (config.logger) {
+                config.logger.info(lineToWrite)
+            }
+
+            normalExtendsArr.push(lineToWrite);
+        }
+    }
+
+    function traverseTsInherit(path, config) {
+        // information for normal extend (unnamed)
+        var extendClass;
+        try {
+            extendClass = _getArgumentFromNodeAsString(path, 6, config)
+        } catch (e) {
+            config.logger.warn(e.message)
+            return;
+        }
+
+        /**
+         * Get _inherits._ property location.
+         */
+        const propertyLocation = path.container.property.loc;
+        const line = propertyLocation.start.line;
+        const column = propertyLocation.start.column;
+
+        var overriddenMethodNames = [];
+        
+        try {
+            const parentPath = _getParent(path, 4, config);
+            const create_class_properties = parentPath.node.body[2].expression.arguments[1].elements;;
+            for (const element of create_class_properties) {
+                overriddenMethodNames.push(element.properties[0].value.value)
+            }
+        } catch(e) {
+            config.logger.warn(e.message)
+            return;
+        }
+
+        var declaredClassName = "";
+        var extendParent = _getParent(path, 2, config);
+
+        if (types.isCallExpression(extendParent)) {
+            declaredClassName = extendParent.node.arguments[0].name;
+        }
+
+        const extendParentScope = _getParent(path, 8, config);
+
+
+        var isDecoratedWithExtend = false,
+            customExtendDecoratorName,
+            customExtendDecoratorValue,
+            implementedInterfaces = [];
+
+        try {
+            for (let define of extendParentScope.container) {
+                if (types.isExpressionStatement(define) && types.isAssignmentExpression(define.expression) && define.expression.left.name === declaredClassName && types.isCallExpression(define.expression.right)) {      
+                    const decoratedNodes = define.expression.right.arguments[0];
+                    for (let i =0; i < decoratedNodes.elements.length;i++) {
+                        const current = decoratedNodes.elements[i];
+                        if (types.isCallExpression(current) && current.callee.name === config.interfacesDecoratorName) {
+                            const interfaces = current.arguments[0].elements;
+                            for (let i =0; i < interfaces.length; i++) {
+                                implementedInterfaces.push(_getWholeInterfaceNameFromInterfacesNode(interfaces[i]));
+                            }
+                        }
+    
+                        if (types.isCallExpression(current) && current.callee.name === config.extendDecoratorName) {
+                            isDecoratedWithExtend = true;
+                            customExtendDecoratorName = config.extendDecoratorName === undefined ? defaultExtendDecoratorName : config.extendDecoratorName;
+                            customExtendDecoratorValue = current.arguments[0].value;
+                        }
+                    }
+                }
+            }
+        } catch(e) {
+            config.logger.warn(e.message)
+            return; 
+        }
+
+        if (isDecoratedWithExtend) {
+            traverseJavaProxyExtend(customExtendDecoratorValue, config, customExtendDecoratorName, extendClass, overriddenMethodNames, implementedInterfaces);
+        } else {
+            var lineToWrite;
+
+            lineToWrite = _generateLineToWrite("", extendClass, overriddenMethodNames, { file: config.filePath, line: line, column: column + 1, className: declaredClassName }, "", implementedInterfaces);
 
             if (config.logger) {
                 config.logger.info(lineToWrite)
@@ -189,6 +287,8 @@ var es5_visitors = (function() {
                 returnIdentifierName = extendPath.node.body[extendPath.node.body.length - 1].argument.name;
         }
 
+
+
         // checks the typescript-extended class for a strict format, and a super call/apply inside
         /**
          *      function MyBtn() {
@@ -209,6 +309,7 @@ var es5_visitors = (function() {
             // the 'super' variable will always be passed as the second argument to the __extends call
             // try to find the 'super' identifier which may be uglified
             var superVariableIdentifier = getSuperVariableIdentifier(extendPath.node.body[0]);
+
 
             //// helper functions to find the correct super.call(this) node
             function getSuperVariableIdentifier(__extendsNode) {
@@ -271,9 +372,11 @@ var es5_visitors = (function() {
                     }
                 });
 
+
                 if (possibleVariableDeclarations.length > 0 || possibleExpressionStatements.length > 0) {
                     var superCallRHS = getThisDeclarationSuperCallLineNode(possibleVariableDeclarations, superVariableIdentifier) ||
                         getThisAssignmentSuperCallLineNode(possibleExpressionStatements, superVariableIdentifier);
+
 
                     if (superCallRHS) {
                         var superCallee = superCallRHS.callee.property;
@@ -641,7 +744,7 @@ var es5_visitors = (function() {
 
         var extClassArr = [];
         var extendedClass = _getParent(path, count, config);
-
+        
         if (extendedClass) {
             if (types.isCallExpression(extendedClass.node)) {
                 var o = extendedClass.node.arguments[0];

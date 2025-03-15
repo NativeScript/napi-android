@@ -168,11 +168,11 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
             if (error == nullptr && count < 3) continue;
 #endif
 
-#ifdef __JSC__
+//#ifdef __JSC__
         regex frameRegex(R"((.*):(\d+):(\d+))");
-#else
-        regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
-#endif
+//#else
+//        regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
+//#endif
         smatch match;
         if (regex_search(frame, match, frameRegex)) {
             current++;

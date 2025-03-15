@@ -64,15 +64,20 @@
       throw new Error("Can not extend an already extended native object.");
     }
 
+    let error = new Error("");
+
+    console.log(error.stack.split("\n")[2]);
+
     function extend(thiz) {
       var child = thiz.__proto__.__child;
       if (!child.__extended) {
         var parent = thiz.__proto__.__parent;
-        child.__extended = parent.extend(child.name, child.prototype, true);
+        child.__extended = parent.extend(child.name, child.prototype, true, error);
         // This will deal with "i instanceof child"
         child[Symbol.hasInstance] = function (instance) {
           return instance instanceof this.__extended;
         };
+        error = null;
       }
       return child.__extended;
     }
