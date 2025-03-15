@@ -187,8 +187,6 @@ describe("parser/js_parser tests", function () {
                 let bindings = bindingsContent[0].split('*');
                 let implInterfacesStr = bindings[bindings.length - 1];
 
-                console.log("LOGGING", bindings);
-
                 expect(implInterfacesStr).toBeDefined();
                 expect(implInterfacesStr.length).toBeGreaterThan(0);
 
