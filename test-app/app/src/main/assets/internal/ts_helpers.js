@@ -63,11 +63,7 @@
     if (Parent.__isPrototypeImplementationObject) {
       throw new Error("Can not extend an already extended native object.");
     }
-
-    let error = new Error("");
-
-    console.log(error.stack.split("\n")[2]);
-
+    
     function extend(thiz) {
       var child = thiz.__proto__.__child;
       if (!child.__extended) {
@@ -77,7 +73,6 @@
         child[Symbol.hasInstance] = function (instance) {
           return instance instanceof this.__extended;
         };
-        error = null;
       }
       return child.__extended;
     }

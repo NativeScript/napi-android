@@ -17,6 +17,7 @@ class Util {
         static void JoinString(const std::vector<std::string>& list, const std::string& delimiter, std::string& out);
 
         static bool EndsWith(const std::string& str, const std::string& suffix);
+        static bool Contains(const std::string &str, const std::string &sequence);
 
         static std::string ConvertFromJniToCanonicalName(const std::string& name);
 

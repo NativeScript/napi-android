@@ -79,6 +79,10 @@ namespace tns {
         return res;
     }
 
+    bool Util::Contains(const string &str, const string &sequence) {
+        return str.find(sequence) != string::npos;
+    }    
+
     string Util::ConvertFromJniToCanonicalName(const string &name) {
         string converted = name;
         replace(converted.begin(), converted.end(), '/', '.');

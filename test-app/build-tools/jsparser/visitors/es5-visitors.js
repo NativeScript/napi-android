@@ -118,6 +118,10 @@ var es5_visitors = (function () {
     var overriddenMethodNames = _getOverriddenMethodsTypescript(path, 3);
 
     var declaredClassName = "";
+    var extendPath = _getParent(path, 3, config);
+    const location = getTypeScriptExtendSuperCallLocation(extendPath, config);
+    const line = location.line
+    const column = location.column;
 
     var extendParent = _getParent(path, 1, config);
 
@@ -189,8 +193,8 @@ var es5_visitors = (function () {
         overriddenMethodNames,
         {
           file: config.filePath,
-          line: path.node.loc.end.line,
-          column: path.node.loc.start.column + 1,
+          line: line,
+          column: column + 1,
           className: declaredClassName,
         },
         "",
@@ -236,15 +240,10 @@ var es5_visitors = (function () {
       }
     }
 
-    console.log(extendClass);
-
-    /**
-     * Get _inherits._ property location or _inherits function location.
-     */
-    const location =
-      defaultDepth === 5 ? path.container.loc : path.container.property.loc;
-    const line = location.start.line;
-    const column = location.start.column;
+    var extendPath = _getParent(path, defaultDepth - 2, config);
+    const location = getTypeScriptExtendSuperCallLocation(extendPath, config);
+    const line = location.line
+    const column = location.column;
 
     var overriddenMethodNames = [];
 
@@ -652,6 +651,155 @@ var es5_visitors = (function () {
   /*
    *	HELPER METHODS
    */
+
+  
+   function getTypeScriptExtendSuperCallLocation(extendPath, config) {
+    var constructorFunctionName;
+    var returnIdentifierName;
+    var superCalleeStartColumn;
+    var superCalleeLine;
+    var locationAssigned = false;
+
+
+    // checks if constructor function and return identifiers match in a transpiled typescript class extend
+    if (extendPath.node.body && extendPath.node.body.length >= 3) {
+        if (types.isFunctionDeclaration(extendPath.node.body[1]) && extendPath.node.body[1].id)
+            constructorFunctionName = extendPath.node.body[1].id.name;
+        if (types.isReturnStatement(extendPath.node.body[extendPath.node.body.length - 1]))
+            returnIdentifierName = extendPath.node.body[extendPath.node.body.length - 1].argument.name;
+    }
+
+
+
+
+    // checks the typescript-extended class for a strict format, and a super call/apply inside
+    /**
+     *      function MyBtn() {
+                var _this = _super.call(this) || this;
+                return global.__native(_this);
+            }
+
+            **UGLIFIED extended class**
+
+            function t(t) {
+                var r = e.call(this) || this;
+                r.textBase = t;
+                return global.__native(r);
+            }
+     */
+    if (constructorFunctionName === returnIdentifierName && !!constructorFunctionName) {
+        var constructorFunctionScope = extendPath.node.body[1];
+        // the 'super' variable will always be passed as the second argument to the __extends call
+        // try to find the 'super' identifier which may be uglified
+        var superVariableIdentifier = getSuperVariableIdentifier(extendPath.node.body[0]);
+
+
+        //// helper functions to find the correct super.call(this) node
+        function getSuperVariableIdentifier(__extendsNode) {
+            if (types.isExpressionStatement(__extendsNode) && types.isCallExpression(__extendsNode.expression)) {
+                var __extendsCallArguments = __extendsNode.expression.arguments;
+                if (__extendsCallArguments.length == 2) {
+                    return __extendsCallArguments[1].name;
+                }
+            }
+        }
+
+        /** Getting the super.call node from assignment
+            if expressionStatement => check possibleExpressionStatements[0]
+            if possibleExpressionStatements[0].expression is assignment expression
+            if possibleExpressionStatements[0].expression.right is logical expression
+            if possibleExpressionStatements[0].expression.right.left is Call expression
+            if possibleExpressionStatements[0].expression.right.left.callee.object.name === superVariableIdentifier
+            if the above is valid, then variableRHS = possibleVariableDeclarations[0].expression.right.left
+         */
+        function getThisAssignmentSuperCallLineNode(nodes, superIdentifier) {
+            var matchingNodes = nodes.filter(
+                (node) => {
+
+                    if (types.isMemberExpression(node.expression?.right?.callee?.expressions[1])
+                        && node.expression?.right?.callee?.expressions[1].object.name.includes("call_super")) return true;
+
+                    return types.isAssignmentExpression(node.expression) &&
+                        types.isLogicalExpression(node.expression.right) &&
+                        types.isCallExpression(node.expression.right.left) &&
+                        (node.expression.right.left.callee.object.name === superIdentifier ||
+                            node.expression.right.left.callee.object.name.includes("call_super")
+                        )
+                });
+
+
+            if (matchingNodes.length > 0 && 
+                types.isMemberExpression(matchingNodes[0].expression?.right?.callee?.expressions[1])
+                    && matchingNodes[0].expression?.right?.callee?.expressions[1].object.name.includes("call_super")) 
+             {
+                return matchingNodes[0].expression?.right?.callee?.expressions[1];
+            }
+
+            return matchingNodes.length > 0 ? matchingNodes[0].expression?.right?.left : null;
+        }
+
+        /** Getting the super.call node from declaration
+            if variableDeclaration => check possibleVariableDeclarations[0].declarations[0].init  isn't null
+            if possibleNodesForSuperCall[0].declarations[0].init is logical expression
+            if possibleNodesForSuperCall[0].declarations[0].init.left is Call Expression
+            if possibleNodesForSuperCall[0].declarations[0].init.left.callee.object.name === superVariableIdentifier
+            if the above is valid, then variableRHS = possibleVariableDeclarations[0].declarations[0].init.left
+         */
+        function getThisDeclarationSuperCallLineNode(nodes, superIdentifier) {
+            var matchingNodes = nodes.filter(
+                (node) => {
+                    return types.isLogicalExpression(node.declarations[0].init) &&
+                        types.isCallExpression(node.declarations[0].init.left) &&
+                        node.declarations[0].init.left.callee.object.name === superIdentifier;
+                });
+
+            return matchingNodes.length > 0 ? matchingNodes[0].declarations[0].init.left : null;
+        }
+        ////
+
+        if (superVariableIdentifier) {
+            var possibleVariableDeclarations = [];
+            var possibleExpressionStatements = [];
+
+            constructorFunctionScope.body.body.forEach(node => {
+                if (types.isVariableDeclaration(node)) {
+                    possibleVariableDeclarations.push(node);
+                } else if (types.isExpressionStatement(node)) {
+                    possibleExpressionStatements.push(node);
+                }
+            });
+
+            if (possibleVariableDeclarations.length > 0 || possibleExpressionStatements.length > 0) {
+                var superCallRHS = getThisDeclarationSuperCallLineNode(possibleVariableDeclarations, superVariableIdentifier) ||
+                    getThisAssignmentSuperCallLineNode(possibleExpressionStatements, superVariableIdentifier);
+
+                if (types.isMemberExpression(superCallRHS)) {
+                    var superCallee = superCallRHS.property;
+                    superCalleeStartColumn = superCallee.loc.start.column + 2;
+                    superCalleeLine = superCallee.loc.start.line;
+                    locationAssigned = true;
+                } else if (superCallRHS) {
+                    var superCallee = superCallRHS.callee.property;
+                    superCalleeStartColumn = superCallee.loc.start.column + 1;
+                    superCalleeLine = superCallee.loc.start.line;
+
+                    locationAssigned = true;
+                }
+            }
+        }
+    }
+
+    if (!locationAssigned) {
+        config.logger.info(UNSUPPORTED_TYPESCRIPT_EXTEND_FORMAT_MESSAGE + " ctor function name: " + constructorFunctionName);
+    }
+
+    return {
+        line: superCalleeLine,
+        column: superCalleeStartColumn
+    };
+}
+
+
   function _getOverriddenMethods(node, config) {
     var overriddenMethodNames = [];
     if (types.isObjectExpression(node)) {
