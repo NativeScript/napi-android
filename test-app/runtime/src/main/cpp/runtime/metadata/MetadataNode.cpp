@@ -504,13 +504,13 @@ bool MetadataNode::IsValidExtendName(napi_env env, napi_value name) {
 
 
 bool
-MetadataNode::GetExtendLocation(napi_env env, string &extendLocation, bool isTypeScriptExtend) {
+MetadataNode::GetExtendLocation(napi_env env, string &extendLocation, bool isTypeScriptExtend, napi_value error) {
     stringstream extendLocationStream;
 
-    auto frames = tns::BuildStacktraceFrames(env, nullptr, 3);
+    auto frames = tns::BuildStacktraceFrames(env, error, 5);
     tns::JsStacktraceFrame *frame;
     if (isTypeScriptExtend) {
-        frame = &frames[2]; // the _super.apply call to ts_helpers will always be the third call frame
+        frame = &frames[1]; // the __extends() call to ts_helpers will always be the second call frame
     } else {
         frame = &frames[0];
     }
@@ -1778,7 +1778,7 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
 
             string strName = napi_util::get_string_value(env, argv[0]);
             hasDot = strName.find('.') != string::npos;
-        } else if (argc == 3) {
+        } else if (argc > 2) {
             if (napi_util::is_of_type(env, argv[2], napi_boolean)) {
                 napi_get_value_bool(env, argv[2], &isTypeScriptExtend);
             };
@@ -1790,7 +1790,8 @@ napi_value MetadataNode::ExtendMethodCallback(napi_env env, napi_callback_info i
             extendName = argv[0];
             implementationObject = argv[1];
         } else {
-            bool validExtend = GetExtendLocation(env, extendLocation, isTypeScriptExtend);
+            bool validExtend = GetExtendLocation(env, extendLocation, isTypeScriptExtend, argc == 4 ? argv[3] : nullptr);
+
             napi_create_string_utf8(env, "", 0, &extendName);
             auto validArgs = ValidateExtendArguments(env, argc, argv.data(), validExtend,
                                                      extendLocation,
@@ -1986,13 +1987,21 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
             }
         }
 
+
         if (argc == 0 && methodName == PROP_KEY_VALUEOF) {
             return jsThis;
         } else {
+            Runtime::GetRuntime(env)->clearPendingError();
             bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();
-            return CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
+            napi_value result = CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
                                                     isFromInterface, first.isStatic, info,
                                                     argc, argv.data());
+            napi_value error;
+            error = Runtime::GetRuntime(env)->getPendingError();
+            if (error) {
+                throw NativeScriptException(env, error);
+            }
+            return result;
         }
 
     } catch (NativeScriptException &e) {

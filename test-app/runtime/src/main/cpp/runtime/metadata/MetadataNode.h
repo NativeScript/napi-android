@@ -103,7 +103,7 @@ private:
 
 
     static bool IsValidExtendName(napi_env env, napi_value name);
-    static bool GetExtendLocation(napi_env env, std::string& extendLocation, bool isTypeScriptExtend);
+    static bool GetExtendLocation(napi_env env, std::string& extendLocation, bool isTypeScriptExtend, napi_value error);
     static ExtendedClassCacheData GetCachedExtendedClassData(napi_env env, const std::string& proxyClassName);
     static std::string GetJniClassName(const MetadataTreeNode* node);
 
