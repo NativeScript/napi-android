@@ -23,7 +23,7 @@ var _swc_helpers_ts_decorate__WEBPACK_IMPORTED_MODULE_6__ = {
 
 var ClickListener = /*#__PURE__*/ function(_java_lang_Object) {
     "use strict";
-    (0, __swc_crazy_long_line_swc_inherit_polyfill._)(ClickListener, _java_lang_Object);
+    __swc_crazy_long_line_swc_inherit_polyfill._(ClickListener, _java_lang_Object);
     function ClickListener() {
         (0,_swc_helpers_class_call_check__WEBPACK_IMPORTED_MODULE_2__._)(this, ClickListener);
         var _this;

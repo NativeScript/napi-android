@@ -1,6 +1,5 @@
-var __swc_crazy_long_line_swc_inherit_polyfill = {
-    _: () => {}
-}
+var __swc_crazy_long_line_swc_inherit_polyfill = () => {}
+
 var _Users_ammarahmed_Downloads_ns_vue_rspack_nativescript_rspack_dist_helpers_swc_call_super_polyfill_js__WEBPACK_IMPORTED_MODULE_0__ = {
     _: () => {}
 }
@@ -17,13 +16,11 @@ var _swc_helpers_create_class__WEBPACK_IMPORTED_MODULE_5__ = {
     _: () => {}
 }
 
-var _swc_helpers_ts_decorate__WEBPACK_IMPORTED_MODULE_6__ = {
-    __decorate: () => {}
-}
+var _swc_helpers_ts_decorate__WEBPACK_IMPORTED_MODULE_6__ = () => {}
 
 var ClickListener = /*#__PURE__*/ function(_java_lang_Object) {
     "use strict";
-    (0, __swc_crazy_long_line_swc_inherit_polyfill._)(ClickListener, _java_lang_Object);
+    __swc_crazy_long_line_swc_inherit_polyfill(ClickListener, _java_lang_Object);
     function ClickListener() {
         (0,_swc_helpers_class_call_check__WEBPACK_IMPORTED_MODULE_2__._)(this, ClickListener);
         var _this;
@@ -48,7 +45,7 @@ var ClickListener = /*#__PURE__*/ function(_java_lang_Object) {
     return ClickListener;
 }(java.lang.Object);
 
-ClickListener = (0,_swc_helpers_ts_decorate__WEBPACK_IMPORTED_MODULE_6__.__decorate)([
+ClickListener = _swc_helpers_ts_decorate__WEBPACK_IMPORTED_MODULE_6__([
     NativeClass,
     Interfaces([
         android.view.View.OnClickListener
