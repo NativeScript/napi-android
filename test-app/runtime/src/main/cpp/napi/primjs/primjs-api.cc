@@ -2460,8 +2460,7 @@ napi_status NAPI_CDECL napi_run_script_source(napi_env env,
     js_enter(env);
     result_val = LEPUS_Eval(env->ctx->ctx, src, size,
                             source_url, LEPUS_EVAL_TYPE_GLOBAL);
-    LEPUS_FreeCString(env->ctx->ctx, src);
-
+    JS_FreeCString_Comp(env->ctx->ctx, src);
     js_exit(env);
 
     CHECK_QJS(env, !LEPUS_IsException(result_val));
