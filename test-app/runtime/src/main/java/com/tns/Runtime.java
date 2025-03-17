@@ -37,8 +37,6 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import dalvik.annotation.optimization.FastNative;
-
 public class Runtime {
     private native void initNativeScript(int runtimeId, String filesPath, String nativeLibDir, boolean verboseLoggingEnabled, boolean isDebuggable, String packageName,
                                          Object[] v8Options, String callingDir, int maxLogcatObjectSize, boolean forceLog);
@@ -61,7 +59,7 @@ public class Runtime {
 
     private native void unlock(int runtimeId);
 
-    private native void passExceptionToJsNative(int runtimeId, Throwable ex, String message, String fullStackTrace, String jsStackTrace, boolean isDiscarded);
+    private native void passExceptionToJsNative(int runtimeId, Throwable ex, String message, String fullStackTrace, String jsStackTrace, boolean isDiscarded, boolean isPendingError);
 
     private static native int getCurrentRuntimeId();
 
@@ -82,21 +80,21 @@ public class Runtime {
     private static native void ResetDateTimeConfigurationCache(int runtimeId);
 
     void passUncaughtExceptionToJs(Throwable ex, String message, String fullStackTrace, String jsStackTrace) {
-        passExceptionToJsNative(getRuntimeId(), ex, message, fullStackTrace, jsStackTrace, false);
+        passExceptionToJsNative(getRuntimeId(), ex, message, fullStackTrace, jsStackTrace, false, false);
     }
 
-    void passDiscardedExceptionToJs(Throwable ex, String prefix) {
+    void passExceptionToJS(Throwable ex, boolean isPendingError, boolean isDiscarded) {
         //String message = prefix + ex.getMessage();
         // we'd better not prefix the error with something like - Error on "main" thread for reportSupressedException
         // as it doesn't seem very useful for the users
-        passExceptionToJsNative(getRuntimeId(), ex, ex.getMessage(), Runtime.getStackTraceErrorMessage(ex), Runtime.getJSStackTrace(ex), true);
+        passExceptionToJsNative(getRuntimeId(), ex, ex.getMessage(), Runtime.getStackTraceErrorMessage(ex), Runtime.getJSStackTrace(ex), isDiscarded, isPendingError);
     }
 
     public static void passSuppressedExceptionToJs(Throwable ex, String methodName) {
         com.tns.Runtime runtime = com.tns.Runtime.getCurrentRuntime();
         if (runtime != null) {
             String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for " + methodName + "\n";
-            runtime.passDiscardedExceptionToJs(ex, "");
+            runtime.passExceptionToJS(ex, false , false);
         }
     }
 
@@ -668,7 +666,6 @@ public class Runtime {
 
     @RuntimeCallable
     public void enableVerboseLogging() {
-
         logger.setEnabled(true);
         ProxyGenerator.IsLogEnabled = true;
     }
@@ -676,70 +673,84 @@ public class Runtime {
 
     @RuntimeCallable
     public void disableVerboseLogging() {
-//        logger.setEnabled(false);
-//        ProxyGenerator.IsLogEnabled = false;
+        logger.setEnabled(false);
+        ProxyGenerator.IsLogEnabled = false;
     }
 
-    public void run() throws NativeScriptException {
+    public void run() {
         ManualInstrumentation.Frame frame = ManualInstrumentation.start("Runtime.run");
         try {
             String mainModule = Module.bootstrapApp();
             runModule(new File(mainModule));
+        } catch (NativeScriptException e){
+            passExceptionToJS(e, false, false);
         } finally {
             frame.close();
         }
     }
 
-    public void runModule(File jsFile) throws NativeScriptException {
-        String filePath = jsFile.getPath();
-        runModule(getRuntimeId(), filePath);
+    public void runModule(File jsFile) {
+        try {
+            String filePath = jsFile.getPath();
+            runModule(getRuntimeId(), filePath);
+        } catch (NativeScriptException ex) {
+            passExceptionToJS(ex, false, false);
+        }
     }
 
-    public Object runScript(File jsFile) throws NativeScriptException {
-        return this.runScript(jsFile, true);
+    public Object runScript(File jsFile) {
+        try {
+            return this.runScript(jsFile, true);
+        } catch (NativeScriptException ex) {
+            passExceptionToJS(ex, false, false);
+            return null;
+        }
     }
 
-    public Object runScript(File jsFile, final boolean waitForResultOnMainThread) throws NativeScriptException {
+    public Object runScript(File jsFile, final boolean waitForResultOnMainThread) {
         Object result = null;
+        try {
+            if (jsFile.exists() && jsFile.isFile()) {
+                final String filePath = jsFile.getAbsolutePath();
 
-        if (jsFile.exists() && jsFile.isFile()) {
-            final String filePath = jsFile.getAbsolutePath();
+                boolean isWorkThread = threadScheduler.getThread().equals(Thread.currentThread());
 
-            boolean isWorkThread = threadScheduler.getThread().equals(Thread.currentThread());
+                if (isWorkThread) {
+                    result = runScript(getRuntimeId(), filePath);
+                } else {
+                    final Object[] arr = new Object[2];
 
-            if (isWorkThread) {
-                result = runScript(getRuntimeId(), filePath);
-            } else {
-                final Object[] arr = new Object[2];
-
-                Runnable r = new Runnable() {
-                    @Override
-                    public void run() {
-                        synchronized (this) {
-                            try {
-                                arr[0] = runScript(getRuntimeId(), filePath);
-                            } finally {
-                                this.notify();
-                                arr[1] = Boolean.TRUE;
+                    Runnable r = new Runnable() {
+                        @Override
+                        public void run() {
+                            synchronized (this) {
+                                try {
+                                    arr[0] = runScript(getRuntimeId(), filePath);
+                                } finally {
+                                    this.notify();
+                                    arr[1] = Boolean.TRUE;
+                                }
                             }
                         }
-                    }
-                };
+                    };
 
-                boolean success = threadScheduler.post(r);
+                    boolean success = threadScheduler.post(r);
 
-                if (success) {
-                    synchronized (r) {
-                        try {
-                            if (arr[1] == null && waitForResultOnMainThread) {
-                                r.wait();
+                    if (success) {
+                        synchronized (r) {
+                            try {
+                                if (arr[1] == null && waitForResultOnMainThread) {
+                                    r.wait();
+                                }
+                            } catch (InterruptedException e) {
+                                result = e;
                             }
-                        } catch (InterruptedException e) {
-                            result = e;
                         }
                     }
                 }
             }
+        } catch (NativeScriptException ex) {
+            passExceptionToJS(ex, false, false);
         }
 
         return result;
@@ -1116,9 +1127,6 @@ public class Runtime {
             }
         }
 
-        // Log.d(DEFAULT_LOG_TAG,
-        // "Platform.getJavaObjectByID found strong object with id:" +
-        // javaObjectID);
         return instance;
     }
 
@@ -1344,13 +1352,13 @@ public class Runtime {
             try {
                 ret = callJSMethodNative(getRuntimeId(), javaObjectID, claz, methodName, returnType, isConstructor, packagedArgs);
             } catch (NativeScriptException e) {
-                if (discardUncaughtJsExceptions) {
+//                if (discardUncaughtJsExceptions) {
                     String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";
-                    android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
-                    passDiscardedExceptionToJs(e, errorMessage);
-                } else {
-                    throw e;
-                }
+//                    android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
+                    passExceptionToJS(e, true, true);
+//                } else {
+//                    throw e;
+//                }
             }
         } else {
             final Object[] arr = new Object[2];
@@ -1365,13 +1373,13 @@ public class Runtime {
                             final Object[] packagedArgs = packageArgs(tmpArgs);
                             arr[0] = callJSMethodNative(getRuntimeId(), javaObjectID, claz, methodName, returnType, isCtor, packagedArgs);
                         } catch (NativeScriptException e) {
-                            if (discardUncaughtJsExceptions) {
+//                            if (discardUncaughtJsExceptions) {
                                 String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";
-                                passDiscardedExceptionToJs(e, errorMessage);
-                                android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
-                            } else {
-                                throw e;
-                            }
+                                passExceptionToJS(e, true, false);
+//                                android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
+//                            } else {
+//                                throw e;
+//                            }
                         } finally {
                             this.notify();
                             arr[1] = Boolean.TRUE;

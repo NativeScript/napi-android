@@ -241,14 +241,14 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_unlock(JNIEnv* env, jobject obj, 
     }
 }
 
-extern "C" JNIEXPORT void Java_com_tns_Runtime_passExceptionToJsNative(JNIEnv* jEnv, jobject obj, jint runtimeId, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded) {
+extern "C" JNIEXPORT void Java_com_tns_Runtime_passExceptionToJsNative(JNIEnv* jEnv, jobject obj, jint runtimeId, jthrowable exception, jstring message, jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded, jboolean isPendingError) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime == nullptr) return;
 
     NapiScope scope(runtime->GetNapiEnv());
 
     try {
-        runtime->PassExceptionToJsNative(jEnv, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded);
+        runtime->PassExceptionToJsNative(jEnv, obj, exception, message, fullStackTrace, jsStackTrace, isDiscarded, isPendingError);
     } catch (NativeScriptException& e) {
         e.ReThrowToJava(runtime->GetNapiEnv());
     } catch (std::exception e) {
