@@ -112,7 +112,7 @@ namespace tns {
 
         void
         PassExceptionToJsNative(JNIEnv *env, jobject obj, jthrowable exception, jstring message,
-                                jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded);
+                                jstring fullStackTrace, jstring jsStackTrace, jboolean isDiscarded, jboolean isPendingError);
 
         void PassUncaughtExceptionFromWorkerToMainHandler(napi_value message, napi_value stackTrace,
                                                           napi_value filename, int lineno);
@@ -123,7 +123,24 @@ namespace tns {
 
         bool is_destroying = false;
 
+        napi_value getPendingError() {
+            if (!pendingError) return nullptr;
+            napi_value error = napi_util::get_ref_value(env, pendingError);
+            napi_delete_reference(env, pendingError);
+            pendingError = nullptr;
+            return error;
+        }
+
+        void clearPendingError() {
+            if (!pendingError) return;
+            napi_delete_reference(env, pendingError);
+            pendingError = nullptr;
+        }
+
     private:
+        napi_ref pendingError;
+
+
         Runtime(JNIEnv *env, jobject runtime, int id);
 
         static napi_value GlobalAccessorCallback(napi_env env, napi_callback_info info);
