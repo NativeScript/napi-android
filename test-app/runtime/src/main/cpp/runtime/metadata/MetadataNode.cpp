@@ -507,10 +507,14 @@ bool
 MetadataNode::GetExtendLocation(napi_env env, string &extendLocation, bool isTypeScriptExtend) {
     stringstream extendLocationStream;
 
-    auto frames = tns::BuildStacktraceFrames(env, nullptr, 3);
+    auto frames = tns::BuildStacktraceFrames(env, nullptr, 4);
     tns::JsStacktraceFrame *frame;
     if (isTypeScriptExtend) {
-        frame = &frames[2]; // the _super.apply call to ts_helpers will always be the third call frame
+        if (Util::Contains(frames[2].text, "call_super")) {
+            frame = &frames[3];
+        } else {
+            frame = &frames[2]; // the _super.apply call to ts_helpers will always be the third call frame
+        }
     } else {
         frame = &frames[0];
     }

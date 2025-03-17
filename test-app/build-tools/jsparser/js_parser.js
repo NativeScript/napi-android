@@ -17,6 +17,8 @@ const showErrorsAndWarnings =
     process.argv &&
     process.argv.includes("enableErrorLogging"));
 
+const lineColumnPrimJS = process.argv.includes("-line-column-primjs");
+
 const loggingSettings = {
   logPath: require("path").join(__dirname, "logs", "i.txt"),
   strategy: "console",
@@ -279,6 +281,7 @@ const visitAst = function (path, data, err) {
             .substring(inputDir.length + 1)
             .replace(/[\\]/g, "/"),
           interfaceNames: interfaceNames,
+          isPrimJS: lineColumnPrimJS
         };
         es5_visitors.es5Visitor(path, decoratorConfig);
       },

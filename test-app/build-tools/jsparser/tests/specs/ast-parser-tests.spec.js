@@ -15,7 +15,6 @@ function execGradle(inputPath, generatedJavaClassesRoot, callback) {
 }
 
 function logExecResult(stdout, stderr) {
-    // console.log(`stdout: ${stdout}`);
     if (stderr) {
         console.log(`stderr: ${stderr}`);
     }
@@ -206,6 +205,116 @@ describe("parser/js_parser tests", function () {
             });
         });
 
+        it("SWC: Generate valid metadata for bindings from a transpiled typescript file where multiple interfaces are implemented using a decorator", function (done) {
+            let input = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc", "app")),
+                generatedJavaClassesRoot = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc", "src", "main", "java"));
+
+            clearOutput();
+
+            execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    return done.fail(error);
+                }
+
+                logExecResult(stdout, stderr)
+
+                let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
+
+                let bindings = bindingsContent[0].split('*');
+                let implInterfacesStr = bindings[bindings.length - 1];
+
+                expect(implInterfacesStr).toBeDefined();
+                expect(implInterfacesStr.length).toBeGreaterThan(0);
+
+                let implInterfaces = implInterfacesStr.split(',');
+
+                let expectedInterfaces = [
+                    "android.view.View.OnClickListener"
+                ];
+
+                for (let i in expectedInterfaces) {
+                    expect(implInterfaces.indexOf(expectedInterfaces[i])).toBeGreaterThan(-1);
+                }
+
+                done();
+            });
+        });
+
+        it("SWC: Generate valid metadata for bindings from a transpiled typescript file where multiple interfaces are implemented using a decorator", function (done) {
+            let input = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case2", "app")),
+                generatedJavaClassesRoot = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case2", "src", "main", "java"));
+
+            clearOutput();
+
+            execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    return done.fail(error);
+                }
+
+                logExecResult(stdout, stderr)
+
+                let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
+
+                let bindings = bindingsContent[0].split('*');
+                let implInterfacesStr = bindings[bindings.length - 1];
+
+
+                expect(implInterfacesStr).toBeDefined();
+                expect(implInterfacesStr.length).toBeGreaterThan(0);
+
+                let implInterfaces = implInterfacesStr.split(',');
+
+                let expectedInterfaces = [
+                    "android.view.View.OnClickListener"
+                ];
+
+                for (let i in expectedInterfaces) {
+                    expect(implInterfaces.indexOf(expectedInterfaces[i])).toBeGreaterThan(-1);
+                }
+
+                done();
+            });
+        });
+
+        it("SWC: Generate valid metadata for bindings from a transpiled typescript file where multiple interfaces are implemented using a decorator", function (done) {
+            let input = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case3", "app")),
+                generatedJavaClassesRoot = path.normalize(path.join(prefix, "extends_with_interfaces_ts_swc_case3", "src", "main", "java"));
+
+            clearOutput();
+
+            execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    return done.fail(error);
+                }
+
+                logExecResult(stdout, stderr)
+
+                let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
+
+                let bindings = bindingsContent[0].split('*');
+                let implInterfacesStr = bindings[bindings.length - 1];
+
+
+                expect(implInterfacesStr).toBeDefined();
+                expect(implInterfacesStr.length).toBeGreaterThan(0);
+
+                let implInterfaces = implInterfacesStr.split(',');
+
+                let expectedInterfaces = [
+                    "android.view.View.OnClickListener",
+                ];
+
+                for (let i in expectedInterfaces) {
+                    expect(implInterfaces.indexOf(expectedInterfaces[i])).toBeGreaterThan(-1);
+                }
+
+                done();
+            });
+        });
+
         it("Generated metadata for bindings should return proper JavaClass name despite emitted TS ES5 code", function (done) {
             let input = path.normalize(path.join(prefix, "decorated_extends_ts", "app")),
                 generatedJavaClassesRoot = path.normalize(path.join(prefix, "decorated_extends_ts", "src", "main", "java"));
@@ -264,6 +373,44 @@ describe("parser/js_parser tests", function () {
                 let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
 
                 expect(bindingsContent.length).toBe(1);
+
+
+
+                for (let line of bindingsContent) {
+                    var lineParts = line.split("*");
+                    var tsExtendsPart = lineParts[1];
+                    expect(tsExtendsPart).toBeFalsy();
+
+                    var newClassNamePart = lineParts[6];
+                    expect(newClassNames).toContain(newClassNamePart);
+                }
+
+                done();
+            });
+        });
+
+    it("SWC: Generated metadata for bindings should return proper JavaClass name when there is a static property and double assignment", function (done) {
+            let input = path.normalize(path.join(prefix, "decorated_double_assignment_ts_swc", "app")),
+                generatedJavaClassesRoot = path.normalize(path.join(prefix, "decorated_double_assignment_ts_swc", "src", "main", "java"));
+
+            const newClassNames = [
+                "org.nativescript.MyCustomActivity",
+            ];
+
+            clearOutput();
+
+            execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    return done.fail(error);
+                }
+
+                logExecResult(stdout, stderr)
+
+                let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
+
+                expect(bindingsContent.length).toBe(1);
+
 
 
                 for (let line of bindingsContent) {
