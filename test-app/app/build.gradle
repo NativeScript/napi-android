@@ -516,6 +516,10 @@ task runSbg(type: BuildToolTask) {
         paramz.add("-show-deprecation-warnings")
     }
 
+    if (ns_engine == "PRIMJS") {
+        paramz.add("-line-column-primjs")
+    }
+
     setOutputs outLogger
 
     args paramz
