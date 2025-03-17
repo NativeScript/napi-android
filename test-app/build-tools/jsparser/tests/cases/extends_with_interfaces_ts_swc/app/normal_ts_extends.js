@@ -27,7 +27,8 @@ var ClickListener = /*#__PURE__*/ function(_java_lang_Object) {
     function ClickListener() {
         (0,_swc_helpers_class_call_check__WEBPACK_IMPORTED_MODULE_2__._)(this, ClickListener);
         var _this;
-        _this = (0,_Users_ammarahmed_Downloads_ns_vue_rspack_nativescript_rspack_dist_helpers_swc_call_super_polyfill_js__WEBPACK_IMPORTED_MODULE_0__._)(this, ClickListener);
+        _this = (0,_Users_ammarahmed_Downloads_ns_vue_rspack_nativescript_rspack_dist_helpers_swc_call_super_polyfill_js__WEBPACK_IMPORTED_MODULE_0__._)(this, 
+            ClickListener);
         // necessary when extending TypeScript constructors
         return (0,_swc_helpers_possible_constructor_return__WEBPACK_IMPORTED_MODULE_4__._)(_this, global.__native(_this));
     }

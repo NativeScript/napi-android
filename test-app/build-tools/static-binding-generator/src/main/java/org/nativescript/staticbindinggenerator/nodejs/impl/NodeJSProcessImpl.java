@@ -3,6 +3,7 @@ package org.nativescript.staticbindinggenerator.nodejs.impl;
 import org.nativescript.staticbindinggenerator.nodejs.NodeJSProcess;
 import org.nativescript.staticbindinggenerator.system.environment.EnvironmentVariablesReader;
 import org.nativescript.staticbindinggenerator.system.process.ProcessExecutor;
+import org.nativescript.staticbindinggenerator.InputParameters;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,6 +28,7 @@ public class NodeJSProcessImpl implements NodeJSProcess {
     @Override
     public int runScript(String scriptPath) {
         List<String> parameters = createNodeJSParameters(scriptPath);
+        
         return processExecutor.executeProcess(NODE_PROCESS_NAME, parameters);
     }
 
@@ -39,6 +41,10 @@ public class NodeJSProcessImpl implements NodeJSProcess {
         // }
 
         parameters.add(scriptPath);
+
+        if (InputParameters.getCurrent().getLineColumnPrimjs()) {
+             parameters.add("-line-column-primjs");
+        }
 
         return parameters;
     }

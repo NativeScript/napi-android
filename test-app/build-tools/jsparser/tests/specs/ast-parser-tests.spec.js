@@ -15,7 +15,6 @@ function execGradle(inputPath, generatedJavaClassesRoot, callback) {
 }
 
 function logExecResult(stdout, stderr) {
-    // console.log(`stdout: ${stdout}`);
     if (stderr) {
         console.log(`stderr: ${stderr}`);
     }
@@ -174,7 +173,6 @@ describe("parser/js_parser tests", function () {
             clearOutput();
 
             execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
-                console.log(error, stdout, stderr);
                 if (error) {
                     console.error(`exec error: ${error}`);
                     return done.fail(error);
@@ -214,7 +212,6 @@ describe("parser/js_parser tests", function () {
             clearOutput();
 
             execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
-                console.log(stdout);
                 if (error) {
                     console.error(`exec error: ${error}`);
                     return done.fail(error);
@@ -251,7 +248,6 @@ describe("parser/js_parser tests", function () {
             clearOutput();
 
             execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
-                console.log(stdout);
                 if (error) {
                     console.error(`exec error: ${error}`);
                     return done.fail(error);
@@ -264,7 +260,6 @@ describe("parser/js_parser tests", function () {
                 let bindings = bindingsContent[0].split('*');
                 let implInterfacesStr = bindings[bindings.length - 1];
 
-                console.log(bindings)
 
                 expect(implInterfacesStr).toBeDefined();
                 expect(implInterfacesStr.length).toBeGreaterThan(0);
@@ -290,7 +285,6 @@ describe("parser/js_parser tests", function () {
             clearOutput();
 
             execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
-                console.log(stdout);
                 if (error) {
                     console.error(`exec error: ${error}`);
                     return done.fail(error);
@@ -303,7 +297,6 @@ describe("parser/js_parser tests", function () {
                 let bindings = bindingsContent[0].split('*');
                 let implInterfacesStr = bindings[bindings.length - 1];
 
-                console.log(bindings)
 
                 expect(implInterfacesStr).toBeDefined();
                 expect(implInterfacesStr.length).toBeGreaterThan(0);
@@ -380,6 +373,44 @@ describe("parser/js_parser tests", function () {
                 let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
 
                 expect(bindingsContent.length).toBe(1);
+
+
+
+                for (let line of bindingsContent) {
+                    var lineParts = line.split("*");
+                    var tsExtendsPart = lineParts[1];
+                    expect(tsExtendsPart).toBeFalsy();
+
+                    var newClassNamePart = lineParts[6];
+                    expect(newClassNames).toContain(newClassNamePart);
+                }
+
+                done();
+            });
+        });
+
+    it("SWC: Generated metadata for bindings should return proper JavaClass name when there is a static property and double assignment", function (done) {
+            let input = path.normalize(path.join(prefix, "decorated_double_assignment_ts_swc", "app")),
+                generatedJavaClassesRoot = path.normalize(path.join(prefix, "decorated_double_assignment_ts_swc", "src", "main", "java"));
+
+            const newClassNames = [
+                "org.nativescript.MyCustomActivity",
+            ];
+
+            clearOutput();
+
+            execGradle(input, generatedJavaClassesRoot, function (error, stdout, stderr) {
+                if (error) {
+                    console.error(`exec error: ${error}`);
+                    return done.fail(error);
+                }
+
+                logExecResult(stdout, stderr)
+
+                let bindingsContent = fs.readFileSync(sbgBindingOutoutFile, "utf-8").toString().trim().split('\n');
+
+                expect(bindingsContent.length).toBe(1);
+
 
 
                 for (let line of bindingsContent) {
