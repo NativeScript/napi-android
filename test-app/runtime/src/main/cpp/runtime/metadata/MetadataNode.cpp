@@ -1986,13 +1986,21 @@ napi_value MetadataNode::MethodCallback(napi_env env, napi_callback_info info) {
             }
         }
 
+
         if (argc == 0 && methodName == PROP_KEY_VALUEOF) {
             return jsThis;
         } else {
+            Runtime::GetRuntime(env)->clearPendingError();
             bool isFromInterface = initialCallbackData->node->IsNodeTypeInterface();
-            return CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
+            napi_value result = CallbackHandlers::CallJavaMethod(env, jsThis, *className, methodName, entry,
                                                     isFromInterface, first.isStatic, info,
                                                     argc, argv.data());
+            napi_value error;
+            error = Runtime::GetRuntime(env)->getPendingError();
+            if (error) {
+                throw NativeScriptException(env, error);
+            }
+            return result;
         }
 
     } catch (NativeScriptException &e) {
