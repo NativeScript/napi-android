@@ -18,3 +18,4 @@ dist_v8
 dist_quickjs
 dist_hermes
 dist_jsc
+dist_*
