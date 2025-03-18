@@ -335,6 +335,8 @@ namespace qjsimpl {
 
 inline void reset_napi_env(napi_env env, napi_handle_scope__ *scope);
 
+
+
 struct napi_context__ {
     napi_env env;
     LEPUSRuntime *rt{};
@@ -360,6 +362,7 @@ struct napi_context__ {
               PROP_CTOR_MAGIC(env, ctx, "@#ctor@#"),
               gc_enable(LEPUS_IsGCModeRT(rt)) {
         env->ctx = this;
+        napi_context__::rt_to_env_cache.emplace(rt, env);
         handle_scope = new napi_handle_scope__(env, ctx, reset_napi_env);
 
         LEPUSValue gc = LEPUS_NewCFunction(ctx, [](LEPUSContext *ctx, LEPUSValueConst this_val,
@@ -370,6 +373,7 @@ struct napi_context__ {
         auto globalValue = LEPUS_GetGlobalObject(ctx);
         LEPUS_SetPropertyStr(ctx, globalValue, "gc", gc);
         JS_FreeValue_Comp(ctx, globalValue);
+        LEPUS_NewClassID(&napiHostObjectClassId);
 
         // TODO primjs doesn't expose DupContext
     }
@@ -377,10 +381,11 @@ struct napi_context__ {
     ~napi_context__() {
         qjsimpl::RefTracker::FinalizeAll(&finalizing_reflist);
         qjsimpl::RefTracker::FinalizeAll(&reflist);
-
+        
         // root handle scope may be used during FinalizeAll
         // must delete at last
         delete handle_scope;
+        rt_to_env_cache.erase(rt);
     }
 
     inline void Ref() { refs++; }
@@ -414,6 +419,16 @@ struct napi_context__ {
     qjsimpl::NAPIPersistent last_exception_pVal;
 
     std::unordered_map<uint64_t, void *> instance_data_registry;
+
+    int napi_host_object_class_init = 0;
+    LEPUSClassID napiHostObjectClassId = 0;
+    static std::unordered_map<LEPUSRuntime *, napi_env> rt_to_env_cache;
+
+    static napi_env GetEnv(LEPUSRuntime* rt) {
+        auto it = rt_to_env_cache.find(rt);
+        if (it == rt_to_env_cache.end()) return nullptr;
+        return it->second;
+    }
 
     int open_handle_scopes = 0;
 

@@ -26,6 +26,8 @@
 #include "napi_env_quickjs.h"
 #include "quickjs/include/quickjs-inner.h"
 
+
+std::unordered_map<LEPUSRuntime *, napi_env> napi_context__::rt_to_env_cache;
 struct napi_callback_info__ {
     napi_value newTarget;
     napi_value thisArg;
@@ -2622,7 +2624,6 @@ napi_status napi_get_instance_data(napi_env env, uint64_t key, void **data) {
 void napi_attach_quickjs(napi_env env, LEPUSContext *context) {
     env->ctx = new napi_context__(env, context);
 
-
     InitNapiScope(context);
 }
 
@@ -2677,6 +2678,204 @@ napi_status primjs_execute_pending_jobs(napi_env env) {
             return napi_set_last_error(env, napi_pending_exception);
         }
     } while (error != 0);
+
+    return napi_clear_last_error(env);
+}
+
+
+typedef struct NapiHostObjectInfo {
+    void *data;
+    napi_ref ref;
+    napi_finalize finalize_cb;
+    bool is_array;
+    napi_ref getter;
+    napi_ref setter;
+} NapiHostObjectInfo;
+
+void host_object_finalizer(LEPUSRuntime *rt, LEPUSValue value) {
+    napi_env env = (napi_env) napi_context__::GetEnv(rt);
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) LEPUS_GetOpaque(value,
+                                                                   env->ctx->napiHostObjectClassId);
+    if (info->finalize_cb) {
+        info->finalize_cb(env, info->data, NULL);
+    }
+    if (info->is_array) {
+        napi_delete_reference(env, info->getter);
+        napi_delete_reference(env, info->setter);
+    }
+
+    napi_delete_reference(env, info->ref);
+    delete info;
+}
+
+int host_object_set(LEPUSContext *ctx, LEPUSValue obj, JSAtom atom,
+                    LEPUSValue value, LEPUSValue receiver, int flags) {
+    napi_env env = (napi_env) napi_context__::GetEnv(LEPUS_GetRuntime(ctx));
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) LEPUS_GetOpaque(obj,
+                                                                   env->ctx->napiHostObjectClassId);
+    if (info != NULL) {
+        auto *target = reinterpret_cast<qjsimpl::Reference *>(info->ref);
+        if (info->is_array) {
+            LEPUSValue atom_val = LEPUS_AtomToValue(ctx, atom);
+
+            auto *setter = reinterpret_cast<qjsimpl::Reference *>(info->setter);
+
+            LEPUSValue argv[4] = {
+                    ToJSValue(target->Get()),
+                    atom_val,
+                    value,
+                    obj
+            };
+
+            LEPUSValue result = LEPUS_Call(ctx, ToJSValue(setter->Get()), LEPUS_UNDEFINED, 4, argv);
+
+            JS_FreeValue_Comp(ctx, atom_val);
+
+            if (LEPUS_IsException(result)) return -1;
+
+            return true;
+        }
+        return LEPUS_SetProperty(ctx, ToJSValue(target->Get()), atom, JS_DupValue_Comp(ctx, value));
+    }
+    return true;
+}
+
+LEPUSValue host_object_get(LEPUSContext *ctx, LEPUSValue obj, JSAtom atom, LEPUSValue receiver) {
+    napi_env env = (napi_env) napi_context__::GetEnv(LEPUS_GetRuntime(ctx));
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) LEPUS_GetOpaque(obj,
+                                                                   env->ctx->napiHostObjectClassId);
+    if (info != NULL) {
+        auto *target = reinterpret_cast<qjsimpl::Reference *>(info->ref);
+        if (info->is_array) {
+            LEPUSValue atom_val = LEPUS_AtomToValue(ctx, atom);
+            auto *getter = reinterpret_cast<qjsimpl::Reference *>(info->getter);
+            LEPUSValue argv[3] = {
+                    ToJSValue(target->Get()),
+                    atom_val,
+                    obj
+            };
+            LEPUSValue value = LEPUS_Call(ctx, ToJSValue(getter->Get()), LEPUS_UNDEFINED, 3, argv);
+            JS_FreeValue_Comp(ctx, atom_val);
+            return value;
+        }
+        return LEPUS_GetProperty(ctx, ToJSValue(target->Get()), atom);
+    }
+    return LEPUS_UNDEFINED;
+}
+
+int host_object_has(LEPUSContext *ctx, LEPUSValue obj, JSAtom atom) {
+    napi_env env = (napi_env) napi_context__::GetEnv(LEPUS_GetRuntime(ctx));
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) LEPUS_GetOpaque(obj,
+                                                                   env->ctx->napiHostObjectClassId);
+    if (info != NULL) {
+        auto *target = reinterpret_cast<qjsimpl::Reference *>(info->ref);
+        return LEPUS_HasProperty(ctx, ToJSValue(target->Get()), atom);
+    }
+    return false;
+}
+
+static int host_object_delete(LEPUSContext *ctx, LEPUSValue obj, JSAtom atom) {
+    napi_env env = (napi_env) napi_context__::GetEnv(LEPUS_GetRuntime(ctx));
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) LEPUS_GetOpaque(obj,
+                                                                   env->ctx->napiHostObjectClassId);
+    if (info != NULL) {
+        auto *target = reinterpret_cast<qjsimpl::Reference *>(info->ref);
+        return LEPUS_DeleteProperty(ctx, ToJSValue(target->Get()), atom, 0);
+    }
+    return true;
+}
+
+LEPUSClassExoticMethods NapiHostObjectExoticMethods = {
+        .get_own_property = nullptr,
+        .get_own_property_names = nullptr,
+        .delete_property = host_object_delete,
+        .define_own_property = nullptr,
+        .has_property = host_object_has,
+        .get_property = host_object_get,
+        .set_property = host_object_set,
+};
+
+napi_status
+napi_create_host_object(napi_env env, napi_value value, napi_finalize finalize, void *data,
+                        bool is_array, napi_value getter, napi_value setter, napi_value *result) {
+    CHECK_ARG(env, result);
+
+   if (env->ctx->napi_host_object_class_init == 0) {
+       LEPUSClassDef NapiHostObjectClassDef = {"NapiHostObject", host_object_finalizer, NULL, NULL,
+                                               &NapiHostObjectExoticMethods};
+       LEPUS_NewClass(env->ctx->rt, env->ctx->napiHostObjectClassId, &NapiHostObjectClassDef);
+       env->ctx->napi_host_object_class_init = 1;
+   }
+
+    napi_value constructor;
+    napi_get_named_property(env, value, "constructor", &constructor);
+
+    napi_value prototype;
+    napi_get_named_property(env, constructor, "prototype", &prototype);
+
+    LEPUSValue jsValue = LEPUS_NewObjectClass(env->ctx->ctx, env->ctx->napiHostObjectClassId);
+    LEPUS_SetPrototype(env->ctx->ctx, jsValue, ToJSValue(prototype));
+
+    NapiHostObjectInfo *info = new NapiHostObjectInfo;
+    info->data = data;
+    if (finalize) {
+        info->finalize_cb = finalize;
+    } else {
+        info->finalize_cb = NULL;
+    }
+    info->is_array = is_array;
+
+    if (is_array) {
+        if (getter) napi_create_reference(env, getter, 1, &info->getter);
+        if (setter) napi_create_reference(env, setter, 1, &info->setter);
+    }
+
+    napi_create_reference(env, value, 1, &info->ref);
+
+    LEPUS_SetOpaque(jsValue, info);
+
+    *result = env->ctx->CreateHandle(jsValue);
+    return napi_ok;
+}
+
+napi_status napi_get_host_object_data(napi_env env, napi_value object, void **data) {
+    CHECK_ARG(env, object);
+    CHECK_ARG(env, data);
+
+    LEPUSValue jsValue = ToJSValue(object);
+
+
+    if (!LEPUS_IsObject(jsValue)) {
+        return napi_set_last_error(env, napi_object_expected);
+    }
+
+    NapiHostObjectInfo *info = (NapiHostObjectInfo *) LEPUS_GetOpaque(jsValue,
+                                                                   env->ctx->napiHostObjectClassId);
+    if (info) {
+        *data = info->data;
+    } else {
+        *data = NULL;
+    }
+
+    return napi_clear_last_error(env);
+}
+
+napi_status napi_is_host_object(napi_env env, napi_value object, bool *result) {
+    CHECK_ARG(env, object);
+
+    LEPUSValue jsValue = ToJSValue(object);
+
+    if (!LEPUS_IsObject(jsValue)) {
+        return napi_set_last_error(env, napi_object_expected);
+    }
+
+    void *data = LEPUS_GetOpaque(jsValue,
+                              env->ctx->napiHostObjectClassId);
+    if (data != NULL) {
+        *result = true;
+    } else {
+        *result = false;
+    }
 
     return napi_clear_last_error(env);
 }
