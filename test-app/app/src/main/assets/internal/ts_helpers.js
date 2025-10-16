@@ -68,7 +68,7 @@
       var child = thiz.__proto__.__child;
       if (!child.__extended) {
         var parent = thiz.__proto__.__parent;
-        child.__extended = parent.extend(child.name, child.prototype, true, error);
+        child.__extended = parent.extend(child.name, child.prototype, true);
         // This will deal with "i instanceof child"
         child[Symbol.hasInstance] = function (instance) {
           return instance instanceof this.__extended;
