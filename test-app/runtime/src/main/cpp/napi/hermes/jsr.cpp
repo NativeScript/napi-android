@@ -13,17 +13,6 @@ JSR::JSR() {
             hermes::vm::RuntimeConfig::Builder().withMicrotaskQueue(true).build();
     threadSafeRuntime = facebook::hermes::makeThreadSafeHermesRuntime(config);
 
-    facebook::jsi::Function abc = facebook::jsi::Function::createFromHostFunction(
-            threadSafeRuntime->getUnsafeRuntime(),
-            facebook::jsi::PropNameID::forAscii(threadSafeRuntime->getUnsafeRuntime(),
-                                                "directFunction"), 0,
-            [](Runtime &rt, const Value &thisVal, const Value *args, size_t count) -> Value {
-                return Value::undefined();
-            });
-
-    threadSafeRuntime->getUnsafeRuntime().global().setProperty(
-            threadSafeRuntime->getUnsafeRuntime(), "directFunction", abc);
-
     rt = (facebook::hermes::HermesRuntime *) &threadSafeRuntime->getUnsafeRuntime();
 }
 
