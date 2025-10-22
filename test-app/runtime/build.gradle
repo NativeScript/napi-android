@@ -31,7 +31,7 @@ if (useCCache) {
     println "Use CCache build triggered."
 }
 
-def defaultNdkVersion = "26.1.10909125"
+def defaultNdkVersion = "27.1.12297006"
 
 def hasNdkVersion = project.hasProperty("ndkVersion")
 if (hasNdkVersion) {
@@ -137,7 +137,6 @@ android {
                     arguments.add("-DSHERMES=1")  
                 } else if (jsEngine == "PRIMJS") {
                     arguments.add("-DPRIMJS=1")
-
                 }else if (jsEngine == "JSC") {
                     arguments.add("-DJSC=1")
                 } else if (jsEngine == "V8") {
@@ -187,7 +186,6 @@ android {
     } else if (jsEngine == "HERMES" || jsEngine == "SHERMES") {
         packagingOptions {
             exclude "**/libjsc.so"
-            exclude "**/libv8.so"
             exclude '**/libc++_shared.so'
             exclude '**/libfbjni.so'
         }
@@ -199,7 +197,6 @@ android {
         }
     } else if (jsEngine == "QUICKJS" || jsEngine == "PRIMJS") {
         packagingOptions {
-            exclude "**/libv8.so"
             exclude "**/libhermes.so"
             exclude "**/libjsc.so"
             exclude "**/libjsi.so"

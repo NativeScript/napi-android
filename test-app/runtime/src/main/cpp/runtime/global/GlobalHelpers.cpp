@@ -169,7 +169,7 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
 #endif
 
 //#ifdef __JSC__
-        regex frameRegex(R"((.*):(\d+):(\d+))");
+        regex frameRegex(R"((file:.*):(\d+):(\d+))");
 //#else
 //        regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
 //#endif

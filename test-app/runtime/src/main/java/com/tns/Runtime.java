@@ -94,7 +94,7 @@ public class Runtime {
         com.tns.Runtime runtime = com.tns.Runtime.getCurrentRuntime();
         if (runtime != null) {
             String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for " + methodName + "\n";
-            runtime.passExceptionToJS(ex, false , false);
+            runtime.passExceptionToJS(ex, false , true);
         }
     }
 
@@ -1352,13 +1352,13 @@ public class Runtime {
             try {
                 ret = callJSMethodNative(getRuntimeId(), javaObjectID, claz, methodName, returnType, isConstructor, packagedArgs);
             } catch (NativeScriptException e) {
-//                if (discardUncaughtJsExceptions) {
+                if (discardUncaughtJsExceptions) {
                     String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";
-//                    android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
-                    passExceptionToJS(e, true, true);
-//                } else {
-//                    throw e;
-//                }
+                    android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
+                    passExceptionToJS(e, false, true);
+                } else {
+                    throw e;
+                }
             }
         } else {
             final Object[] arr = new Object[2];
@@ -1373,13 +1373,13 @@ public class Runtime {
                             final Object[] packagedArgs = packageArgs(tmpArgs);
                             arr[0] = callJSMethodNative(getRuntimeId(), javaObjectID, claz, methodName, returnType, isCtor, packagedArgs);
                         } catch (NativeScriptException e) {
-//                            if (discardUncaughtJsExceptions) {
+                            if (discardUncaughtJsExceptions) {
                                 String errorMessage = "Error on \"" + Thread.currentThread().getName() + "\" thread for callJSMethodNative\n";
-                                passExceptionToJS(e, true, false);
-//                                android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
-//                            } else {
-//                                throw e;
-//                            }
+                                passExceptionToJS(e, false, true);
+                                android.util.Log.w("Warning", "NativeScript discarding uncaught JS exception!");
+                            } else {
+                                throw e;
+                            }
                         } finally {
                             this.notify();
                             arr[1] = Boolean.TRUE;

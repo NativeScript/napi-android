@@ -1271,12 +1271,17 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
             throw NativeScriptException("Worker should be called as a constructor!");
         }
 
+        if (argc != 1) {
+            throw NativeScriptException(
+                    "Worker should be called with one parameter (name of file to run) or a URL/URL OBJECT to the file");
+        }
+
         napi_valuetype value_type;
         napi_typeof(env, argv[0], &value_type);
 
-        if (argc != 1 || (value_type != napi_string && value_type != napi_object) ) {
+        if (value_type != napi_string && value_type != napi_object) {
             throw NativeScriptException(
-                    "Worker should be called with one parameter (name of file to run) or a URL to the file");
+                    "Worker should be called with one parameter (name of file to run) or a URL/URL OBJECT to the file");
         }
 
         napi_value workerFilePath;

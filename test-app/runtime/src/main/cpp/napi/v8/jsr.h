@@ -11,6 +11,7 @@
 #include "SimpleAllocator.h"
 #include "JEnv.h"
 
+
 typedef struct napi_runtime__ *napi_runtime;
 
 class JSR {

@@ -3,4 +3,13 @@
   <component name="CompilerConfiguration">
     <bytecodeTargetLevel target="17" />
   </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="test-app.android-metadata-generator.main" options="-Xlint:all -Xlint:-options -Werror" />
+      <module name="test-app.dts-generator" options="-Xlint:all -Werror" />
+      <module name="test-app.dts-generator.main" options="-Xlint:all -Werror" />
+      <module name="test-app.dts-generator.test" options="-Xlint:all -Werror" />
+      <module name="test-app.static-binding-generator.main" options="-Xlint:all -Xlint:-options -Werror" />
+    </option>
+  </component>
 </project>

@@ -186,12 +186,15 @@ if (V8)
             src/main/cpp/napi/v8/SimpleAllocator.cpp
     )
 
-    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_31BIT_SMIS_ON_64BIT_ARCH -DV8_31BIT_SMIS_ON_64BIT_ARCH -DV8_ENABLE_REGEXP_INTERPRETER_THREADED_DISPATCH -DV8_EMBEDDED_BUILTINS")
-
-    if("${ANDROID_ABI}" MATCHES "arm64-v8a$" OR "${ANDROID_ABI}" MATCHES "x86_64$")
-        # Enable pointer compression on 64 bit platforms
-        set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_COMPRESS_POINTERS")
-    endif()
+    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_ENABLE_REGEXP_INTERPRETER_THREADED_DISPATCH -DV8_EMBEDDED_BUILTINS")
+#    -DV8_31BIT_SMIS_ON_64BIT_ARCH
+#    if("${ANDROID_ABI}" MATCHES "arm64-v8a$" OR "${ANDROID_ABI}" MATCHES "x86_64$")
+#        # Enable pointer compression on 64 bit platforms
+#        set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_COMPRESS_POINTERS -DV8_ENABLE_SANDBOX")
+#        message(STATUS "V8 pointer compression enabled for ${ANDROID_ABI}")
+#    else()
+#        message(STATUS "V8 pointer compression not enabled for ${ANDROID_ABI}")
+#    endif()
 endif ()
 
 

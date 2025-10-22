@@ -8,42 +8,42 @@ describe("Tests exception handling ", function () {
 		jasmine.addCustomEqualityTester(myCustomEquality);
 	});
 
-//	it("TestThrowJSExceptionThroughJavaAndCatchInJS", function () {
-//
-//		__log("TEST: TestThrowJSExceptionThroughJavaAndCatchInJS");
-//
-//		var exceptionThrown = false;
-//		var exceptionCaught = false;
-//		var sameExObject = false;
-//
-//		var ex = { myProp: "SomeValue" };
-//
-//		var EH = com.tns.tests.ExceptionHandlingTest.extend("ExceptionHandlingTest", {
-//			onEvent1: function(s, n) {
-//				if (n === 0) {
-//					exceptionThrown = true;
-//					throw ex;
-//				} else {
-//					this.triggerEvent1(s, n-1);
-//				}
-//			}
-//		});
-//
-//		var eh = new EH();
-//
-//		try {
-//			eh.triggerEvent1("test", 5);
-//		}
-//		catch (e) {
-//			exceptionCaught = true;
-//			sameExObject = e === ex;
-//			__log("e=" + e);
-//		}
-//
-//		expect(exceptionThrown).toBe(true);
-//		expect(exceptionCaught).toBe(true);
-//		expect(sameExObject).toBe(true);
-//	});
+	it("TestThrowJSExceptionThroughJavaAndCatchInJS", function () {
+
+		__log("TEST: TestThrowJSExceptionThroughJavaAndCatchInJS");
+
+		var exceptionThrown = false;
+		var exceptionCaught = false;
+		var sameExObject = false;
+
+		var ex = { myProp: "SomeValue" };
+
+		var EH = com.tns.tests.ExceptionHandlingTest.extend("ExceptionHandlingTest", {
+			onEvent1: function(s, n) {
+				if (n === 0) {
+					exceptionThrown = true;
+					throw ex;
+				} else {
+					this.triggerEvent1(s, n-1);
+				}
+			}
+		});
+
+		var eh = new EH();
+
+		try {
+			eh.triggerEvent1("test", 5);
+		}
+		catch (e) {
+			exceptionCaught = true;
+			sameExObject = e === ex;
+			__log("e=" + e);
+		}
+
+		expect(exceptionThrown).toBe(true);
+		expect(exceptionCaught).toBe(true);
+		expect(sameExObject).toBe(true);
+	});
 
 	xit("TestThrowJavaExceptionFromJsThroughJavaAndCatchInJS", function () {
 
@@ -114,6 +114,7 @@ describe("Tests exception handling ", function () {
 			exceptionCaught = false;
 		}
 		catch (e) {
+		console.log(e);
 			exceptionCaught = true;
 		}
 

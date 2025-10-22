@@ -123,22 +123,22 @@ namespace tns {
 
         bool is_destroying = false;
 
-        napi_value getPendingError() {
-            if (!pendingError) return nullptr;
-            napi_value error = napi_util::get_ref_value(env, pendingError);
-            napi_delete_reference(env, pendingError);
-            pendingError = nullptr;
-            return error;
-        }
-
-        void clearPendingError() {
-            if (!pendingError) return;
-            napi_delete_reference(env, pendingError);
-            pendingError = nullptr;
-        }
+//        napi_value getPendingError() {
+//            if (!pendingError) return nullptr;
+//            napi_value error = napi_util::get_ref_value(env, pendingError);
+//            napi_delete_reference(env, pendingError);
+//            pendingError = nullptr;
+//            return error;
+//        }
+//
+//        void clearPendingError() {
+//            if (!pendingError) return;
+//            napi_delete_reference(env, pendingError);
+//            pendingError = nullptr;
+//        }
 
     private:
-        napi_ref pendingError;
+//        napi_ref pendingError;
 
 
         Runtime(JNIEnv *env, jobject runtime, int id);

@@ -85,7 +85,7 @@ Runtime::Runtime(JNIEnv *jEnv, jobject runtime, int id)
     m_objectManager = new ObjectManager(m_runtime);
     m_loopTimer = new MessageLoopTimer();
     id_to_runtime_cache.Insert(id, this);
-    pendingError = nullptr;
+//    pendingError = nullptr;
 
     js_method_cache = new JSMethodCache(this);
 
@@ -643,9 +643,9 @@ Runtime::PassExceptionToJsNative(JNIEnv *jEnv, jobject obj, jthrowable exception
 
     // Pass err to JS
     NativeScriptException::CallJsFuncWithErr(env, errObj, isDiscarded);
-    if (isPendingError) {
-        pendingError = napi_util::make_ref(env, errObj);
-    }
+//    if (isPendingError) {
+//        pendingError = napi_util::make_ref(env, errObj);
+//    }
 }
 
 void
