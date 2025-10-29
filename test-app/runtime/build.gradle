@@ -1,13 +1,15 @@
 apply plugin: 'com.android.library'
 
 // can be: "V8", "JSC", "HERMES", "QUICKJS", "SHERMES", "PRIMJS"
-def jsEngine = "V8"
+
+def jsEngine = "SHERMES"
 def hasEngine = project.hasProperty("engine")
 if (hasEngine) {
     jsEngine = engine
 }
 
 def hasHostObjects = project.hasProperty("useHostObjects")
+def isNapiModule = true;//project.hasProperty("asNapiModule");
 
 printf("Compiling NativeScript with %s.\n", jsEngine)
 
@@ -37,7 +39,6 @@ def hasNdkVersion = project.hasProperty("ndkVersion")
 if (hasNdkVersion) {
     println "Runtime using NDK version " + ndkVersion
 }
-
 
 def NDK_PATH = ""
 def hasNdkDirectory = project.hasProperty("ndkDirectory")
@@ -128,6 +129,10 @@ android {
                    arguments.add("-DUSE_HOST_OBJECTS=true")
                }
 
+                if (isNapiModule) {
+                    arguments.add("-DIS_NAPI_MODULE=true")
+                }
+
                if (jsEngine == "QUICKJS") {
                     arguments.add("-DQUICKJS=1")
                     arguments.add("-DUSE_MIMALLOC=1")
@@ -145,7 +150,11 @@ android {
 
 //              arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DANDROID_NDK_ROOT=${NDK_PATH}"
                 cppFlags "-std=c++17"
-                arguments "-DANDROID_STL=c++_shared", "-DANDROID_NDK_ROOT=${NDK_PATH}", "-DCMAKE_ANDROID_NDK=${NDK_PATH}", "-DCMAKE_TOOLCHAIN_FILE=${NDK_PATH}/build/cmake/android.toolchain.cmake"
+                arguments "-DANDROID_STL=c++_shared",
+                        "-DANDROID_NDK_ROOT=${NDK_PATH}",
+                        "-DCMAKE_ANDROID_NDK=${NDK_PATH}",
+                        "-DCMAKE_TOOLCHAIN_FILE=${NDK_PATH}/build/cmake/android.toolchain.cmake",
+                        "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
             }
         }
 
@@ -186,8 +195,8 @@ android {
     } else if (jsEngine == "HERMES" || jsEngine == "SHERMES") {
         packagingOptions {
             exclude "**/libjsc.so"
-            exclude '**/libc++_shared.so'
             exclude '**/libfbjni.so'
+            exclude "**/libc++_shared.so"
         }
     } else if (jsEngine == "JSC") {
         packagingOptions {
@@ -220,7 +229,7 @@ dependencies {
     testImplementation "junit:junit:${ns_default_junit_version}"
     testImplementation "org.mockito:mockito-core:${ns_default_mockito_core_version}"
     if (jsEngine == "HERMES" || jsEngine == "SHERMES") {
-        implementation 'com.facebook.fbjni:fbjni:0.3.0'
+        implementation 'com.facebook.fbjni:fbjni:0.7.0'
     }
 }
 

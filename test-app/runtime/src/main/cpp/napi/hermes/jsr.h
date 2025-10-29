@@ -6,7 +6,12 @@
 #define TEST_APP_JSR_H
 
 #include "hermes/hermes.h"
+#ifdef __SHERMES__
+#include "hermes/hermes_node_api.h"
+#else
 #include "hermes/hermes_api.h"
+#endif
+
 #include "jsi/threadsafe.h"
 #include "jsr_common.h"
 

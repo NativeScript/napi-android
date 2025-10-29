@@ -489,6 +489,8 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
         }
     }
 
+
+
     return nullptr;
 }
 
@@ -544,6 +546,7 @@ Runtime::CallJSMethodNative(JNIEnv *_jEnv, jobject obj, jint javaObjectID, jclas
 
     int classReturnType = retType;
     jobject javaObject = ConvertJsValueToJavaObject(jEnv, jsResult, classReturnType);
+
 
     return javaObject;
 }

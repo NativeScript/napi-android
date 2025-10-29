@@ -1,6 +1,6 @@
 {
-    "kotlinUsage": {
-        "hasUseKotlinPropertyInApp": true,
-        "hasKotlinRuntimeClasses": false
-    }
+  "kotlinUsage": {
+    "hasUseKotlinPropertyInApp": true,
+    "hasKotlinRuntimeClasses": true
+  }
 }

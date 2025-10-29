@@ -80,7 +80,8 @@
         "stdlib.h": "c",
         "assert.h": "c",
         "js_native_api.h": "c",
-        "javascriptcore.h": "c"
+        "javascriptcore.h": "c",
+        "codecvt": "cpp"
     },
     "cmake.sourceDirectory": "/Volumes/DataDrive/Android/android-runtime/test-app/runtime"
 }

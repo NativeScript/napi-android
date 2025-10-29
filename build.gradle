@@ -20,6 +20,8 @@ def hasNdkVersion = project.hasProperty("ndkVersion")
 
 def hasHostObjects = project.hasProperty("useHostObjects")
 
+def asNapiModule = project.hasProperty("asNapiModule")
+
 if (hasNdkVersion) {
     println "Using NDK version " + ndkVersion
 }
@@ -211,6 +213,10 @@ def getAssembleReleaseBuildArguments = { ->
 
     if (hasHostObjects) {
          arguments.add("-PuseHostObjects")
+    }
+
+    if (asNapiModule) {
+         arguments.add("-PasNapiModule")
     }
 
     arguments += ["--warning-mode", "all"]

@@ -32,9 +32,16 @@ namespace cdp {
 
 /// Base class for data to be stored in DomainState.
 struct StateValue {
- public:
   virtual ~StateValue() = default;
   virtual std::unique_ptr<StateValue> copy() const = 0;
+};
+
+/// StateValue that can be used as a boolean flag.
+struct BooleanStateValue : public StateValue {
+  ~BooleanStateValue() override = default;
+  std::unique_ptr<StateValue> copy() const override;
+
+  bool value{false};
 };
 
 /// StateValue that can be used as a dictionary. Used as the main storage value

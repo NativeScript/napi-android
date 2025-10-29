@@ -18,7 +18,8 @@ describe("Runtime exposes", function () {
         var timeEnd = __time();
         var dateDelta = dateTimeEnd - dateTimeStart;
         var timeDelta = timeEnd - timeStart;
-        expect(Math.abs(dateDelta - timeDelta) < dateDelta * 0.25).toBe(true);
+
+        expect(Math.abs(dateDelta - timeDelta) <= dateDelta * 0.25).toBe(true);
         break;
       } catch(e) {
         if (i == 9) {

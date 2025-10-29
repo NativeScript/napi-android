@@ -204,7 +204,7 @@
   }
 
   global.setNativeArrayProp = (target, prop, value, receiver) => {
-    if (!isNaN(prop)) {
+     if (typeof prop !== "symbol" && !isNaN(prop)) {
       receiver.setValueAtIndex(parseInt(prop), value);
       return true;
     }
@@ -213,7 +213,7 @@
   };
 
   global.getNativeArrayProp = (target, prop, receiver) => {
-    if (!isNaN(prop)) {
+    if (typeof prop !== "symbol" && !isNaN(prop)) {
       return receiver.getValueAtIndex(parseInt(prop));
     }
 

@@ -1,7 +1,7 @@
 # documentation: https://d.android.com/studio/projects/add-native-code.html
 
 # Command info: https://cmake.org/cmake/help/v3.4/command/cmake_minimum_required.html
-cmake_minimum_required(VERSION 3.4.1)
+cmake_minimum_required(VERSION 3.22.1)
 
 project(NativeScriptAndroidRuntime)
 
@@ -18,7 +18,7 @@ if (CCACHE_FOUND AND (USE_CCACHE))
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
 endif (CCACHE_FOUND AND (USE_CCACHE))
 
-set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy -fno-rtti")
+set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy -frtti")
 set(MI_OVERRIDE OFF)
 # AOSP has switched to using LLD by default and the NDK will use it by default in the next release.
 # BFD and Gold will be removed once LLD has been through a release cycle with no major unresolved issues (estimated r21)
@@ -283,6 +283,10 @@ endif ()
 
 if (USE_HOST_OBJECTS)
     add_compile_definitions(NativeScript, PRIVATE USE_HOST_OBJECT)
+endif()
+
+if (IS_NAPI_MODULE)
+    add_compile_definitions(NativeScript, PRIVATE IS_NAPI_MODULE)
 endif()
 
 # if("${ANDROID_ABI}" MATCHES "armeabi-v7a$" OR "${ANDROID_ABI}" MATCHES "x86$")

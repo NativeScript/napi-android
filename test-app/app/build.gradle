@@ -214,6 +214,7 @@ def computeNamespace = { ->
 }
 
 android {
+
     namespace computeNamespace()
 
     applyBeforePluginGradleConfiguration()
@@ -350,7 +351,7 @@ dependencies {
     }
 
     if (ns_engine == "HERMES") {
-        implementation 'com.facebook.fbjni:fbjni:0.3.0'
+        implementation 'com.facebook.fbjni:fbjni:0.7.0'
     }
 
     def androidXMaterialVersion = "${ns_default_androidx_material_version}"
