@@ -2,7 +2,7 @@ apply plugin: 'com.android.library'
 
 // can be: "V8-11", "V8-10","V8-13", "JSC", "HERMES", "QUICKJS", "SHERMES", "PRIMJS"
 
-def jsEngine = "V8-13"
+def jsEngine = "V8-10"
 def hasEngine = project.hasProperty("engine")
 if (hasEngine) {
     jsEngine = engine
