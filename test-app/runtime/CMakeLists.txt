@@ -16,10 +16,23 @@ if (CCACHE_FOUND AND (USE_CCACHE))
     MESSAGE(STATUS "## Using CCache when building!")
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
-endif (CCACHE_FOUND AND (USE_CCACHE))
+endif ()
 
-set(COMMON_CMAKE_ARGUMENTS "-std=c++20 -Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy -frtti")
+set(COMMON_CMAKE_ARGUMENTS "-Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy")
 set(MI_OVERRIDE OFF)
+
+if (V8_13)
+    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++20")
+elseif ()
+    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++17")
+endif ()
+
+if (SHERMES)
+    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -frtti")
+else ()
+    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -fno-rtti")
+endif ()
+
 # AOSP has switched to using LLD by default and the NDK will use it by default in the next release.
 # BFD and Gold will be removed once LLD has been through a release cycle with no major unresolved issues (estimated r21)
 # Note: lld does not currently work on Windows: https://github.com/android-ndk/ndk/issues/888
@@ -78,7 +91,7 @@ file(GLOB_RECURSE RUNTIME_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/**/*.cpp"
 )
 
-file (GLOB_RECURSE MODULE_FILES
+file(GLOB_RECURSE MODULE_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/*.cpp"
         "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/**/*.cpp"
 )
@@ -129,24 +142,24 @@ endif ()
 
 if (HERMES)
     include_directories(
-         src/main/cpp/napi/hermes
-         src/main/cpp/napi/hermes/include
-         src/main/cpp/napi/common
+            src/main/cpp/napi/hermes
+            src/main/cpp/napi/hermes/include
+            src/main/cpp/napi/common
     )
     set(SOURCES ${SOURCES}
-        src/main/cpp/napi/hermes/jsr.cpp
-      )
+            src/main/cpp/napi/hermes/jsr.cpp
+    )
 endif ()
 
 if (SHERMES)
     include_directories(
-         src/main/cpp/napi/hermes
-         src/main/cpp/napi/hermes/include_shermes
-         src/main/cpp/napi/common
+            src/main/cpp/napi/hermes
+            src/main/cpp/napi/hermes/include_shermes
+            src/main/cpp/napi/common
     )
     set(SOURCES ${SOURCES}
-        src/main/cpp/napi/hermes/jsr.cpp
-      )
+            src/main/cpp/napi/hermes/jsr.cpp
+    )
 endif ()
 
 if (JSC)
@@ -162,16 +175,37 @@ if (JSC)
 endif ()
 
 if (V8)
-    include_directories(
-            src/main/cpp/napi/v8
-            src/main/cpp/napi/v8/include
-            src/main/cpp/napi/common
-            src/main/cpp/napi/v8/v8_inspector
-    )
+    if (V8_10)
+        include_directories(
+                src/main/cpp/napi/v8
+                src/main/cpp/napi/v8-10
+                src/main/cpp/napi/v8-10/include
+                src/main/cpp/napi/common
+                src/main/cpp/napi/v8/v8_inspector
+                src/main/cpp/napi/v8-10/v8_inspector
+        )
+    elseif (V8_11)
+        include_directories(
+                src/main/cpp/napi/v8
+                src/main/cpp/napi/v8-11
+                src/main/cpp/napi/v8-11/include
+                src/main/cpp/napi/common
+                src/main/cpp/napi/v8/v8_inspector
+                src/main/cpp/napi/v8-11/v8_inspector
+        )
+    else ()
+        include_directories(
+                src/main/cpp/napi/v8
+                src/main/cpp/napi/v8-13
+                src/main/cpp/napi/v8-13/include
+                src/main/cpp/napi/common
+                src/main/cpp/napi/v8/v8_inspector
+                src/main/cpp/napi/v8-13/v8_inspector
+        )
+    endif ()
 
     if (NOT OPTIMIZED_BUILD OR OPTIMIZED_WITH_INSPECTOR_BUILD)
         add_definitions(-DAPPLICATION_IN_DEBUG)
-        # Debug builds will include the V8 inspector sources
         set(
                 SOURCES
                 ${SOURCES}
@@ -186,15 +220,18 @@ if (V8)
             src/main/cpp/napi/v8/SimpleAllocator.cpp
     )
 
-    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_ENABLE_REGEXP_INTERPRETER_THREADED_DISPATCH -DV8_EMBEDDED_BUILTINS")
-#    -DV8_31BIT_SMIS_ON_64BIT_ARCH
-#    if("${ANDROID_ABI}" MATCHES "arm64-v8a$" OR "${ANDROID_ABI}" MATCHES "x86_64$")
-#        # Enable pointer compression on 64 bit platforms
-#        set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_COMPRESS_POINTERS -DV8_ENABLE_SANDBOX")
-#        message(STATUS "V8 pointer compression enabled for ${ANDROID_ABI}")
-#    else()
-#        message(STATUS "V8 pointer compression not enabled for ${ANDROID_ABI}")
-#    endif()
+
+    if (V8_10)
+        set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_31BIT_SMIS_ON_64BIT_ARCH -DV8_31BIT_SMIS_ON_64BIT_ARCH -DV8_ENABLE_REGEXP_INTERPRETER_THREADED_DISPATCH -DV8_EMBEDDED_BUILTINS")
+        # Enable pointer compression on 64 bit platforms
+        if ("${ANDROID_ABI}" MATCHES "arm64-v8a$" OR "${ANDROID_ABI}" MATCHES "x86_64$")
+            set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_COMPRESS_POINTERS")
+        endif ()
+    else ()
+        set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -DV8_ENABLE_REGEXP_INTERPRETER_THREADED_DISPATCH -DV8_EMBEDDED_BUILTINS")
+    endif ()
+
+
 endif ()
 
 
@@ -228,8 +265,8 @@ else ()
             NativeScript
             PROPERTIES LINK_FLAGS -Wl,--allow-multiple-definition
     )
-#    target_compile_options(NativeScript PUBLIC -fsanitize=hwaddress -fno-omit-frame-pointer)
-#    target_link_options(NativeScript PUBLIC -fsanitize=hwaddress)
+    #    target_compile_options(NativeScript PUBLIC -fsanitize=hwaddress -fno-omit-frame-pointer)
+    #    target_link_options(NativeScript PUBLIC -fsanitize=hwaddress)
 endif ()
 
 MESSAGE(STATUS "# General cmake Info")
@@ -264,8 +301,22 @@ if (JSC)
 endif ()
 
 if (V8)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/v8/${ANDROID_ABI}/libv8_monolith.a)
     add_compile_definitions(NativeScript, PRIVATE __V8__)
+endif ()
+
+if (V8_10)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/v8-10/${ANDROID_ABI}/libv8_monolith.a)
+    add_compile_definitions(NativeScript, PRIVATE __V8_10__)
+endif ()
+
+if (V8_11)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/v8-11/${ANDROID_ABI}/libv8_monolith.a)
+    add_compile_definitions(NativeScript, PRIVATE __V8_11__)
+endif ()
+
+if (V8_13)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/v8-13/${ANDROID_ABI}/libv8_monolith.a)
+    add_compile_definitions(NativeScript, PRIVATE __V8_13__)
 endif ()
 
 if (PRIMJS)
@@ -283,11 +334,11 @@ endif ()
 
 if (USE_HOST_OBJECTS)
     add_compile_definitions(NativeScript, PRIVATE USE_HOST_OBJECT)
-endif()
+endif ()
 
 if (IS_NAPI_MODULE)
     add_compile_definitions(NativeScript, PRIVATE IS_NAPI_MODULE)
-endif()
+endif ()
 
 # if("${ANDROID_ABI}" MATCHES "armeabi-v7a$" OR "${ANDROID_ABI}" MATCHES "x86$")
 #     # On API Level 19 and lower we need to link with android_support

@@ -7,8 +7,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 const readline = require('readline');
 
-const VALID_ENGINES = ['V8', 'QUICKJS', 'HERMES', 'JSC', 'SHERMES', 'PRIMJS'];
-const HOST_OBJECTS_SUPPORTED = new Set(['V8', 'QUICKJS', 'PRIMJS']);
+const VALID_ENGINES = ['V8-10',"V8-11","V8-13", 'QUICKJS', 'HERMES', 'JSC', 'SHERMES', 'PRIMJS'];
+const HOST_OBJECTS_SUPPORTED = new Set(['V8-10','V8-11',"V8-13", 'QUICKJS', 'PRIMJS']);
 
 function parseArgs(argv) {
   const opts = {};
@@ -46,9 +46,9 @@ async function interactiveFill(opts) {
       if (!opts.engine) {
         console.log('Select JS engine:');
         VALID_ENGINES.forEach((e, i) => console.log(`  ${i + 1}) ${e}`));
-        const ans = await prompt('Choose number or name', rl, 'V8');
+        const ans = await prompt('Choose number or name', rl, 'V8-10');
         const pick = /^\d+$/.test(ans) ? VALID_ENGINES[Number(ans) - 1] : ans;
-        opts.engine = VALID_ENGINES.includes(pick) ? pick : 'V8';
+        opts.engine = VALID_ENGINES.includes(pick) ? pick : 'V8-10';
       }
 
       // Only prompt for host objects if the chosen engine supports it
