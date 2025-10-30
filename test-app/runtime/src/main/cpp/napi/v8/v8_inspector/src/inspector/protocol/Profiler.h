@@ -37,20 +37,40 @@ public:
     protocol::Runtime::CallFrame* getCallFrame() { return m_callFrame.get(); }
     void setCallFrame(std::unique_ptr<protocol::Runtime::CallFrame> value) { m_callFrame = std::move(value); }
 
-    bool hasHitCount() { return m_hitCount.isJust(); }
-    int getHitCount(int defaultValue) { return m_hitCount.isJust() ? m_hitCount.fromJust() : defaultValue; }
+    bool hasHitCount() { return !!m_hitCount; }
+    int getHitCount(int defaultValue) const {
+       return m_hitCount.value_or(defaultValue);
+    }
+    const std::optional<int>& getHitCount() const {
+       return m_hitCount;
+    }
     void setHitCount(int value) { m_hitCount = value; }
 
-    bool hasChildren() { return m_children.isJust(); }
-    protocol::Array<int>* getChildren(protocol::Array<int>* defaultValue) { return m_children.isJust() ? m_children.fromJust() : defaultValue; }
+    bool hasChildren() { return !!m_children; }
+    protocol::Array<int>* getChildren(protocol::Array<int>* defaultValue) {
+       return m_children ? m_children.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Array<int>>& getChildren() const {
+       return m_children;
+    }
     void setChildren(std::unique_ptr<protocol::Array<int>> value) { m_children = std::move(value); }
 
-    bool hasDeoptReason() { return m_deoptReason.isJust(); }
-    String getDeoptReason(const String& defaultValue) { return m_deoptReason.isJust() ? m_deoptReason.fromJust() : defaultValue; }
+    bool hasDeoptReason() { return !!m_deoptReason; }
+    String getDeoptReason(const String& defaultValue) const {
+       return m_deoptReason.value_or(defaultValue);
+    }
+    const std::optional<String>& getDeoptReason() const {
+       return m_deoptReason;
+    }
     void setDeoptReason(const String& value) { m_deoptReason = value; }
 
-    bool hasPositionTicks() { return m_positionTicks.isJust(); }
-    protocol::Array<protocol::Profiler::PositionTickInfo>* getPositionTicks(protocol::Array<protocol::Profiler::PositionTickInfo>* defaultValue) { return m_positionTicks.isJust() ? m_positionTicks.fromJust() : defaultValue; }
+    bool hasPositionTicks() { return !!m_positionTicks; }
+    protocol::Array<protocol::Profiler::PositionTickInfo>* getPositionTicks(protocol::Array<protocol::Profiler::PositionTickInfo>* defaultValue) {
+       return m_positionTicks ? m_positionTicks.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Array<protocol::Profiler::PositionTickInfo>>& getPositionTicks() const {
+       return m_positionTicks;
+    }
     void setPositionTicks(std::unique_ptr<protocol::Array<protocol::Profiler::PositionTickInfo>> value) { m_positionTicks = std::move(value); }
 
     template<int STATE>
@@ -134,10 +154,10 @@ private:
 
     int m_id;
     std::unique_ptr<protocol::Runtime::CallFrame> m_callFrame;
-    Maybe<int> m_hitCount;
-    Maybe<protocol::Array<int>> m_children;
-    Maybe<String> m_deoptReason;
-    Maybe<protocol::Array<protocol::Profiler::PositionTickInfo>> m_positionTicks;
+    std::optional<int> m_hitCount;
+    std::unique_ptr<protocol::Array<int>> m_children;
+    std::optional<String> m_deoptReason;
+    std::unique_ptr<protocol::Array<protocol::Profiler::PositionTickInfo>> m_positionTicks;
 };
 
 
@@ -154,12 +174,22 @@ public:
     double getEndTime() { return m_endTime; }
     void setEndTime(double value) { m_endTime = value; }
 
-    bool hasSamples() { return m_samples.isJust(); }
-    protocol::Array<int>* getSamples(protocol::Array<int>* defaultValue) { return m_samples.isJust() ? m_samples.fromJust() : defaultValue; }
+    bool hasSamples() { return !!m_samples; }
+    protocol::Array<int>* getSamples(protocol::Array<int>* defaultValue) {
+       return m_samples ? m_samples.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Array<int>>& getSamples() const {
+       return m_samples;
+    }
     void setSamples(std::unique_ptr<protocol::Array<int>> value) { m_samples = std::move(value); }
 
-    bool hasTimeDeltas() { return m_timeDeltas.isJust(); }
-    protocol::Array<int>* getTimeDeltas(protocol::Array<int>* defaultValue) { return m_timeDeltas.isJust() ? m_timeDeltas.fromJust() : defaultValue; }
+    bool hasTimeDeltas() { return !!m_timeDeltas; }
+    protocol::Array<int>* getTimeDeltas(protocol::Array<int>* defaultValue) {
+       return m_timeDeltas ? m_timeDeltas.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Array<int>>& getTimeDeltas() const {
+       return m_timeDeltas;
+    }
     void setTimeDeltas(std::unique_ptr<protocol::Array<int>> value) { m_timeDeltas = std::move(value); }
 
     template<int STATE>
@@ -241,8 +271,8 @@ private:
     std::unique_ptr<protocol::Array<protocol::Profiler::ProfileNode>> m_nodes;
     double m_startTime;
     double m_endTime;
-    Maybe<protocol::Array<int>> m_samples;
-    Maybe<protocol::Array<int>> m_timeDeltas;
+    std::unique_ptr<protocol::Array<int>> m_samples;
+    std::unique_ptr<protocol::Array<int>> m_timeDeltas;
 };
 
 
@@ -575,7 +605,7 @@ public:
     virtual DispatchResponse getBestEffortCoverage(std::unique_ptr<protocol::Array<protocol::Profiler::ScriptCoverage>>* out_result) = 0;
     virtual DispatchResponse setSamplingInterval(int in_interval) = 0;
     virtual DispatchResponse start() = 0;
-    virtual DispatchResponse startPreciseCoverage(Maybe<bool> in_callCount, Maybe<bool> in_detailed, Maybe<bool> in_allowTriggeredUpdates, double* out_timestamp) = 0;
+    virtual DispatchResponse startPreciseCoverage(std::optional<bool> in_callCount, std::optional<bool> in_detailed, std::optional<bool> in_allowTriggeredUpdates, double* out_timestamp) = 0;
     virtual DispatchResponse stop(std::unique_ptr<protocol::Profiler::Profile>* out_profile) = 0;
     virtual DispatchResponse stopPreciseCoverage() = 0;
     virtual DispatchResponse takePreciseCoverage(std::unique_ptr<protocol::Array<protocol::Profiler::ScriptCoverage>>* out_result, double* out_timestamp) = 0;
@@ -587,8 +617,8 @@ public:
 class  Frontend {
 public:
   explicit Frontend(FrontendChannel* frontend_channel) : frontend_channel_(frontend_channel) {}
-    void consoleProfileFinished(const String& id, std::unique_ptr<protocol::Debugger::Location> location, std::unique_ptr<protocol::Profiler::Profile> profile, Maybe<String> title = Maybe<String>());
-    void consoleProfileStarted(const String& id, std::unique_ptr<protocol::Debugger::Location> location, Maybe<String> title = Maybe<String>());
+    void consoleProfileFinished(const String& id, std::unique_ptr<protocol::Debugger::Location> location, std::unique_ptr<protocol::Profiler::Profile> profile, std::optional<String> title = {});
+    void consoleProfileStarted(const String& id, std::unique_ptr<protocol::Debugger::Location> location, std::optional<String> title = {});
     void preciseCoverageDeltaUpdate(double timestamp, const String& occasion, std::unique_ptr<protocol::Array<protocol::Profiler::ScriptCoverage>> result);
 
   void flush();

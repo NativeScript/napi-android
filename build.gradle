@@ -409,6 +409,7 @@ task createNpmPackage(type: Exec) {
 generateSbgJar.dependsOn(generateDtsgJar)
 generateSbgJar.dependsOn(jsParserNPMInstall)
 generateMdgJar.dependsOn(generateSbgJar)
+buildJsParser.dependsOn(jsParserNPMInstall)
 createDistDir.dependsOn(generateMdgJar)
 
 getPackageVersion.dependsOn(createDistDir)

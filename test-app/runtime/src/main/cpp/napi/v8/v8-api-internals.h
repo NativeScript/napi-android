@@ -48,19 +48,45 @@ inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
   OneByteString((isolate), (string), sizeof(string) - 1)
 
 namespace v8impl {
-
+// https://github.com/nodejs/node/blob/66f19ddd18d0f18a079aaa1141d5c987bcceff8e/src/js_native_api_v8_internals.h#L34
 template <typename T>
-using Persistent = v8::Persistent<T>;
-
+using Persistent = v8::Global<T>;
+// https://github.com/nodejs/node/blob/66f19ddd18d0f18a079aaa1141d5c987bcceff8e/src/util.h#L788
 class PersistentToLocal {
-public:
-    template <class TypeName>
-    static inline v8::Local<TypeName> Strong(
-        const Persistent<TypeName>& persistent) {
-        return *reinterpret_cast<v8::Local<TypeName>*>(
-            const_cast<Persistent<TypeName>*>(&persistent));
-    }
-};
+    public:
+        // If persistent.IsWeak() == false, then do not call persistent.Reset()
+        // while the returned Local<T> is still in scope, it will destroy the
+        // reference to the object.
+        template <class TypeName>
+        static inline v8::Local<TypeName> Default(
+                v8::Isolate* isolate,
+                const v8::PersistentBase<TypeName>& persistent) {
+            if (persistent.IsWeak()) {
+                return PersistentToLocal::Weak(isolate, persistent);
+            } else {
+                return PersistentToLocal::Strong(persistent);
+            }
+        }
+
+        // Unchecked conversion from a non-weak Persistent<T> to Local<T>,
+        // use with care!
+        //
+        // Do not call persistent.Reset() while the returned Local<T> is still in
+        // scope, it will destroy the reference to the object.
+        template <class TypeName>
+        static inline v8::Local<TypeName> Strong(
+                const v8::PersistentBase<TypeName>& persistent) {
+            return *reinterpret_cast<v8::Local<TypeName>*>(
+                    const_cast<v8::PersistentBase<TypeName>*>(&persistent));
+        }
+
+        template <class TypeName>
+        static inline v8::Local<TypeName> Weak(
+                v8::Isolate* isolate,
+                const v8::PersistentBase<TypeName>& persistent) {
+            return v8::Local<TypeName>::New(isolate, persistent);
+        }
+    };
 }  // end of namespace v8impl
 
 #ifndef CHECK

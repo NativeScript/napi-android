@@ -41,6 +41,7 @@ V8_EXPORT extern const char* OOM;
 V8_EXPORT extern const char* Other;
 V8_EXPORT extern const char* PromiseRejection;
 V8_EXPORT extern const char* XHR;
+V8_EXPORT extern const char* Step;
 } // ReasonEnum
 } // Paused
 

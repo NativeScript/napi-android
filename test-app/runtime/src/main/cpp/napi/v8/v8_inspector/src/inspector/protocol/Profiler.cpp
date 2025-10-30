@@ -116,7 +116,7 @@ V8_CRDTP_END_SERIALIZER();
 
 // ------------- Frontend notifications.
 
-void Frontend::consoleProfileFinished(const String& id, std::unique_ptr<protocol::Debugger::Location> location, std::unique_ptr<protocol::Profiler::Profile> profile, Maybe<String> title)
+void Frontend::consoleProfileFinished(const String& id, std::unique_ptr<protocol::Debugger::Location> location, std::unique_ptr<protocol::Profiler::Profile> profile, std::optional<String> title)
 {
     if (!frontend_channel_)
         return;
@@ -128,7 +128,7 @@ void Frontend::consoleProfileFinished(const String& id, std::unique_ptr<protocol
     frontend_channel_->SendProtocolNotification(v8_crdtp::CreateNotification("Profiler.consoleProfileFinished", serializer.Finish()));
 }
 
-void Frontend::consoleProfileStarted(const String& id, std::unique_ptr<protocol::Debugger::Location> location, Maybe<String> title)
+void Frontend::consoleProfileStarted(const String& id, std::unique_ptr<protocol::Debugger::Location> location, std::optional<String> title)
 {
     if (!frontend_channel_)
         return;
@@ -375,9 +375,9 @@ void DomainDispatcherImpl::start(const v8_crdtp::Dispatchable& dispatchable)
 namespace {
 
 struct startPreciseCoverageParams : public v8_crdtp::DeserializableProtocolObject<startPreciseCoverageParams> {
-    Maybe<bool> callCount;
-    Maybe<bool> detailed;
-    Maybe<bool> allowTriggeredUpdates;
+    std::optional<bool> callCount;
+    std::optional<bool> detailed;
+    std::optional<bool> allowTriggeredUpdates;
     DECLARE_DESERIALIZATION_SUPPORT();
 };
 

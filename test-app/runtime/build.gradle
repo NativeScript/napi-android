@@ -2,14 +2,14 @@ apply plugin: 'com.android.library'
 
 // can be: "V8", "JSC", "HERMES", "QUICKJS", "SHERMES", "PRIMJS"
 
-def jsEngine = "SHERMES"
+def jsEngine = "V8"
 def hasEngine = project.hasProperty("engine")
 if (hasEngine) {
     jsEngine = engine
 }
 
 def hasHostObjects = project.hasProperty("useHostObjects")
-def isNapiModule = true;//project.hasProperty("asNapiModule");
+def isNapiModule = project.hasProperty("asNapiModule");
 
 printf("Compiling NativeScript with %s.\n", jsEngine)
 
@@ -149,7 +149,7 @@ android {
                 }
 
 //              arguments "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static", "-DANDROID_NDK_ROOT=${NDK_PATH}"
-                cppFlags "-std=c++17"
+                cppFlags "-std=c++20"
                 arguments "-DANDROID_STL=c++_shared",
                         "-DANDROID_NDK_ROOT=${NDK_PATH}",
                         "-DCMAKE_ANDROID_NDK=${NDK_PATH}",

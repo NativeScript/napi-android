@@ -290,13 +290,20 @@ public:
     virtual DispatchResponse disable() = 0;
     virtual DispatchResponse enable() = 0;
     virtual DispatchResponse getHeapObjectId(const String& in_objectId, String* out_heapSnapshotObjectId) = 0;
-    virtual DispatchResponse getObjectByHeapObjectId(const String& in_objectId, Maybe<String> in_objectGroup, std::unique_ptr<protocol::Runtime::RemoteObject>* out_result) = 0;
+    virtual DispatchResponse getObjectByHeapObjectId(const String& in_objectId, std::optional<String> in_objectGroup, std::unique_ptr<protocol::Runtime::RemoteObject>* out_result) = 0;
     virtual DispatchResponse getSamplingProfile(std::unique_ptr<protocol::HeapProfiler::SamplingHeapProfile>* out_profile) = 0;
-    virtual DispatchResponse startSampling(Maybe<double> in_samplingInterval, Maybe<bool> in_includeObjectsCollectedByMajorGC, Maybe<bool> in_includeObjectsCollectedByMinorGC) = 0;
-    virtual DispatchResponse startTrackingHeapObjects(Maybe<bool> in_trackAllocations) = 0;
+    virtual DispatchResponse startSampling(std::optional<double> in_samplingInterval, std::optional<bool> in_includeObjectsCollectedByMajorGC, std::optional<bool> in_includeObjectsCollectedByMinorGC) = 0;
+    virtual DispatchResponse startTrackingHeapObjects(std::optional<bool> in_trackAllocations) = 0;
     virtual DispatchResponse stopSampling(std::unique_ptr<protocol::HeapProfiler::SamplingHeapProfile>* out_profile) = 0;
-    virtual DispatchResponse stopTrackingHeapObjects(Maybe<bool> in_reportProgress, Maybe<bool> in_treatGlobalObjectsAsRoots, Maybe<bool> in_captureNumericValue, Maybe<bool> in_exposeInternals) = 0;
-    virtual DispatchResponse takeHeapSnapshot(Maybe<bool> in_reportProgress, Maybe<bool> in_treatGlobalObjectsAsRoots, Maybe<bool> in_captureNumericValue, Maybe<bool> in_exposeInternals) = 0;
+    virtual DispatchResponse stopTrackingHeapObjects(std::optional<bool> in_reportProgress, std::optional<bool> in_treatGlobalObjectsAsRoots, std::optional<bool> in_captureNumericValue, std::optional<bool> in_exposeInternals) = 0;
+    class  TakeHeapSnapshotCallback {
+    public:
+        virtual void sendSuccess() = 0;
+        virtual void sendFailure(const DispatchResponse&) = 0;
+        virtual void fallThrough() = 0;
+        virtual ~TakeHeapSnapshotCallback() { }
+    };
+    virtual void takeHeapSnapshot(std::optional<bool> in_reportProgress, std::optional<bool> in_treatGlobalObjectsAsRoots, std::optional<bool> in_captureNumericValue, std::optional<bool> in_exposeInternals, std::unique_ptr<TakeHeapSnapshotCallback> callback) = 0;
 
 };
 
@@ -308,7 +315,7 @@ public:
     void addHeapSnapshotChunk(const String& chunk);
     void heapStatsUpdate(std::unique_ptr<protocol::Array<int>> statsUpdate);
     void lastSeenObjectId(int lastSeenObjectId, double timestamp);
-    void reportHeapSnapshotProgress(int done, int total, Maybe<bool> finished = Maybe<bool>());
+    void reportHeapSnapshotProgress(int done, int total, std::optional<bool> finished = {});
     void resetProfiles();
 
   void flush();

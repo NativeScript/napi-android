@@ -98,7 +98,7 @@ void Frontend::lastSeenObjectId(int lastSeenObjectId, double timestamp)
     frontend_channel_->SendProtocolNotification(v8_crdtp::CreateNotification("HeapProfiler.lastSeenObjectId", serializer.Finish()));
 }
 
-void Frontend::reportHeapSnapshotProgress(int done, int total, Maybe<bool> finished)
+void Frontend::reportHeapSnapshotProgress(int done, int total, std::optional<bool> finished)
 {
     if (!frontend_channel_)
         return;
@@ -387,7 +387,7 @@ namespace {
 
 struct getObjectByHeapObjectIdParams : public v8_crdtp::DeserializableProtocolObject<getObjectByHeapObjectIdParams> {
     String objectId;
-    Maybe<String> objectGroup;
+    std::optional<String> objectGroup;
     DECLARE_DESERIALIZATION_SUPPORT();
 };
 
@@ -464,9 +464,9 @@ void DomainDispatcherImpl::getSamplingProfile(const v8_crdtp::Dispatchable& disp
 namespace {
 
 struct startSamplingParams : public v8_crdtp::DeserializableProtocolObject<startSamplingParams> {
-    Maybe<double> samplingInterval;
-    Maybe<bool> includeObjectsCollectedByMajorGC;
-    Maybe<bool> includeObjectsCollectedByMinorGC;
+    std::optional<double> samplingInterval;
+    std::optional<bool> includeObjectsCollectedByMajorGC;
+    std::optional<bool> includeObjectsCollectedByMinorGC;
     DECLARE_DESERIALIZATION_SUPPORT();
 };
 
@@ -502,7 +502,7 @@ void DomainDispatcherImpl::startSampling(const v8_crdtp::Dispatchable& dispatcha
 namespace {
 
 struct startTrackingHeapObjectsParams : public v8_crdtp::DeserializableProtocolObject<startTrackingHeapObjectsParams> {
-    Maybe<bool> trackAllocations;
+    std::optional<bool> trackAllocations;
     DECLARE_DESERIALIZATION_SUPPORT();
 };
 
@@ -567,10 +567,10 @@ void DomainDispatcherImpl::stopSampling(const v8_crdtp::Dispatchable& dispatchab
 namespace {
 
 struct stopTrackingHeapObjectsParams : public v8_crdtp::DeserializableProtocolObject<stopTrackingHeapObjectsParams> {
-    Maybe<bool> reportProgress;
-    Maybe<bool> treatGlobalObjectsAsRoots;
-    Maybe<bool> captureNumericValue;
-    Maybe<bool> exposeInternals;
+    std::optional<bool> reportProgress;
+    std::optional<bool> treatGlobalObjectsAsRoots;
+    std::optional<bool> captureNumericValue;
+    std::optional<bool> exposeInternals;
     DECLARE_DESERIALIZATION_SUPPORT();
 };
 
@@ -604,13 +604,37 @@ void DomainDispatcherImpl::stopTrackingHeapObjects(const v8_crdtp::Dispatchable&
     return;
 }
 
+class TakeHeapSnapshotCallbackImpl : public Backend::TakeHeapSnapshotCallback, public DomainDispatcher::Callback {
+public:
+    TakeHeapSnapshotCallbackImpl(std::unique_ptr<DomainDispatcher::WeakPtr> backendImpl, int callId, v8_crdtp::span<uint8_t> message)
+        : DomainDispatcher::Callback(std::move(backendImpl), callId,
+v8_crdtp::SpanFrom("HeapProfiler.takeHeapSnapshot"), message) { }
+
+    void sendSuccess() override
+    {
+        v8_crdtp::ObjectSerializer serializer;
+        sendIfActive(serializer.Finish(), DispatchResponse::Success());
+    }
+
+    void fallThrough() override
+    {
+        fallThroughIfActive();
+    }
+
+    void sendFailure(const DispatchResponse& response) override
+    {
+        DCHECK(response.IsError());
+        sendIfActive(nullptr, response);
+    }
+};
+
 namespace {
 
 struct takeHeapSnapshotParams : public v8_crdtp::DeserializableProtocolObject<takeHeapSnapshotParams> {
-    Maybe<bool> reportProgress;
-    Maybe<bool> treatGlobalObjectsAsRoots;
-    Maybe<bool> captureNumericValue;
-    Maybe<bool> exposeInternals;
+    std::optional<bool> reportProgress;
+    std::optional<bool> treatGlobalObjectsAsRoots;
+    std::optional<bool> captureNumericValue;
+    std::optional<bool> exposeInternals;
     DECLARE_DESERIALIZATION_SUPPORT();
 };
 
@@ -633,15 +657,7 @@ void DomainDispatcherImpl::takeHeapSnapshot(const v8_crdtp::Dispatchable& dispat
       return;
     }
 
-    std::unique_ptr<DomainDispatcher::WeakPtr> weak = weakPtr();
-    DispatchResponse response = m_backend->takeHeapSnapshot(std::move(params.reportProgress), std::move(params.treatGlobalObjectsAsRoots), std::move(params.captureNumericValue), std::move(params.exposeInternals));
-    if (response.IsFallThrough()) {
-        channel()->FallThrough(dispatchable.CallId(), v8_crdtp::SpanFrom("HeapProfiler.takeHeapSnapshot"), dispatchable.Serialized());
-        return;
-    }
-    if (weak->get())
-        weak->get()->sendResponse(dispatchable.CallId(), response);
-    return;
+    m_backend->takeHeapSnapshot(std::move(params.reportProgress), std::move(params.treatGlobalObjectsAsRoots), std::move(params.captureNumericValue), std::move(params.exposeInternals), std::make_unique<TakeHeapSnapshotCallbackImpl>(weakPtr(), dispatchable.CallId(), dispatchable.Serialized()));
 }
 
 namespace {

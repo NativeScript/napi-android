@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#ifndef V8_BASE_HASHMAP_H_
+#define V8_BASE_HASHMAP_H_
+
 // The reason we write our own hash map instead of using unordered_map in STL,
 // is that STL containers use a mutex pool on debug build, which will lead to
 // deadlock when we are using async signal handler.
-
-#ifndef V8_BASE_HASHMAP_H_
-#define V8_BASE_HASHMAP_H_
 
 #include <stdlib.h>
 
@@ -22,7 +22,7 @@ namespace base {
 class DefaultAllocationPolicy {
  public:
   template <typename T, typename TypeTag = T[]>
-  V8_INLINE T* NewArray(size_t length) {
+  V8_INLINE T* AllocateArray(size_t length) {
     return static_cast<T*>(base::Malloc(length * sizeof(T)));
   }
   template <typename T, typename TypeTag = T[]>
@@ -197,7 +197,7 @@ TemplateHashMapImpl<Key, Value, MatchFun, AllocationPolicy>::
     : impl_(original->impl_.match(), std::move(allocator)) {
   impl_.capacity_ = original->capacity();
   impl_.occupancy_ = original->occupancy();
-  impl_.map_ = impl_.allocator().template NewArray<Entry>(capacity());
+  impl_.map_ = impl_.allocator().template AllocateArray<Entry>(capacity());
   memcpy(impl_.map_, original->impl_.map_, capacity() * sizeof(Entry));
 }
 
@@ -326,9 +326,7 @@ template <typename Key, typename Value, typename MatchFun,
           class AllocationPolicy>
 void TemplateHashMapImpl<Key, Value, MatchFun, AllocationPolicy>::Clear() {
   // Mark all entries as empty.
-  for (size_t i = 0; i < capacity(); ++i) {
-    impl_.map_[i].clear();
-  }
+  memset(impl_.map_, 0, capacity() * sizeof(Entry));
   impl_.occupancy_ = 0;
 }
 
@@ -360,6 +358,7 @@ template <typename LookupKey>
 typename TemplateHashMapImpl<Key, Value, MatchFun, AllocationPolicy>::Entry*
 TemplateHashMapImpl<Key, Value, MatchFun, AllocationPolicy>::Probe(
     const LookupKey& key, uint32_t hash) const {
+  hash &= 0x7FFFFFFF;
   DCHECK(base::bits::IsPowerOfTwo(capacity()));
   size_t i = hash & (capacity() - 1);
   DCHECK(i < capacity());
@@ -398,7 +397,7 @@ template <typename Key, typename Value, typename MatchFun,
 void TemplateHashMapImpl<Key, Value, MatchFun, AllocationPolicy>::Initialize(
     uint32_t capacity) {
   DCHECK(base::bits::IsPowerOfTwo(capacity));
-  impl_.map_ = impl_.allocator().template NewArray<Entry>(capacity);
+  impl_.map_ = impl_.allocator().template AllocateArray<Entry>(capacity);
   if (impl_.map_ == nullptr) {
     FATAL("Out of memory: HashMap::Initialize");
     return;
@@ -545,7 +544,7 @@ class TemplateHashMap
     }
 
     value_type* operator->() { return reinterpret_cast<value_type*>(entry_); }
-    bool operator!=(const Iterator& other) { return entry_ != other.entry_; }
+    bool operator==(const Iterator& other) { return entry_ == other.entry_; }
 
    private:
     Iterator(const Base* map, typename Base::Entry* entry)

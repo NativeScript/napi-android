@@ -28,6 +28,7 @@ class BreakLocation;
 class WasmDisassemblyChunk;
 using ScriptLanguage = String;
 class DebugSymbols;
+class ResolvedBreakpoint;
 
 // ------------- Forward and enum declarations.
 
@@ -71,6 +72,7 @@ namespace StatusEnum {
  extern const char* CompileError;
  extern const char* BlockedByActiveGenerator;
  extern const char* BlockedByActiveFunction;
+ extern const char* BlockedByTopLevelEsModuleChange;
 } // StatusEnum
 } // SetScriptSource
 
@@ -88,6 +90,7 @@ namespace ReasonEnum {
  extern const char* Other;
  extern const char* PromiseRejection;
  extern const char* XHR;
+ extern const char* Step;
 } // ReasonEnum
 } // Paused
 
@@ -103,8 +106,13 @@ public:
     int getLineNumber() { return m_lineNumber; }
     void setLineNumber(int value) { m_lineNumber = value; }
 
-    bool hasColumnNumber() { return m_columnNumber.isJust(); }
-    int getColumnNumber(int defaultValue) { return m_columnNumber.isJust() ? m_columnNumber.fromJust() : defaultValue; }
+    bool hasColumnNumber() { return !!m_columnNumber; }
+    int getColumnNumber(int defaultValue) const {
+       return m_columnNumber.value_or(defaultValue);
+    }
+    const std::optional<int>& getColumnNumber() const {
+       return m_columnNumber;
+    }
     void setColumnNumber(int value) { m_columnNumber = value; }
 
     template<int STATE>
@@ -170,7 +178,7 @@ private:
 
     String m_scriptId;
     int m_lineNumber;
-    Maybe<int> m_columnNumber;
+    std::optional<int> m_columnNumber;
 };
 
 
@@ -336,8 +344,13 @@ public:
     String getFunctionName() { return m_functionName; }
     void setFunctionName(const String& value) { m_functionName = value; }
 
-    bool hasFunctionLocation() { return m_functionLocation.isJust(); }
-    protocol::Debugger::Location* getFunctionLocation(protocol::Debugger::Location* defaultValue) { return m_functionLocation.isJust() ? m_functionLocation.fromJust() : defaultValue; }
+    bool hasFunctionLocation() { return !!m_functionLocation; }
+    protocol::Debugger::Location* getFunctionLocation(protocol::Debugger::Location* defaultValue) {
+       return m_functionLocation ? m_functionLocation.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Debugger::Location>& getFunctionLocation() const {
+       return m_functionLocation;
+    }
     void setFunctionLocation(std::unique_ptr<protocol::Debugger::Location> value) { m_functionLocation = std::move(value); }
 
     protocol::Debugger::Location* getLocation() { return m_location.get(); }
@@ -352,12 +365,22 @@ public:
     protocol::Runtime::RemoteObject* getThis() { return m_this.get(); }
     void setThis(std::unique_ptr<protocol::Runtime::RemoteObject> value) { m_this = std::move(value); }
 
-    bool hasReturnValue() { return m_returnValue.isJust(); }
-    protocol::Runtime::RemoteObject* getReturnValue(protocol::Runtime::RemoteObject* defaultValue) { return m_returnValue.isJust() ? m_returnValue.fromJust() : defaultValue; }
+    bool hasReturnValue() { return !!m_returnValue; }
+    protocol::Runtime::RemoteObject* getReturnValue(protocol::Runtime::RemoteObject* defaultValue) {
+       return m_returnValue ? m_returnValue.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Runtime::RemoteObject>& getReturnValue() const {
+       return m_returnValue;
+    }
     void setReturnValue(std::unique_ptr<protocol::Runtime::RemoteObject> value) { m_returnValue = std::move(value); }
 
-    bool hasCanBeRestarted() { return m_canBeRestarted.isJust(); }
-    bool getCanBeRestarted(bool defaultValue) { return m_canBeRestarted.isJust() ? m_canBeRestarted.fromJust() : defaultValue; }
+    bool hasCanBeRestarted() { return !!m_canBeRestarted; }
+    bool getCanBeRestarted(bool defaultValue) const {
+       return m_canBeRestarted.value_or(defaultValue);
+    }
+    const std::optional<bool>& getCanBeRestarted() const {
+       return m_canBeRestarted;
+    }
     void setCanBeRestarted(bool value) { m_canBeRestarted = value; }
 
     template<int STATE>
@@ -466,13 +489,13 @@ private:
 
     String m_callFrameId;
     String m_functionName;
-    Maybe<protocol::Debugger::Location> m_functionLocation;
+    std::unique_ptr<protocol::Debugger::Location> m_functionLocation;
     std::unique_ptr<protocol::Debugger::Location> m_location;
     String m_url;
     std::unique_ptr<protocol::Array<protocol::Debugger::Scope>> m_scopeChain;
     std::unique_ptr<protocol::Runtime::RemoteObject> m_this;
-    Maybe<protocol::Runtime::RemoteObject> m_returnValue;
-    Maybe<bool> m_canBeRestarted;
+    std::unique_ptr<protocol::Runtime::RemoteObject> m_returnValue;
+    std::optional<bool> m_canBeRestarted;
 };
 
 
@@ -499,16 +522,31 @@ public:
     protocol::Runtime::RemoteObject* getObject() { return m_object.get(); }
     void setObject(std::unique_ptr<protocol::Runtime::RemoteObject> value) { m_object = std::move(value); }
 
-    bool hasName() { return m_name.isJust(); }
-    String getName(const String& defaultValue) { return m_name.isJust() ? m_name.fromJust() : defaultValue; }
+    bool hasName() { return !!m_name; }
+    String getName(const String& defaultValue) const {
+       return m_name.value_or(defaultValue);
+    }
+    const std::optional<String>& getName() const {
+       return m_name;
+    }
     void setName(const String& value) { m_name = value; }
 
-    bool hasStartLocation() { return m_startLocation.isJust(); }
-    protocol::Debugger::Location* getStartLocation(protocol::Debugger::Location* defaultValue) { return m_startLocation.isJust() ? m_startLocation.fromJust() : defaultValue; }
+    bool hasStartLocation() { return !!m_startLocation; }
+    protocol::Debugger::Location* getStartLocation(protocol::Debugger::Location* defaultValue) {
+       return m_startLocation ? m_startLocation.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Debugger::Location>& getStartLocation() const {
+       return m_startLocation;
+    }
     void setStartLocation(std::unique_ptr<protocol::Debugger::Location> value) { m_startLocation = std::move(value); }
 
-    bool hasEndLocation() { return m_endLocation.isJust(); }
-    protocol::Debugger::Location* getEndLocation(protocol::Debugger::Location* defaultValue) { return m_endLocation.isJust() ? m_endLocation.fromJust() : defaultValue; }
+    bool hasEndLocation() { return !!m_endLocation; }
+    protocol::Debugger::Location* getEndLocation(protocol::Debugger::Location* defaultValue) {
+       return m_endLocation ? m_endLocation.get() : defaultValue;
+    }
+    const std::unique_ptr<protocol::Debugger::Location>& getEndLocation() const {
+       return m_endLocation;
+    }
     void setEndLocation(std::unique_ptr<protocol::Debugger::Location> value) { m_endLocation = std::move(value); }
 
     template<int STATE>
@@ -585,9 +623,9 @@ private:
 
     String m_type;
     std::unique_ptr<protocol::Runtime::RemoteObject> m_object;
-    Maybe<String> m_name;
-    Maybe<protocol::Debugger::Location> m_startLocation;
-    Maybe<protocol::Debugger::Location> m_endLocation;
+    std::optional<String> m_name;
+    std::unique_ptr<protocol::Debugger::Location> m_startLocation;
+    std::unique_ptr<protocol::Debugger::Location> m_endLocation;
 };
 
 
@@ -672,8 +710,13 @@ public:
     int getLineNumber() { return m_lineNumber; }
     void setLineNumber(int value) { m_lineNumber = value; }
 
-    bool hasColumnNumber() { return m_columnNumber.isJust(); }
-    int getColumnNumber(int defaultValue) { return m_columnNumber.isJust() ? m_columnNumber.fromJust() : defaultValue; }
+    bool hasColumnNumber() { return !!m_columnNumber; }
+    int getColumnNumber(int defaultValue) const {
+       return m_columnNumber.value_or(defaultValue);
+    }
+    const std::optional<int>& getColumnNumber() const {
+       return m_columnNumber;
+    }
     void setColumnNumber(int value) { m_columnNumber = value; }
 
     struct  TypeEnum {
@@ -682,8 +725,13 @@ public:
         static const char* Return;
     }; // TypeEnum
 
-    bool hasType() { return m_type.isJust(); }
-    String getType(const String& defaultValue) { return m_type.isJust() ? m_type.fromJust() : defaultValue; }
+    bool hasType() { return !!m_type; }
+    String getType(const String& defaultValue) const {
+       return m_type.value_or(defaultValue);
+    }
+    const std::optional<String>& getType() const {
+       return m_type;
+    }
     void setType(const String& value) { m_type = value; }
 
     template<int STATE>
@@ -755,8 +803,8 @@ private:
 
     String m_scriptId;
     int m_lineNumber;
-    Maybe<int> m_columnNumber;
-    Maybe<String> m_type;
+    std::optional<int> m_columnNumber;
+    std::optional<String> m_type;
 };
 
 
@@ -834,7 +882,6 @@ public:
     ~DebugSymbols() override { }
 
     struct  TypeEnum {
-        static const char* None;
         static const char* SourceMap;
         static const char* EmbeddedDWARF;
         static const char* ExternalDWARF;
@@ -843,8 +890,13 @@ public:
     String getType() { return m_type; }
     void setType(const String& value) { m_type = value; }
 
-    bool hasExternalURL() { return m_externalURL.isJust(); }
-    String getExternalURL(const String& defaultValue) { return m_externalURL.isJust() ? m_externalURL.fromJust() : defaultValue; }
+    bool hasExternalURL() { return !!m_externalURL; }
+    String getExternalURL(const String& defaultValue) const {
+       return m_externalURL.value_or(defaultValue);
+    }
+    const std::optional<String>& getExternalURL() const {
+       return m_externalURL;
+    }
     void setExternalURL(const String& value) { m_externalURL = value; }
 
     template<int STATE>
@@ -900,7 +952,76 @@ private:
     }
 
     String m_type;
-    Maybe<String> m_externalURL;
+    std::optional<String> m_externalURL;
+};
+
+
+class  ResolvedBreakpoint : public ::v8_crdtp::ProtocolObject<ResolvedBreakpoint> {
+public:
+    ~ResolvedBreakpoint() override { }
+
+    String getBreakpointId() { return m_breakpointId; }
+    void setBreakpointId(const String& value) { m_breakpointId = value; }
+
+    protocol::Debugger::Location* getLocation() { return m_location.get(); }
+    void setLocation(std::unique_ptr<protocol::Debugger::Location> value) { m_location = std::move(value); }
+
+    template<int STATE>
+    class ResolvedBreakpointBuilder {
+    public:
+        enum {
+            NoFieldsSet = 0,
+            BreakpointIdSet = 1 << 1,
+            LocationSet = 1 << 2,
+            AllFieldsSet = (BreakpointIdSet | LocationSet | 0)};
+
+
+        ResolvedBreakpointBuilder<STATE | BreakpointIdSet>& setBreakpointId(const String& value)
+        {
+            static_assert(!(STATE & BreakpointIdSet), "property breakpointId should not be set yet");
+            m_result->setBreakpointId(value);
+            return castState<BreakpointIdSet>();
+        }
+
+        ResolvedBreakpointBuilder<STATE | LocationSet>& setLocation(std::unique_ptr<protocol::Debugger::Location> value)
+        {
+            static_assert(!(STATE & LocationSet), "property location should not be set yet");
+            m_result->setLocation(std::move(value));
+            return castState<LocationSet>();
+        }
+
+        std::unique_ptr<ResolvedBreakpoint> build()
+        {
+            static_assert(STATE == AllFieldsSet, "state should be AllFieldsSet");
+            return std::move(m_result);
+        }
+
+    private:
+        friend class ResolvedBreakpoint;
+        ResolvedBreakpointBuilder() : m_result(new ResolvedBreakpoint()) { }
+
+        template<int STEP> ResolvedBreakpointBuilder<STATE | STEP>& castState()
+        {
+            return *reinterpret_cast<ResolvedBreakpointBuilder<STATE | STEP>*>(this);
+        }
+
+        std::unique_ptr<protocol::Debugger::ResolvedBreakpoint> m_result;
+    };
+
+    static ResolvedBreakpointBuilder<0> create()
+    {
+        return ResolvedBreakpointBuilder<0>();
+    }
+
+private:
+    DECLARE_SERIALIZATION_SUPPORT();
+
+    ResolvedBreakpoint()
+    {
+    }
+
+    String m_breakpointId;
+    std::unique_ptr<protocol::Debugger::Location> m_location;
 };
 
 
@@ -910,38 +1031,39 @@ class  Backend {
 public:
     virtual ~Backend() { }
 
-    virtual DispatchResponse continueToLocation(std::unique_ptr<protocol::Debugger::Location> in_location, Maybe<String> in_targetCallFrames) = 0;
+    virtual DispatchResponse continueToLocation(std::unique_ptr<protocol::Debugger::Location> in_location, std::optional<String> in_targetCallFrames) = 0;
     virtual DispatchResponse disable() = 0;
-    virtual DispatchResponse enable(Maybe<double> in_maxScriptsCacheSize, String* out_debuggerId) = 0;
-    virtual DispatchResponse evaluateOnCallFrame(const String& in_callFrameId, const String& in_expression, Maybe<String> in_objectGroup, Maybe<bool> in_includeCommandLineAPI, Maybe<bool> in_silent, Maybe<bool> in_returnByValue, Maybe<bool> in_generatePreview, Maybe<bool> in_throwOnSideEffect, Maybe<double> in_timeout, std::unique_ptr<protocol::Runtime::RemoteObject>* out_result, Maybe<protocol::Runtime::ExceptionDetails>* out_exceptionDetails) = 0;
-    virtual DispatchResponse getPossibleBreakpoints(std::unique_ptr<protocol::Debugger::Location> in_start, Maybe<protocol::Debugger::Location> in_end, Maybe<bool> in_restrictToFunction, std::unique_ptr<protocol::Array<protocol::Debugger::BreakLocation>>* out_locations) = 0;
-    virtual DispatchResponse getScriptSource(const String& in_scriptId, String* out_scriptSource, Maybe<Binary>* out_bytecode) = 0;
-    virtual DispatchResponse disassembleWasmModule(const String& in_scriptId, Maybe<String>* out_streamId, int* out_totalNumberOfLines, std::unique_ptr<protocol::Array<int>>* out_functionBodyOffsets, std::unique_ptr<protocol::Debugger::WasmDisassemblyChunk>* out_chunk) = 0;
+    virtual DispatchResponse enable(std::optional<double> in_maxScriptsCacheSize, String* out_debuggerId) = 0;
+    virtual DispatchResponse evaluateOnCallFrame(const String& in_callFrameId, const String& in_expression, std::optional<String> in_objectGroup, std::optional<bool> in_includeCommandLineAPI, std::optional<bool> in_silent, std::optional<bool> in_returnByValue, std::optional<bool> in_generatePreview, std::optional<bool> in_throwOnSideEffect, std::optional<double> in_timeout, std::unique_ptr<protocol::Runtime::RemoteObject>* out_result, std::unique_ptr<protocol::Runtime::ExceptionDetails>* out_exceptionDetails) = 0;
+    virtual DispatchResponse getPossibleBreakpoints(std::unique_ptr<protocol::Debugger::Location> in_start, std::unique_ptr<protocol::Debugger::Location> in_end, std::optional<bool> in_restrictToFunction, std::unique_ptr<protocol::Array<protocol::Debugger::BreakLocation>>* out_locations) = 0;
+    virtual DispatchResponse getScriptSource(const String& in_scriptId, String* out_scriptSource, std::optional<Binary>* out_bytecode) = 0;
+    virtual DispatchResponse disassembleWasmModule(const String& in_scriptId, std::optional<String>* out_streamId, int* out_totalNumberOfLines, std::unique_ptr<protocol::Array<int>>* out_functionBodyOffsets, std::unique_ptr<protocol::Debugger::WasmDisassemblyChunk>* out_chunk) = 0;
     virtual DispatchResponse nextWasmDisassemblyChunk(const String& in_streamId, std::unique_ptr<protocol::Debugger::WasmDisassemblyChunk>* out_chunk) = 0;
     virtual DispatchResponse getWasmBytecode(const String& in_scriptId, Binary* out_bytecode) = 0;
     virtual DispatchResponse getStackTrace(std::unique_ptr<protocol::Runtime::StackTraceId> in_stackTraceId, std::unique_ptr<protocol::Runtime::StackTrace>* out_stackTrace) = 0;
     virtual DispatchResponse pause() = 0;
     virtual DispatchResponse pauseOnAsyncCall(std::unique_ptr<protocol::Runtime::StackTraceId> in_parentStackTraceId) = 0;
     virtual DispatchResponse removeBreakpoint(const String& in_breakpointId) = 0;
-    virtual DispatchResponse restartFrame(const String& in_callFrameId, Maybe<String> in_mode, std::unique_ptr<protocol::Array<protocol::Debugger::CallFrame>>* out_callFrames, Maybe<protocol::Runtime::StackTrace>* out_asyncStackTrace, Maybe<protocol::Runtime::StackTraceId>* out_asyncStackTraceId) = 0;
-    virtual DispatchResponse resume(Maybe<bool> in_terminateOnResume) = 0;
-    virtual DispatchResponse searchInContent(const String& in_scriptId, const String& in_query, Maybe<bool> in_caseSensitive, Maybe<bool> in_isRegex, std::unique_ptr<protocol::Array<protocol::Debugger::SearchMatch>>* out_result) = 0;
+    virtual DispatchResponse restartFrame(const String& in_callFrameId, std::optional<String> in_mode, std::unique_ptr<protocol::Array<protocol::Debugger::CallFrame>>* out_callFrames, std::unique_ptr<protocol::Runtime::StackTrace>* out_asyncStackTrace, std::unique_ptr<protocol::Runtime::StackTraceId>* out_asyncStackTraceId) = 0;
+    virtual DispatchResponse resume(std::optional<bool> in_terminateOnResume) = 0;
+    virtual DispatchResponse searchInContent(const String& in_scriptId, const String& in_query, std::optional<bool> in_caseSensitive, std::optional<bool> in_isRegex, std::unique_ptr<protocol::Array<protocol::Debugger::SearchMatch>>* out_result) = 0;
     virtual DispatchResponse setAsyncCallStackDepth(int in_maxDepth) = 0;
-    virtual DispatchResponse setBlackboxPatterns(std::unique_ptr<protocol::Array<String>> in_patterns) = 0;
+    virtual DispatchResponse setBlackboxExecutionContexts(std::unique_ptr<protocol::Array<String>> in_uniqueIds) = 0;
+    virtual DispatchResponse setBlackboxPatterns(std::unique_ptr<protocol::Array<String>> in_patterns, std::optional<bool> in_skipAnonymous) = 0;
     virtual DispatchResponse setBlackboxedRanges(const String& in_scriptId, std::unique_ptr<protocol::Array<protocol::Debugger::ScriptPosition>> in_positions) = 0;
-    virtual DispatchResponse setBreakpoint(std::unique_ptr<protocol::Debugger::Location> in_location, Maybe<String> in_condition, String* out_breakpointId, std::unique_ptr<protocol::Debugger::Location>* out_actualLocation) = 0;
+    virtual DispatchResponse setBreakpoint(std::unique_ptr<protocol::Debugger::Location> in_location, std::optional<String> in_condition, String* out_breakpointId, std::unique_ptr<protocol::Debugger::Location>* out_actualLocation) = 0;
     virtual DispatchResponse setInstrumentationBreakpoint(const String& in_instrumentation, String* out_breakpointId) = 0;
-    virtual DispatchResponse setBreakpointByUrl(int in_lineNumber, Maybe<String> in_url, Maybe<String> in_urlRegex, Maybe<String> in_scriptHash, Maybe<int> in_columnNumber, Maybe<String> in_condition, String* out_breakpointId, std::unique_ptr<protocol::Array<protocol::Debugger::Location>>* out_locations) = 0;
-    virtual DispatchResponse setBreakpointOnFunctionCall(const String& in_objectId, Maybe<String> in_condition, String* out_breakpointId) = 0;
+    virtual DispatchResponse setBreakpointByUrl(int in_lineNumber, std::optional<String> in_url, std::optional<String> in_urlRegex, std::optional<String> in_scriptHash, std::optional<int> in_columnNumber, std::optional<String> in_condition, String* out_breakpointId, std::unique_ptr<protocol::Array<protocol::Debugger::Location>>* out_locations) = 0;
+    virtual DispatchResponse setBreakpointOnFunctionCall(const String& in_objectId, std::optional<String> in_condition, String* out_breakpointId) = 0;
     virtual DispatchResponse setBreakpointsActive(bool in_active) = 0;
     virtual DispatchResponse setPauseOnExceptions(const String& in_state) = 0;
     virtual DispatchResponse setReturnValue(std::unique_ptr<protocol::Runtime::CallArgument> in_newValue) = 0;
-    virtual DispatchResponse setScriptSource(const String& in_scriptId, const String& in_scriptSource, Maybe<bool> in_dryRun, Maybe<bool> in_allowTopFrameEditing, Maybe<protocol::Array<protocol::Debugger::CallFrame>>* out_callFrames, Maybe<bool>* out_stackChanged, Maybe<protocol::Runtime::StackTrace>* out_asyncStackTrace, Maybe<protocol::Runtime::StackTraceId>* out_asyncStackTraceId, String* out_status, Maybe<protocol::Runtime::ExceptionDetails>* out_exceptionDetails) = 0;
+    virtual DispatchResponse setScriptSource(const String& in_scriptId, const String& in_scriptSource, std::optional<bool> in_dryRun, std::optional<bool> in_allowTopFrameEditing, std::unique_ptr<protocol::Array<protocol::Debugger::CallFrame>>* out_callFrames, std::optional<bool>* out_stackChanged, std::unique_ptr<protocol::Runtime::StackTrace>* out_asyncStackTrace, std::unique_ptr<protocol::Runtime::StackTraceId>* out_asyncStackTraceId, String* out_status, std::unique_ptr<protocol::Runtime::ExceptionDetails>* out_exceptionDetails) = 0;
     virtual DispatchResponse setSkipAllPauses(bool in_skip) = 0;
     virtual DispatchResponse setVariableValue(int in_scopeNumber, const String& in_variableName, std::unique_ptr<protocol::Runtime::CallArgument> in_newValue, const String& in_callFrameId) = 0;
-    virtual DispatchResponse stepInto(Maybe<bool> in_breakOnAsyncCall, Maybe<protocol::Array<protocol::Debugger::LocationRange>> in_skipList) = 0;
+    virtual DispatchResponse stepInto(std::optional<bool> in_breakOnAsyncCall, std::unique_ptr<protocol::Array<protocol::Debugger::LocationRange>> in_skipList) = 0;
     virtual DispatchResponse stepOut() = 0;
-    virtual DispatchResponse stepOver(Maybe<protocol::Array<protocol::Debugger::LocationRange>> in_skipList) = 0;
+    virtual DispatchResponse stepOver(std::unique_ptr<protocol::Array<protocol::Debugger::LocationRange>> in_skipList) = 0;
 
 };
 
@@ -951,10 +1073,10 @@ class  Frontend {
 public:
   explicit Frontend(FrontendChannel* frontend_channel) : frontend_channel_(frontend_channel) {}
     void breakpointResolved(const String& breakpointId, std::unique_ptr<protocol::Debugger::Location> location);
-    void paused(std::unique_ptr<protocol::Array<protocol::Debugger::CallFrame>> callFrames, const String& reason, Maybe<protocol::DictionaryValue> data = Maybe<protocol::DictionaryValue>(), Maybe<protocol::Array<String>> hitBreakpoints = Maybe<protocol::Array<String>>(), Maybe<protocol::Runtime::StackTrace> asyncStackTrace = Maybe<protocol::Runtime::StackTrace>(), Maybe<protocol::Runtime::StackTraceId> asyncStackTraceId = Maybe<protocol::Runtime::StackTraceId>(), Maybe<protocol::Runtime::StackTraceId> asyncCallStackTraceId = Maybe<protocol::Runtime::StackTraceId>());
+    void paused(std::unique_ptr<protocol::Array<protocol::Debugger::CallFrame>> callFrames, const String& reason, std::unique_ptr<protocol::DictionaryValue> data = {}, std::unique_ptr<protocol::Array<String>> hitBreakpoints = {}, std::unique_ptr<protocol::Runtime::StackTrace> asyncStackTrace = {}, std::unique_ptr<protocol::Runtime::StackTraceId> asyncStackTraceId = {}, std::unique_ptr<protocol::Runtime::StackTraceId> asyncCallStackTraceId = {});
     void resumed();
-    void scriptFailedToParse(const String& scriptId, const String& url, int startLine, int startColumn, int endLine, int endColumn, int executionContextId, const String& hash, Maybe<protocol::DictionaryValue> executionContextAuxData = Maybe<protocol::DictionaryValue>(), Maybe<String> sourceMapURL = Maybe<String>(), Maybe<bool> hasSourceURL = Maybe<bool>(), Maybe<bool> isModule = Maybe<bool>(), Maybe<int> length = Maybe<int>(), Maybe<protocol::Runtime::StackTrace> stackTrace = Maybe<protocol::Runtime::StackTrace>(), Maybe<int> codeOffset = Maybe<int>(), Maybe<String> scriptLanguage = Maybe<String>(), Maybe<String> embedderName = Maybe<String>());
-    void scriptParsed(const String& scriptId, const String& url, int startLine, int startColumn, int endLine, int endColumn, int executionContextId, const String& hash, Maybe<protocol::DictionaryValue> executionContextAuxData = Maybe<protocol::DictionaryValue>(), Maybe<bool> isLiveEdit = Maybe<bool>(), Maybe<String> sourceMapURL = Maybe<String>(), Maybe<bool> hasSourceURL = Maybe<bool>(), Maybe<bool> isModule = Maybe<bool>(), Maybe<int> length = Maybe<int>(), Maybe<protocol::Runtime::StackTrace> stackTrace = Maybe<protocol::Runtime::StackTrace>(), Maybe<int> codeOffset = Maybe<int>(), Maybe<String> scriptLanguage = Maybe<String>(), Maybe<protocol::Debugger::DebugSymbols> debugSymbols = Maybe<protocol::Debugger::DebugSymbols>(), Maybe<String> embedderName = Maybe<String>());
+    void scriptFailedToParse(const String& scriptId, const String& url, int startLine, int startColumn, int endLine, int endColumn, int executionContextId, const String& hash, const String& buildId, std::unique_ptr<protocol::DictionaryValue> executionContextAuxData = {}, std::optional<String> sourceMapURL = {}, std::optional<bool> hasSourceURL = {}, std::optional<bool> isModule = {}, std::optional<int> length = {}, std::unique_ptr<protocol::Runtime::StackTrace> stackTrace = {}, std::optional<int> codeOffset = {}, std::optional<String> scriptLanguage = {}, std::optional<String> embedderName = {});
+    void scriptParsed(const String& scriptId, const String& url, int startLine, int startColumn, int endLine, int endColumn, int executionContextId, const String& hash, const String& buildId, std::unique_ptr<protocol::DictionaryValue> executionContextAuxData = {}, std::optional<bool> isLiveEdit = {}, std::optional<String> sourceMapURL = {}, std::optional<bool> hasSourceURL = {}, std::optional<bool> isModule = {}, std::optional<int> length = {}, std::unique_ptr<protocol::Runtime::StackTrace> stackTrace = {}, std::optional<int> codeOffset = {}, std::optional<String> scriptLanguage = {}, std::unique_ptr<protocol::Array<protocol::Debugger::DebugSymbols>> debugSymbols = {}, std::optional<String> embedderName = {}, std::unique_ptr<protocol::Array<protocol::Debugger::ResolvedBreakpoint>> resolvedBreakpoints = {});
 
   void flush();
   void sendRawNotification(std::unique_ptr<Serializable>);

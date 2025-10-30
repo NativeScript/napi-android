@@ -56,16 +56,31 @@ public:
     String getText() { return m_text; }
     void setText(const String& value) { m_text = value; }
 
-    bool hasUrl() { return m_url.isJust(); }
-    String getUrl(const String& defaultValue) { return m_url.isJust() ? m_url.fromJust() : defaultValue; }
+    bool hasUrl() { return !!m_url; }
+    String getUrl(const String& defaultValue) const {
+       return m_url.value_or(defaultValue);
+    }
+    const std::optional<String>& getUrl() const {
+       return m_url;
+    }
     void setUrl(const String& value) { m_url = value; }
 
-    bool hasLine() { return m_line.isJust(); }
-    int getLine(int defaultValue) { return m_line.isJust() ? m_line.fromJust() : defaultValue; }
+    bool hasLine() { return !!m_line; }
+    int getLine(int defaultValue) const {
+       return m_line.value_or(defaultValue);
+    }
+    const std::optional<int>& getLine() const {
+       return m_line;
+    }
     void setLine(int value) { m_line = value; }
 
-    bool hasColumn() { return m_column.isJust(); }
-    int getColumn(int defaultValue) { return m_column.isJust() ? m_column.fromJust() : defaultValue; }
+    bool hasColumn() { return !!m_column; }
+    int getColumn(int defaultValue) const {
+       return m_column.value_or(defaultValue);
+    }
+    const std::optional<int>& getColumn() const {
+       return m_column;
+    }
     void setColumn(int value) { m_column = value; }
 
     template<int STATE>
@@ -151,9 +166,9 @@ private:
     String m_source;
     String m_level;
     String m_text;
-    Maybe<String> m_url;
-    Maybe<int> m_line;
-    Maybe<int> m_column;
+    std::optional<String> m_url;
+    std::optional<int> m_line;
+    std::optional<int> m_column;
 };
 
 

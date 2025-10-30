@@ -68,34 +68,18 @@ Clone the repo:
 git clone https://github.com/NativeScript/napi-android.git
 ```
 
-Install the jsparser dependencies:
-
-```Shell
-cd test-app/build-tools/jsparser
-npm install
-```
-
 Set the following environment variables:
 
 - `JAVA_HOME` such that `$JAVA_HOME/bin/java` points to your Java executable
 - `ANDROID_HOME` pointing to where you have installed the Android SDK
 - `ANDROID_NDK_HOME` pointing to the version of the Android NDK needed for this version of NativeScript
 
-Run command
+Run the following command to build the runtime:
 
-Windows:
-
-```Shell
-gradlew -Pengine=V8
 ```
-
-Mac/Linux:
-
-```Shell
-./gradlew -Pengine=V8
+npm run build
 ```
-
-You can pass in `QUICKJS`, `HERMES`, `JSC` or `V8` to compile the runtime with the respective JS engine.
+The command will let you interactively choose the JS engine you want to build with. i.e V8, QuickJS, Hermes or JSC, PrimJS, Static Hermes.
 
 - The build process includes building of the runtime package (both optimized and with unstripped v8 symbol table), as well as all supplementary tools used for the android builds: metadata-generator, binding-generator, metadata-generator, static-binding-generator
 - The result of the build will be in the dist\_[engine] folder. For example if you are building with V8, the result will be in the dist_v8 folder.

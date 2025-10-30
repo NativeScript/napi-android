@@ -37,12 +37,6 @@ class SerializedValue;
 class StringValue;
 class Value;
 
-using v8_crdtp::detail::PtrMaybe;
-using v8_crdtp::detail::ValueMaybe;
-
-template<typename T>
-using Maybe = v8_crdtp::Maybe<T>;
-
 namespace detail {
 
 template <typename T>
