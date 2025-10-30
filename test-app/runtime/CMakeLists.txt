@@ -16,10 +16,17 @@ if (CCACHE_FOUND AND (USE_CCACHE))
     MESSAGE(STATUS "## Using CCache when building!")
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK ccache)
-endif (CCACHE_FOUND AND (USE_CCACHE))
+endif ()
 
-set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy -frtti")
+set(COMMON_CMAKE_ARGUMENTS "-std=c++17 -Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy")
 set(MI_OVERRIDE OFF)
+
+if (SHERMES) 
+    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -frtti")
+else()
+    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -fno-rtti")
+endif()
+
 # AOSP has switched to using LLD by default and the NDK will use it by default in the next release.
 # BFD and Gold will be removed once LLD has been through a release cycle with no major unresolved issues (estimated r21)
 # Note: lld does not currently work on Windows: https://github.com/android-ndk/ndk/issues/888
