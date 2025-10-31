@@ -33,7 +33,7 @@ def pVersion = "no package version was provided by build.gradle build"
 def arVersion = "no commit sha was provided by build.gradle build"
 def generateRegularRuntimePackage = !project.hasProperty("skipUnoptimized")
 
-def jsEngine = engine ?: 'v8'
+def jsEngine = engine ?: 'V8-10'
 
 def DIST_PATH = "$rootDir/dist_${jsEngine.toLowerCase()}"
 def TEST_APP_PATH = "$rootDir/test-app"
@@ -409,6 +409,7 @@ task createNpmPackage(type: Exec) {
 generateSbgJar.dependsOn(generateDtsgJar)
 generateSbgJar.dependsOn(jsParserNPMInstall)
 generateMdgJar.dependsOn(generateSbgJar)
+buildJsParser.dependsOn(jsParserNPMInstall)
 createDistDir.dependsOn(generateMdgJar)
 
 getPackageVersion.dependsOn(createDistDir)

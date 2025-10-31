@@ -17,14 +17,14 @@ JSR::JSR(): isolate(nullptr) {
     create_params.array_buffer_allocator = &g_allocator;
 
     if (!JSR::s_mainThreadInitialized) {
-        JSR::platform = v8::platform::NewDefaultPlatform().release();
-        v8::V8::InitializePlatform(JSR::platform);
+        JSR::platform = v8::platform::NewDefaultPlatform();
+        v8::V8::InitializePlatform(JSR::platform.get());
         v8::V8::Initialize();
         JSR::s_mainThreadInitialized = true;
     }
     isolate = v8::Isolate::New(create_params);
 }
-v8::Platform* JSR::platform = nullptr;
+std::unique_ptr<v8::Platform> JSR::platform = nullptr;
 bool JSR::s_mainThreadInitialized = false;
 std::unordered_map<napi_env, JSR*> JSR::env_to_jsr_cache;
 
@@ -65,11 +65,25 @@ napi_status js_unlock_env(napi_env env) {
 napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
     JSR* jsr = (JSR*) runtime;
-    v8::Locker locker(jsr->isolate);
-    v8::HandleScope handle_scope(jsr->isolate);
-    v8::Local<v8::Context> context = v8::Context::New(jsr->isolate);
-    *env = new napi_env__(context, NAPI_VERSION_EXPERIMENTAL);
-    JSR::env_to_jsr_cache.insert(std::make_pair(*env, jsr));
+    // Must enter explictly
+#ifdef __V8_13__
+    jsr->isolate->Enter();
+#endif
+    try {
+        v8::HandleScope handle_scope(jsr->isolate);
+        v8::Local<v8::Context> context = v8::Context::New(jsr->isolate);
+        *env = new napi_env__(context, NAPI_VERSION_EXPERIMENTAL);
+        JSR::env_to_jsr_cache.insert(std::make_pair(*env, jsr));
+        // Must exit explictly
+#ifdef __V8_13__
+        jsr->isolate->Exit();
+#endif
+    } catch (...) {
+#ifdef __V8_13__
+        jsr->isolate->Exit();
+#endif
+        return napi_generic_failure;
+    }
     return napi_ok;
 }
 
@@ -112,7 +126,11 @@ napi_status js_adjust_external_memory(napi_env env, int64_t changeInBytes, int64
 napi_status js_cache_script(napi_env env, const char *source, const char *file) {
     v8::Local<v8::String> sourceString = v8::String::NewFromUtf8(env->isolate, source).ToLocalChecked();
     v8::Local<v8::String> fileString = v8::String::NewFromUtf8(env->isolate, file).ToLocalChecked();
-    v8::ScriptOrigin origin(env->isolate, fileString);
+#ifdef __V8_13__
+    v8::ScriptOrigin origin(fileString);
+#else
+    v8::ScriptOrigin origin(env->isolate,fileString);
+#endif
     v8::Local<v8::Script> script = v8::Script::Compile(env->context(),sourceString, &origin).ToLocalChecked();
 
     Local<UnboundScript> unboundScript = script->GetUnboundScript();
@@ -162,7 +180,11 @@ napi_status js_run_cached_script(napi_env env, const char * file, napi_value scr
 
     auto fullRequiredModulePathWithSchema = v8::String::NewFromUtf8(env->isolate, filePath.c_str());
 
-    ScriptOrigin origin(env->isolate, fullRequiredModulePathWithSchema.ToLocalChecked());
+#ifdef __V8_13__
+    v8::ScriptOrigin origin(fullRequiredModulePathWithSchema.ToLocalChecked());
+#else
+    v8::ScriptOrigin origin(env->isolate,fullRequiredModulePathWithSchema.ToLocalChecked());
+#endif
 
     v8::Local<v8::String> scriptText;
     memcpy(static_cast<void*>(&scriptText), &script, sizeof(script));

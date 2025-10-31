@@ -86,7 +86,11 @@ void JsV8InspectorClient::scheduleBreak() {
 }
 
 void JsV8InspectorClient::createInspectorSession() {
+#ifdef __V8_10__
+    session_ = inspector_->connect(JsV8InspectorClient::contextGroupId, this, {});
+#else
     session_ = inspector_->connect(JsV8InspectorClient::contextGroupId, this, {}, V8Inspector::ClientTrustLevel::kFullyTrusted);
+#endif
 }
 
 void JsV8InspectorClient::disconnect() {
@@ -211,7 +215,7 @@ void JsV8InspectorClient::runMessageLoopOnPause(int context_group_id) {
             doDispatchMessage(inspectorMessage);
         }
 
-        while (v8::platform::PumpMessageLoop(JSR::platform, env->isolate)) {
+        while (v8::platform::PumpMessageLoop(JSR::platform.get(), env->isolate)) {
         }
     }
     terminated_ = false;
@@ -361,10 +365,18 @@ void JsV8InspectorClient::consoleLogCallback(napi_env env, ConsoleAPIType method
     v8::Local<v8::Context> context = instance->context_.Get(instance->env->isolate);
     const int contextId = V8ContextInfo::executionContextId(context);
 
+#ifdef __V8_13__
+    v8::MemorySpan<const v8::Local<v8::Value>> argsSpan((v8::Local<v8::Value> *) args.data(), args.size());
     std::unique_ptr<v8_inspector::V8ConsoleMessage> msg =
         v8_inspector::V8ConsoleMessage::createForConsoleAPI(
             context, contextId, contextGroupId, impl, instance->currentTimeMS(),
-            method, args, String16{}, std::move(stack));
+            method, argsSpan, String16{}, std::move(stack));
+#else
+    std::unique_ptr<v8_inspector::V8ConsoleMessage> msg =
+            v8_inspector::V8ConsoleMessage::createForConsoleAPI(
+                    context, contextId, contextGroupId, impl, instance->currentTimeMS(),
+                    method, args, String16{}, std::move(stack));
+#endif
 
     session->runtimeAgent()->messageAdded(msg.get());
 }

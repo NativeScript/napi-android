@@ -110,10 +110,9 @@ napi_status js_execute_pending_jobs(napi_env env) {
     itFound->second->rt->drainMicrotasks();
     return napi_ok;
     #else
+     bool result;
      return jsr_drain_microtasks(env, 0, &result);
     #endif
-   
-    
 }
 
 napi_status js_get_engine_ptr(napi_env env, int64_t *engine_ptr) {

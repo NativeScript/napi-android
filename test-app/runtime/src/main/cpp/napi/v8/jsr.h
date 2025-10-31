@@ -19,7 +19,7 @@ public:
     JSR();
     v8::Isolate* isolate;
     static bool s_mainThreadInitialized;
-    static v8::Platform* platform;
+    static std::unique_ptr<v8::Platform> platform;
 
     std::recursive_mutex js_mutex;
     void lock() {

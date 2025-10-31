@@ -63,7 +63,7 @@
     if (Parent.__isPrototypeImplementationObject) {
       throw new Error("Can not extend an already extended native object.");
     }
-    
+
     function extend(thiz) {
       var child = thiz.__proto__.__child;
       if (!child.__extended) {
@@ -204,7 +204,7 @@
   }
 
   global.setNativeArrayProp = (target, prop, value, receiver) => {
-     if (typeof prop !== "symbol" && !isNaN(prop)) {
+    if (typeof prop !== "symbol" && !isNaN(prop)) {
       receiver.setValueAtIndex(parseInt(prop), value);
       return true;
     }
@@ -218,7 +218,7 @@
     }
 
     if (prop === Symbol.iterator) {
-      let index = 0;
+      var index = 0;
       const l = target.length;
       return function () {
         return {
@@ -240,7 +240,7 @@
         const values = receiver.getAllValues();
         const result = [];
         const l = target.length;
-        for (let i = 0; i < l; i++) {
+        for (var i = 0; i < l; i++) {
           result.push(callback(values[i], i, target));
         }
         return result;
@@ -258,7 +258,7 @@
       return function (callback) {
         const values = receiver.getAllValues();
         const l = values.length;
-        for (let i = 0; i < l; i++) {
+        for (var i = 0; i < l; i++) {
           callback(values[i], i, target);
         }
       };
@@ -351,7 +351,7 @@
     URL.revokeObjectURL = function (url) {
       BLOB_STORE.delete(url);
     };
-    const InternalAccessor = class {};
+    function InternalAccessor() {}
     InternalAccessor.getData = function (url) {
       return BLOB_STORE.get(url);
     };
