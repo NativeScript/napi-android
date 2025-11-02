@@ -1,0 +1,219 @@
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'If true, run publish after build (default: false)'
+        required: false
+        default: 'false'
+      run_tests:
+        description: 'If true, run gradle runtestsAndVerifyResults before builds (default: false)'
+        required: false
+        default: 'false'
+      custom_version:
+        description: 'Optional custom NPM version (overrides computed version).'
+        required: false
+        default: ''
+      enable_HERMES:
+        description: 'Enable HERMES in the matrix'
+        required: false
+        default: 'true'
+      enable_V8:
+        description: 'Enable V8 in the matrix'
+        required: false
+        default: 'true'
+      enable_QUICKS:
+        description: 'Enable QUICKS in the matrix'
+        required: false
+        default: 'true'
+      enable_JSC:
+        description: 'Enable JSC in the matrix'
+        required: false
+        default: 'true'
+
+jobs:
+  set-matrix:
+    name: Build matrix from inputs
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.emit.outputs.matrix }}
+    steps:
+      - name: Emit matrix JSON
+        id: emit
+        run: |
+          set -e
+          # Build the engine list based on workflow dispatch inputs.
+          engines=()
+          if [ "${{ github.event.inputs.enable_HERMES }}" != "false" ]; then engines+=("HERMES"); fi
+          if [ "${{ github.event.inputs.enable_V8 }}" != "false" ]; then engines+=("V8"); fi
+          if [ "${{ github.event.inputs.enable_QUICKS }}" != "false" ]; then engines+=("QUICKS"); fi
+          if [ "${{ github.event.inputs.enable_JSC }}" != "false" ]; then engines+=("JSC"); fi
+
+          # If user disabled everything, fall back to a safe default (all engines).
+          if [ ${#engines[@]} -eq 0 ]; then
+            echo "All engines were disabled; defaulting to all engines."
+            engines=(HERMES V8 QUICKS JSC)
+          fi
+
+          # Build a JSON array string like ["HERMES","V8"]
+          json="["
+          for e in "${engines[@]}"; do
+            json="${json}\"${e}\","
+          done
+          json="${json%,}"   # remove trailing comma
+          json="${json}]"
+
+          echo "Computed matrix JSON: $json"
+          echo "matrix=$json" >> $GITHUB_OUTPUT
+
+  engine:
+    name: Test · Build · Publish (engine=${{ matrix.engine }})
+    needs: set-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # fromJson converts the JSON string emitted by set-matrix into the matrix array
+        engine: ${{ fromJson(needs.set-matrix.outputs.matrix) }}
+    env:
+      JS_PARSER_DIR: test-app/build-tools/jsparser
+      ENGINE: ${{ matrix.engine }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Restore npm cache for jsparser
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            ${{ github.workspace }}/${{ env.JS_PARSER_DIR }}/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('test-app/build-tools/jsparser/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies (jsparser)
+        working-directory: ${{ env.JS_PARSER_DIR }}
+        run: npm ci
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run runSbgTests (no emulator) for ${{ matrix.engine }}
+        if: ${{ github.event.inputs.run_tests == 'true' }}
+        run: |
+          echo "Running runSbgTests with ENGINE=${ENGINE}"
+          ./gradlew -Pengine="${ENGINE}" runSbgTests
+        env:
+          ENGINE: ${{ matrix.engine }}
+
+      - name: Run runtestsAndVerifyResults inside emulator for ${{ matrix.engine }}
+        if: ${{ github.event.inputs.run_tests == 'true' }}
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window
+          script: |
+            echo "Running runtestsAndVerifyResults with ENGINE=${ENGINE}"
+            ./gradlew -Pengine="${ENGINE}" runtestsAndVerifyResults
+        env:
+          ENGINE: ${{ matrix.engine }}
+
+      - name: Build with engine ${{ matrix.engine }}
+        run: |
+          echo "Building with ENGINE=${ENGINE}"
+          ./gradlew -Pengine="${ENGINE}"
+        env:
+          ENGINE: ${{ matrix.engine }}
+
+      - name: Publish tarball (or add dist-tag if version already exists)
+        id: npm_publish
+        run: |
+          set -e
+          eng_lc="${ENG_LC}"
+          TARBALL="${TARBALL:-dist-${eng_lc}-${NPM_VERSION}.tgz}"
+          TAG="${eng_lc}-${NPM_VERSION}"
+          echo "Publishing tarball $TARBALL with npm tag $TAG (package version: $NPM_VERSION)..."
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
+
+          if npm publish "$TARBALL" --tag "$TAG" --provenance --access public; then
+            echo "npm publish succeeded for $TARBALL"
+            echo "PUBLISHED=true" >> $GITHUB_ENV
+          else
+            echo "npm publish failed; attempting to add dist-tag pointing to existing version"
+            npm dist-tag add @nativescript/android@"${NPM_VERSION}" "${TAG}"
+            echo "DIST_TAG_ADDED=true" >> $GITHUB_ENV
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          NPM_VERSION: ${{ env.NPM_VERSION }}
+          ENG_LC: ${{ env.ENG_LC }}
+          TARBALL: ${{ env.TARBALL }}
+
+      - name: Create and push git tag for engine/version
+        if: always()
+        id: tag_release
+        run: |
+          set -e
+          eng_lc="${ENG_LC}"
+          TAG_NAME="${eng_lc}-v${NPM_VERSION}"
+          echo "Creating tag $TAG_NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse --verify "$TAG_NAME" >/dev/null 2>&1; then
+            git tag -d "$TAG_NAME" || true
+          fi
+          git tag -a "$TAG_NAME" -m "Release ${TAG_NAME}"
+          git push origin "refs/tags/${TAG_NAME}" || true
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
+      - name: Update CHANGELOG
+        id: changelog
+        uses: requarks/changelog-action@v1
+        with:
+          useGitmojis: false
+          excludeTypes: build,docs,other,style,chore,perf,doc
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: v${{ env.TAG_NAME }}
+          writeToFile: false
+
+      - name: Create GitHub release for engine
+        uses: actions/create-release@v1
+        if: always()
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          release_name: ${{ env.ENGINE }} ${{ env.NPM_VERSION }}
+          body: ${{ steps.changelog.outputs.changes }}
+          draft: false
+          prerelease: ${{ contains(env.NPM_VERSION, '-dev') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENGINE: ${{ matrix.engine }}
+          NPM_VERSION: ${{ env.NPM_VERSION }}
+
+      - name: Final status print
+        run: |
+          echo "Engine: ${ENGINE}"
+          echo "NPM_VERSION: ${NPM_VERSION}"
+          echo "Published: ${PUBLISHED:-false}"
+          echo "Dist-tag added: ${DIST_TAG_ADDED:-false}"
+          echo "Tag created: ${TAG_NAME:-none}"
+        env:
+          PUBLISHED: ${{ env.PUBLISHED }}
+          DIST_TAG_ADDED: ${{ env.DIST_TAG_ADDED }}
+          TAG_NAME: ${{ env.TAG_NAME }}
