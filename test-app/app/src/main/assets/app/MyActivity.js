@@ -21,6 +21,7 @@
 		}
 	}
 */
+const benchmarkRunner = require("./benchmark.js");
 var MyActivity = (function (_super) {
   __extends(MyActivity, _super);
   function MyActivity() {
@@ -30,17 +31,22 @@ var MyActivity = (function (_super) {
     _super.prototype.onCreate.call(this, bundle);
     require('./tests/testsWithContext').run(this);
     //run jasmine
-    execute();
+//    execute();
     var layout = new android.widget.LinearLayout(this);
     layout.setOrientation(1);
     this.setContentView(layout);
     var textView = new android.widget.TextView(this);
     textView.setText("It's a button!");
+    textView.setTextIsSelectable(true);
     layout.addView(textView);
 
     var button = new android.widget.Button(this);
     button.setText("Hit me");
     layout.addView(button);
+
+    var button2 = new android.widget.Button(this);
+    button2.setText("Run Benchmark");
+    layout.addView(button2);
 
     var Color = android.graphics.Color;
     var colors = [
@@ -61,6 +67,17 @@ var MyActivity = (function (_super) {
           taps++;
         },
       })
+    );
+    button2.setOnClickListener(
+          new android.view.View.OnClickListener("AppClickListener", {
+            onClick: function () {
+              const result = benchmarkRunner.runBenchmark();
+              setTimeout(() => {
+              globalThis.gc();
+              });
+              textView.setText(result);
+            },
+          })
     );
   };
   MyActivity = __decorate(

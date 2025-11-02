@@ -338,8 +338,8 @@
           const ret = `blob:nativescript/${id}`;
           BLOB_STORE.set(ret, {
             blob: object,
-            type: object?.type,
-            ext: options?.ext,
+            type: object ? object.type : undefined,
+            ext: options ? options.ext : undefined,
           });
           return ret;
         }

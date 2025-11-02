@@ -26,6 +26,7 @@
             android:name="com.tns.ErrorReportActivity"
             android:label="ErrorActivity">
         </activity>
+        <profileable android:shell="true"/>
     </application>
 
 </manifest>
