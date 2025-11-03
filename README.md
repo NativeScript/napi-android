@@ -74,11 +74,16 @@ Set the following environment variables:
 - `ANDROID_HOME` pointing to where you have installed the Android SDK
 - `ANDROID_NDK_HOME` pointing to the version of the Android NDK needed for this version of NativeScript
 
-Run the following command to build the runtime:
+Run the following commands to build the runtime:
+
+```
+npm run setup
+```
 
 ```
 npm run build
 ```
+
 The command will let you interactively choose the JS engine you want to build with. i.e V8, QuickJS, Hermes or JSC, PrimJS, Static Hermes.
 
 - The build process includes building of the runtime package (both optimized and with unstripped v8 symbol table), as well as all supplementary tools used for the android builds: metadata-generator, binding-generator, metadata-generator, static-binding-generator

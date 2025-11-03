@@ -27,7 +27,8 @@
   "scripts": {
     "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
     "version": "npm run changelog && git add CHANGELOG.md",
-    "build": "node ./scripts/build.js"
+    "build": "node ./scripts/build.js",
+    "setup": "cd test-app/build-tools/jsparser && npm install && cd ../../../"
   },
   "devDependencies": {
     "conventional-changelog-cli": "^2.1.1",
