@@ -1,5 +1,6 @@
 #include "jsr.h"
 #include "js_runtime.h"
+#include "File.h"
 
 using namespace facebook::jsi;
 std::unordered_map<napi_env, JSR *> JSR::env_to_jsr_cache;
@@ -131,7 +132,13 @@ napi_status js_cache_script(napi_env env, const char *source, const char *file) 
 
 napi_status js_run_cached_script(napi_env env, const char *file, napi_value script, void *cache,
                                  napi_value *result) {
-    return napi_ok;
+    int length = 0;
+    auto data = tns::File::ReadBinary(file, length);
+    if (!data) {
+        return napi_cannot_run_js;
+    }
+
+    return napi_run_bytecode(env, data, length, file, result);
 }
 
 napi_status js_get_runtime_version(napi_env env, napi_value *version) {
