@@ -16,6 +16,8 @@
 // #include "hermes/VM/RuntimeModule.h"
 #include "js_native_api.h"
 
+NAPI_EXTERN napi_status NAPI_CDECL napi_run_bytecode(napi_env env, void* data, size_t size, const char* source_url, napi_value *result);
+
 namespace hermes::node_api {
 
 class NodeApiEnvironment;
