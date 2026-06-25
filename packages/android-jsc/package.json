@@ -1,0 +1,22 @@
+{
+  "name": "@nativescript/android-jsc",
+  "version": "0.0.1",
+  "description": "NativeScript Runtime for Android (JavaScriptCore engine)",
+  "keywords": [
+    "NativeScript",
+    "Android",
+    "runtime",
+    "jsc",
+    "javascriptcore"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NativeScript/napi-android",
+    "directory": "packages/android-jsc"
+  },
+  "author": {
+    "name": "NativeScript Team",
+    "email": "oss@nativescript.org"
+  },
+  "license": "Apache-2.0"
+}

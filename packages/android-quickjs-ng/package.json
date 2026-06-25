@@ -1,0 +1,22 @@
+{
+  "name": "@nativescript/android-quickjs-ng",
+  "version": "0.0.1",
+  "description": "NativeScript Runtime for Android (QuickJS-ng engine)",
+  "keywords": [
+    "NativeScript",
+    "Android",
+    "runtime",
+    "quickjs",
+    "quickjs-ng"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NativeScript/napi-android",
+    "directory": "packages/android-quickjs-ng"
+  },
+  "author": {
+    "name": "NativeScript Team",
+    "email": "oss@nativescript.org"
+  },
+  "license": "Apache-2.0"
+}
