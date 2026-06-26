@@ -1,0 +1,376 @@
+name: NPM Trusted Release (Android engines)
+
+# Publishes one or more engine-specific NativeScript Android runtime packages
+# (@nativescript/android-v8, @nativescript/android-hermes, @nativescript/android-jsc,
+# @nativescript/android-quickjs, @nativescript/android-quickjs-ng,
+# @nativescript/android-shermes, @nativescript/android-primjs) via npm trusted
+# publishing (OIDC).
+#
+# Each package must be configured on npmjs.com with a trusted publisher that
+# points at this repository + workflow + environment. With `engine: all`, the
+# workflow fans out across every engine via a matrix.
+
+on:
+  workflow_dispatch:
+    inputs:
+      engine:
+        description: "Engine to release (or 'all' to publish every engine)"
+        required: true
+        type: choice
+        default: v8
+        options:
+          - v8
+          - hermes
+          - jsc
+          - quickjs
+          - quickjs-ng
+          - shermes
+          - primjs
+          - all
+      release-type:
+        description: "Version bump (patch/minor/major publish to 'latest'; prerelease uses 'preid' as the dist-tag)"
+        required: false
+        type: choice
+        default: prerelease
+        options:
+          - prerelease
+          - patch
+          - minor
+          - major
+      version:
+        description: "Exact npm version to publish; overrides release-type/preid. Use a prerelease version for preview publishes, e.g. 9.0.0-preview.0"
+        required: false
+        type: string
+      preid:
+        description: "Prerelease identifier (used only when release-type=prerelease; also becomes the npm dist-tag, e.g. next | canary)"
+        required: false
+        type: string
+        default: next
+      npm-tag:
+        description: "Optional npm dist-tag override for publish, e.g. latest"
+        required: false
+        type: string
+      dry-run:
+        description: "Run release steps without making changes (no publish)"
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  # Avoid overlapping publishes on the same ref/engine selection.
+  group: npm-trusted-release-${{ github.ref }}-${{ inputs.engine }}
+  cancel-in-progress: false
+
+jobs:
+  matrix:
+    name: Resolve engine matrix
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      engines: ${{ steps.compute.outputs.engines }}
+    steps:
+      - name: Compute matrix
+        id: compute
+        env:
+          ENGINE: ${{ inputs.engine }}
+        run: |
+          set -euo pipefail
+          case "$ENGINE" in
+            all)
+              echo 'engines=["v8","hermes","jsc","quickjs","quickjs-ng","shermes","primjs"]' >> "$GITHUB_OUTPUT"
+              ;;
+            v8|hermes|jsc|quickjs|quickjs-ng|shermes|primjs)
+              printf 'engines=["%s"]\n' "$ENGINE" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported engine: $ENGINE" >&2
+              exit 1
+              ;;
+          esac
+
+  build:
+    name: Build ${{ matrix.engine }}
+    needs: matrix
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: ${{ fromJson(needs.matrix.outputs.engines) }}
+    outputs:
+      # Per-engine outputs aren't natively supported with matrices, so each job
+      # uploads its computed metadata alongside the tarball artifact.
+      placeholder: noop
+    env:
+      JS_PARSER_DIR: test-app/build-tools/jsparser
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+      - name: Set up JDK 17
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          java-version: "17"
+          distribution: "temurin"
+      - name: Install root dependencies
+        run: npm install
+      - name: Resolve engine target
+        id: target
+        shell: bash
+        env:
+          ENGINE: ${{ matrix.engine }}
+        run: |
+          set -euo pipefail
+          case "$ENGINE" in
+            v8)         GRADLE_ENGINE=V8 ;;
+            hermes)     GRADLE_ENGINE=HERMES ;;
+            jsc)        GRADLE_ENGINE=JSC ;;
+            quickjs)    GRADLE_ENGINE=QUICKJS ;;
+            quickjs-ng) GRADLE_ENGINE=QUICKJS_NG ;;
+            shermes)    GRADLE_ENGINE=SHERMES ;;
+            primjs)     GRADLE_ENGINE=PRIMJS ;;
+            *) echo "Unsupported engine: $ENGINE" >&2; exit 1 ;;
+          esac
+          DIST_DIR="dist_$(printf '%s' "$GRADLE_ENGINE" | tr '[:upper:]' '[:lower:]')"
+          echo "GRADLE_ENGINE=$GRADLE_ENGINE" >> "$GITHUB_OUTPUT"
+          echo "DIST_DIR=$DIST_DIR" >> "$GITHUB_OUTPUT"
+          echo "PACKAGE_NAME=@nativescript/android-${ENGINE}" >> "$GITHUB_OUTPUT"
+          echo "PACKAGE_DIR=packages/android-${ENGINE}" >> "$GITHUB_OUTPUT"
+      - name: Bump version
+        id: bump
+        shell: bash
+        env:
+          RELEASE_TYPE: ${{ inputs.release-type }}
+          PACKAGE_VERSION: ${{ inputs.version }}
+          PREID: ${{ inputs.preid }}
+          NPM_TAG_OVERRIDE: ${{ inputs.npm-tag }}
+          ENGINE: ${{ matrix.engine }}
+          PACKAGE_DIR: ${{ steps.target.outputs.PACKAGE_DIR }}
+          PACKAGE_NAME: ${{ steps.target.outputs.PACKAGE_NAME }}
+        run: |
+          set -euo pipefail
+          release_type="$RELEASE_TYPE"
+          package_version="$PACKAGE_VERSION"
+          preid="$PREID"
+          npm_tag_override="$NPM_TAG_OVERRIDE"
+
+          pushd "$PACKAGE_DIR" >/dev/null
+          if [ -n "$package_version" ]; then
+            npm version "$package_version" --no-git-tag-version >/dev/null
+          elif [ "$release_type" = "prerelease" ]; then
+            npm version prerelease --preid "$preid" --no-git-tag-version >/dev/null
+          else
+            npm version "$release_type" --no-git-tag-version >/dev/null
+          fi
+          NPM_VERSION=$(node -e "console.log(require('./package.json').version)")
+          popd >/dev/null
+
+          NPM_TAG=$(NPM_VERSION="$NPM_VERSION" node ./scripts/get-npm-tag.js "android-${ENGINE}")
+          if [ -n "$npm_tag_override" ]; then
+            case "$npm_tag_override" in
+              *[[:space:]]*)
+                echo "Invalid npm tag override '$npm_tag_override': dist-tags cannot contain whitespace." >&2
+                exit 1
+                ;;
+            esac
+            if printf '%s\n' "$npm_tag_override" | grep -Eq '^[0-9]+(\.[0-9]+)*$'; then
+              echo "Invalid npm tag override '$npm_tag_override': dist-tags must not look like semver versions." >&2
+              exit 1
+            fi
+            NPM_TAG="$npm_tag_override"
+          fi
+          if [ -n "$package_version" ] && [ "$release_type" = "prerelease" ] && [ -z "$npm_tag_override" ] && [ "$NPM_TAG" = "latest" ]; then
+            echo "Exact prerelease publishes must include a prerelease identifier (for example 9.0.0-preview.0)." >&2
+            exit 1
+          fi
+
+          # Stamp the package identity into the root package.json so Gradle bakes the
+          # correct name + version straight into the dist tarball.
+          npm pkg set name="$PACKAGE_NAME" version="$NPM_VERSION"
+
+          echo "NPM_VERSION=$NPM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved $PACKAGE_NAME@$NPM_VERSION (tag: $NPM_TAG)"
+      - name: Install jsparser dependencies
+        working-directory: ${{ env.JS_PARSER_DIR }}
+        run: npm ci
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Build (-Pengine=${{ steps.target.outputs.GRADLE_ENGINE }})
+        env:
+          GRADLE_ENGINE: ${{ steps.target.outputs.GRADLE_ENGINE }}
+        run: ./gradlew -Pengine="${GRADLE_ENGINE}"
+      - name: Record metadata
+        shell: bash
+        env:
+          ENGINE: ${{ matrix.engine }}
+          DIST_DIR: ${{ steps.target.outputs.DIST_DIR }}
+          PACKAGE_NAME: ${{ steps.target.outputs.PACKAGE_NAME }}
+          NPM_VERSION: ${{ steps.bump.outputs.NPM_VERSION }}
+          NPM_TAG: ${{ steps.bump.outputs.NPM_TAG }}
+        run: |
+          set -euo pipefail
+          tarball_file="nativescript-android-${ENGINE}-${NPM_VERSION}.tgz"
+          if [ ! -f "${DIST_DIR}/${tarball_file}" ]; then
+            echo "Expected tarball ${DIST_DIR}/${tarball_file} was not produced by the build." >&2
+            ls -la "${DIST_DIR}" || true
+            exit 1
+          fi
+          cat > "${DIST_DIR}/release-meta.json" <<EOF
+          {
+            "engine": "${ENGINE}",
+            "dist_dir": "${DIST_DIR}",
+            "package_name": "${PACKAGE_NAME}",
+            "version": "${NPM_VERSION}",
+            "tag": "${NPM_TAG}",
+            "tarball": "${tarball_file}"
+          }
+          EOF
+      - name: Upload npm package artifact
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: npm-package-${{ matrix.engine }}
+          path: |
+            ${{ steps.target.outputs.DIST_DIR }}/nativescript-android-${{ matrix.engine }}-${{ steps.bump.outputs.NPM_VERSION }}.tgz
+            ${{ steps.target.outputs.DIST_DIR }}/release-meta.json
+
+  publish:
+    name: Publish ${{ matrix.engine }}
+    needs:
+      - matrix
+      - build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.dry-run && 'npm-publish-dry-run' || 'npm-publish' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: ${{ fromJson(needs.matrix.outputs.engines) }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: npm-package-${{ matrix.engine }}
+          path: npm-package/${{ matrix.engine }}
+      - name: Update npm (required for OIDC trusted publishing)
+        run: |
+          corepack enable npm
+          corepack install -g npm@11.6.2
+          test "$(npm --version)" = "11.6.2"
+          test "$(npx --version)" = "11.6.2"
+      - name: Read release metadata
+        id: meta
+        shell: bash
+        env:
+          ENGINE: ${{ matrix.engine }}
+        run: |
+          set -euo pipefail
+          meta="npm-package/${ENGINE}/release-meta.json"
+          if [ ! -f "$meta" ]; then
+            echo "Missing release metadata at $meta" >&2
+            exit 1
+          fi
+          NPM_VERSION=$(node -e "console.log(require('./$meta').version)")
+          NPM_TAG=$(node -e "console.log(require('./$meta').tag)")
+          PACKAGE_NAME=$(node -e "console.log(require('./$meta').package_name)")
+          TARBALL=$(node -e "console.log(require('./$meta').tarball)")
+          echo "NPM_VERSION=$NPM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "TARBALL=$TARBALL" >> "$GITHUB_OUTPUT"
+      - name: Publish package (OIDC trusted publishing)
+        if: ${{ vars.USE_NPM_TOKEN != 'true' }}
+        shell: bash
+        env:
+          NPM_VERSION: ${{ steps.meta.outputs.NPM_VERSION }}
+          NPM_TAG: ${{ steps.meta.outputs.NPM_TAG }}
+          PACKAGE_NAME: ${{ steps.meta.outputs.PACKAGE_NAME }}
+          TARBALL: ${{ steps.meta.outputs.TARBALL }}
+          ENGINE: ${{ matrix.engine }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          NODE_AUTH_TOKEN: ""
+        run: |
+          set -euo pipefail
+          TARBALL_PATH="npm-package/${ENGINE}/${TARBALL}"
+          PUBLISH_ARGS=("$TARBALL_PATH" --tag "$NPM_TAG" --access public --provenance)
+          if [ "$DRY_RUN" = "true" ]; then
+            PUBLISH_ARGS+=(--dry-run)
+          fi
+          echo "Publishing ${PACKAGE_NAME}@${NPM_VERSION} (tag: $NPM_TAG, dry-run: $DRY_RUN) via OIDC trusted publishing..."
+          unset NODE_AUTH_TOKEN
+          rm -f ~/.npmrc || true
+          if [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then
+            rm -f "$NPM_CONFIG_USERCONFIG" || true
+          fi
+          npm publish "${PUBLISH_ARGS[@]}"
+      - name: Publish package (granular token fallback)
+        if: ${{ vars.USE_NPM_TOKEN == 'true' }}
+        shell: bash
+        env:
+          NPM_VERSION: ${{ steps.meta.outputs.NPM_VERSION }}
+          NPM_TAG: ${{ steps.meta.outputs.NPM_TAG }}
+          PACKAGE_NAME: ${{ steps.meta.outputs.PACKAGE_NAME }}
+          TARBALL: ${{ steps.meta.outputs.TARBALL }}
+          ENGINE: ${{ matrix.engine }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          TARBALL_PATH="npm-package/${ENGINE}/${TARBALL}"
+          PUBLISH_ARGS=("$TARBALL_PATH" --tag "$NPM_TAG" --access public --provenance)
+          if [ "$DRY_RUN" = "true" ]; then
+            PUBLISH_ARGS+=(--dry-run)
+          fi
+          echo "Publishing ${PACKAGE_NAME}@${NPM_VERSION} (tag: $NPM_TAG, dry-run: $DRY_RUN) via granular token..."
+          npm publish "${PUBLISH_ARGS[@]}"
+
+  summary:
+    name: Release summary
+    if: always()
+    needs:
+      - matrix
+      - build
+      - publish
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Print summary
+        env:
+          ENGINE_SELECTION: ${{ inputs.engine }}
+          RELEASE_TYPE: ${{ inputs.release-type }}
+          PACKAGE_VERSION: ${{ inputs.version }}
+          PREID: ${{ inputs.preid }}
+          NPM_TAG_OVERRIDE: ${{ inputs.npm-tag }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          ENGINES: ${{ needs.matrix.outputs.engines }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+        run: |
+          echo "Engine selection: $ENGINE_SELECTION"
+          echo "Release type:     $RELEASE_TYPE"
+          echo "Exact version:    $PACKAGE_VERSION"
+          echo "Preid:            $PREID"
+          echo "NPM tag override: $NPM_TAG_OVERRIDE"
+          echo "Dry run:          $DRY_RUN"
+          echo "Engines:          $ENGINES"
+          echo "Build result:     $BUILD_RESULT"
+          echo "Publish result:   $PUBLISH_RESULT"

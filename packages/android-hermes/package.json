@@ -1,0 +1,21 @@
+{
+  "name": "@nativescript/android-hermes",
+  "version": "0.0.1",
+  "description": "NativeScript Runtime for Android (Hermes engine)",
+  "keywords": [
+    "NativeScript",
+    "Android",
+    "runtime",
+    "hermes"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NativeScript/napi-android",
+    "directory": "packages/android-hermes"
+  },
+  "author": {
+    "name": "NativeScript Team",
+    "email": "oss@nativescript.org"
+  },
+  "license": "Apache-2.0"
+}

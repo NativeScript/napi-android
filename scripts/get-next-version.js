@@ -3,8 +3,34 @@ const child_process = require("child_process");
 const dayjs = require("dayjs");
 const fs = require("fs");
 
-const currentVersion =
-  process.env.NPM_VERSION || require("../package.json").version;
+function resolveCurrentVersion() {
+  if (process.env.NPM_VERSION) {
+    return process.env.NPM_VERSION;
+  }
+  const target = process.argv[2] || "android";
+  const packageJsonByTarget = {
+    android: "../package.json",
+    "android-v8": "../packages/android-v8/package.json",
+    "android-hermes": "../packages/android-hermes/package.json",
+    "android-jsc": "../packages/android-jsc/package.json",
+    "android-quickjs": "../packages/android-quickjs/package.json",
+    "android-quickjs-ng": "../packages/android-quickjs-ng/package.json",
+    "android-shermes": "../packages/android-shermes/package.json",
+    "android-primjs": "../packages/android-primjs/package.json",
+  };
+
+  if (!packageJsonByTarget[target]) {
+    throw new Error(
+      `Unknown target "${target}". Expected one of ${Object.keys(packageJsonByTarget)
+        .map((name) => `"${name}"`)
+        .join(", ")}.`,
+    );
+  }
+
+  return require(packageJsonByTarget[target]).version;
+}
+
+const currentVersion = resolveCurrentVersion();
 
 if (!currentVersion) {
   throw new Error("Invalid current version");
