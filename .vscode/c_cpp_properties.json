@@ -1,25 +1,43 @@
 {
-    "configurations": [
-        {
-            "name": "Android",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/**",
-                "${workspaceFolder}/test-app/runtime/src/main/cpp/jsc/include"
-            ],
-            "defines": [],
-            "compilerPath": "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64/bin/clang-17",
-            "cStandard": "c17",
-            "cppStandard": "c++17",
-            "intelliSenseMode":  "clang-x86",
-            "browse": {
-                "path": [
-                    "/Users/ammarahmed/Library/Android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/darwin-x86_64",
-                    "${workspaceFolder}/test-app/runtime/src/main/cpp/jsc/include"
-                ],
-                "limitSymbolsToIncludedHeaders": false
-            }
-        }
-    ],
-    "version": 4
+  "configurations": [
+    {
+      "name": "Android",
+      "compilerPath": "/Users/ammarahmed/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android21-clang++",
+      "compilerArgs": ["-std=c++20"],
+      "cStandard": "c17",
+      "cppStandard": "c++20",
+      "intelliSenseMode": "linux-clang-arm64",
+      "defines": [
+        "USE_HOST_OBJECT=true",
+        "NAPI_EXPERIMENTAL=true",
+        "__BIONIC__=1",
+        "__V8__",
+        "__V8_13__"
+      ],
+      "includePath": [
+        "/Users/ammarahmed/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include/c++/v1",
+        "/Users/ammarahmed/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include",
+        "/Users/ammarahmed/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include/aarch64-linux-android",
+        "/Users/ammarahmed/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/18/include",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/zip/include",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/runtime/**",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/modules/**",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/napi/common",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/napi/v8",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/napi/v8/v8_inspector",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/napi/v8-13",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/napi/v8-13/include",
+        "${workspaceFolder}/test-app/runtime/src/main/cpp/napi/v8-13/v8_inspector"
+      ],
+      "browse": {
+        "path": [
+          "${workspaceFolder}/test-app/runtime/src/main/cpp",
+          "/Users/ammarahmed/Library/Android/sdk/ndk/27.1.12297006/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/include"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
 }
