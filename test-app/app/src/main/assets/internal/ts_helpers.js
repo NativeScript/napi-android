@@ -203,68 +203,10 @@
     global.WeakRef.prototype.get = global.WeakRef.prototype.deref;
   }
 
-  global.setNativeArrayProp = (target, prop, value, receiver) => {
-    if (typeof prop !== "symbol" && !isNaN(prop)) {
-      receiver.setValueAtIndex(parseInt(prop), value);
-      return true;
-    }
-    target[prop] = value;
-    return true;
-  };
-
-  global.getNativeArrayProp = (target, prop, receiver) => {
-    if (typeof prop !== "symbol" && !isNaN(prop)) {
-      return receiver.getValueAtIndex(parseInt(prop));
-    }
-
-    if (prop === Symbol.iterator) {
-      var index = 0;
-      const l = target.length;
-      return function () {
-        return {
-          next: function () {
-            if (index < l) {
-              return {
-                value: receiver.getValueAtIndex(index++),
-                done: false,
-              };
-            } else {
-              return { done: true };
-            }
-          },
-        };
-      };
-    }
-    if (prop === "map") {
-      return function (callback) {
-        const values = receiver.getAllValues();
-        const result = [];
-        const l = target.length;
-        for (var i = 0; i < l; i++) {
-          result.push(callback(values[i], i, target));
-        }
-        return result;
-      };
-    }
-
-    if (prop === "toString") {
-      return function () {
-        const result = receiver.getAllValues();
-        return result.join(",");
-      };
-    }
-
-    if (prop === "forEach") {
-      return function (callback) {
-        const values = receiver.getAllValues();
-        const l = values.length;
-        for (var i = 0; i < l; i++) {
-          callback(values[i], i, target);
-        }
-      };
-    }
-    return target[prop];
-  };
+  // Native array access: numeric indexing and the map/forEach/toString/
+  // Symbol.iterator helpers are now implemented natively (see MetadataNode's
+  // array prototype + the host object's indexed accessors), so the old JS
+  // getNativeArrayProp/setNativeArrayProp helpers are gone.
 
   function findInPrototypeChain(obj, prop) {
     while (obj) {
@@ -292,8 +234,11 @@
       get: function (target, prop) {
         if (prop === EXTERNAL_PROP) return this[EXTERNAL_PROP];
         if (prop === REFERENCE_PROP_JSC) return this[REFERENCE_PROP_JSC];
-        if (target.__is__javaArray) {
-          return global.getNativeArrayProp(target, prop, target);
+        // Numeric indices go straight to the native element accessor; the
+        // map/forEach/toString/Symbol.iterator helpers live on the array
+        // prototype now, so everything else just forwards to the target.
+        if (target.__is__javaArray && typeof prop !== "symbol" && !isNaN(prop)) {
+          return target.getValueAtIndex(parseInt(prop));
         }
         return target[prop];
       },
