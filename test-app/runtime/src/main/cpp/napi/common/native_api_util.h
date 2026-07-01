@@ -41,6 +41,36 @@
     }                                                                             \
   }
 
+// Faster varargs prologue for hot callbacks. Reads arguments into a fixed stack
+// buffer with a SINGLE napi_get_cb_info call (no heap allocation, no redundant
+// argc-probe call), falling back to a heap vector only when the real arity
+// exceeds the inline capacity `stackn`. Exposes `napi_value *argv` + `size_t
+// argc`, so call sites use `argv`/`argv[i]` (a pointer) instead of a vector.
+#define NAPI_CALLBACK_BEGIN_VARGS_FAST(stackn)                                    \
+  napi_status status;                                                             \
+  size_t argc = (stackn);                                                         \
+  void *data;                                                                     \
+  napi_value jsThis;                                                              \
+  napi_value __argv_stack[(stackn)];                                              \
+  NAPI_GUARD(napi_get_cb_info(env, info, &argc, __argv_stack, &jsThis, &data))    \
+  {                                                                               \
+    NAPI_THROW_LAST_ERROR                                                         \
+    return NULL;                                                                  \
+  }                                                                               \
+  std::vector<napi_value> __argv_heap;                                            \
+  napi_value *argv = __argv_stack;                                                \
+  if (argc > (stackn))                                                            \
+  {                                                                               \
+    __argv_heap.resize(argc);                                                     \
+    NAPI_GUARD(                                                                   \
+        napi_get_cb_info(env, info, &argc, __argv_heap.data(), nullptr, nullptr)) \
+    {                                                                             \
+      NAPI_THROW_LAST_ERROR                                                       \
+      return NULL;                                                                \
+    }                                                                             \
+    argv = __argv_heap.data();                                                    \
+  }
+
 #define NAPI_ERROR_INFO                                                     \
   const napi_extended_error_info *error_info =                              \
       (napi_extended_error_info *)malloc(sizeof(napi_extended_error_info)); \

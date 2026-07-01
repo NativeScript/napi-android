@@ -161,6 +161,56 @@ typedef struct {
   napi_status error_code;
 } napi_extended_error_info;
 
+#ifdef USE_HOST_OBJECT
+// Native handlers for a host object. The host object is a transparent proxy:
+// every property operation is dispatched to these callbacks. Each receives the
+// host object itself as `host_object` and the `data` pointer given to
+// napi_create_host_object. `property` is the key as a napi_value (a number for
+// indexed access, a string or symbol otherwise).
+//
+// `get` and `set` are required; `has`, `delete_property` and `own_keys` are
+// optional (NULL means the operation is not intercepted / reports absent).
+typedef napi_value(NAPI_CDECL* napi_host_object_get_cb)(napi_env env,
+                                                        napi_value host_object,
+                                                        napi_value property,
+                                                        void* data);
+typedef void(NAPI_CDECL* napi_host_object_set_cb)(napi_env env,
+                                                  napi_value host_object,
+                                                  napi_value property,
+                                                  napi_value value,
+                                                  void* data);
+typedef int (NAPI_CDECL* napi_host_object_has_cb)(napi_env env,
+                                                   napi_value host_object,
+                                                   napi_value property,
+                                                   void* data);
+typedef int (NAPI_CDECL* napi_host_object_delete_cb)(napi_env env,
+                                                      napi_value host_object,
+                                                      napi_value property,
+                                                      void* data);
+typedef napi_value(NAPI_CDECL* napi_host_object_own_keys_cb)(
+    napi_env env, napi_value host_object, void* data);
+
+// Optional fast paths for integer-indexed access.
+typedef napi_value(NAPI_CDECL* napi_host_object_indexed_get_cb)(
+    napi_env env, napi_value host_object, uint32_t index, void* data);
+typedef void(NAPI_CDECL* napi_host_object_indexed_set_cb)(
+    napi_env env,
+    napi_value host_object,
+    uint32_t index,
+    napi_value value,
+    void* data);
+
+typedef struct {
+  napi_host_object_get_cb get;
+  napi_host_object_set_cb set;
+  napi_host_object_has_cb has;
+  napi_host_object_delete_cb delete_property;
+  napi_host_object_own_keys_cb own_keys;
+  napi_host_object_indexed_get_cb indexed_get;
+  napi_host_object_indexed_set_cb indexed_set;
+} napi_host_object_methods;
+#endif
+
 EXTERN_C_END
 
 #endif // SRC_JS_NATIVE_API_TYPES_H_

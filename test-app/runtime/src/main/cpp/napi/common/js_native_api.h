@@ -17,6 +17,8 @@ EXTERN_C_START
 #define NAPI_VERSION_EXPERIMENTAL 2147483647
 #define NAPI_VERSION 8
 
+#define NAPI_EXPERIMENTAL 1
+
 NAPI_EXTERN napi_status napi_get_last_error_info(napi_env env, const napi_extended_error_info **result);
 
 // Getters for defined singletons
@@ -538,11 +540,35 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_object_seal(napi_env env,
                                                     napi_value object);
 
 #ifdef USE_HOST_OBJECT
-NAPI_EXTERN napi_status NAPI_CDECL napi_create_host_object(napi_env env, napi_value value, napi_finalize finalize, void* data, bool is_array, napi_value getter, napi_value setter, napi_value* result);
+// Creates a host object: a transparent proxy whose property operations are
+// dispatched to the native `methods` (see napi_host_object_methods). `data` is
+// passed to every callback and is also retrievable via
+// napi_get_host_object_data; `finalize` (optional) runs when the host object is
+// garbage-collected. `methods` and its `get`/`set` members are required.
+NAPI_EXTERN napi_status NAPI_CDECL
+napi_create_host_object(napi_env env,
+                        napi_finalize finalize,
+                        void* data,
+                        const napi_host_object_methods* methods,
+                        napi_value* result);
 
-NAPI_EXTERN napi_status NAPI_CDECL napi_get_host_object_data(napi_env env, napi_value object, void** data);
+NAPI_EXTERN napi_status NAPI_CDECL napi_get_host_object_data(napi_env env,
+                                                            napi_value object,
+                                                            void** data);
 
-NAPI_EXTERN napi_status NAPI_CDECL napi_is_host_object(napi_env env, napi_value object, bool* result);
+NAPI_EXTERN napi_status NAPI_CDECL napi_is_host_object(napi_env env,
+                                                       napi_value object,
+                                                       bool* result);
+#endif
+
+#ifdef NAPI_EXPERIMENTAL
+// Defers `finalize_cb` to a safe pass after the GC finalizer, where reference
+// and other JS/GC-state-affecting Node-API calls are allowed. Implemented for
+// the V8 engine.
+NAPI_EXTERN napi_status NAPI_CDECL node_api_post_finalizer(napi_env env,
+                                                          napi_finalize finalize_cb,
+                                                          void* finalize_data,
+                                                          void* finalize_hint);
 #endif
 
 #endif // NAPI_VERSION >= 8
