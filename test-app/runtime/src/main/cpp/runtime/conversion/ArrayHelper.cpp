@@ -48,7 +48,7 @@ napi_value ArrayHelper::CreateJavaArrayCallback(napi_env env, napi_callback_info
 }
 
 napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(8)
 
     if (argc != 2) {
         Throw(env, "Expect two parameters.");

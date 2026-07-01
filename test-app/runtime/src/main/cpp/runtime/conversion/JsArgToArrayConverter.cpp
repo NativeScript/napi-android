@@ -12,12 +12,14 @@ using namespace std;
 using namespace tns;
 
 JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, napi_value arg,
-                                             bool isImplementationObject, int classReturnType)
+                                             bool isImplementationObject, int classReturnType,
+                                             ObjectManager* objectManager)
         : m_arr(nullptr), m_argsAsObject(nullptr), m_argsLen(0), m_isValid(false), m_error(Error()),
           m_return_type(classReturnType) {
+    m_objectManager = objectManager;
     if (!isImplementationObject) {
         m_argsLen = 1;
-        m_argsAsObject = new jobject[m_argsLen];
+        m_argsAsObject = (m_argsLen <= INLINE_CAPACITY) ? m_inlineArgs : new jobject[m_argsLen];
         memset(m_argsAsObject, 0, m_argsLen * sizeof(jobject));
 
         m_isValid = ConvertArg(env, arg, 0);
@@ -33,7 +35,7 @@ JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, size_t argc, napi_val
     bool success = true;
 
     if (m_argsLen > 0) {
-        m_argsAsObject = new jobject[m_argsLen];
+        m_argsAsObject = (m_argsLen <= INLINE_CAPACITY) ? m_inlineArgs : new jobject[m_argsLen];
         memset(m_argsAsObject, 0, m_argsLen * sizeof(jobject));
 
         for (int i = 0; i < m_argsLen; i++) {
@@ -50,7 +52,8 @@ JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, size_t argc, napi_val
 
 bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) {
     bool success = false;
-    stringstream s;
+    // Error text is built only on failure (avoids a per-call stringstream).
+    std::string errMsg;
 
     JEnv jEnv;
 
@@ -131,8 +134,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
         jobject javaObject;
         JniLocalRef obj;
 
-        auto runtime = Runtime::GetRuntime(env);
-        auto objectManager = runtime->GetObjectManager();
+        auto objectManager = m_objectManager != nullptr
+                             ? m_objectManager
+                             : Runtime::GetRuntime(env)->GetObjectManager();
 
         switch (castType) {
             case CastType::Char:
@@ -265,7 +269,8 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                         napi_get_value_external(env, privateValue, &data);
                         auto node = reinterpret_cast<MetadataNode *>(data);
                         if (node == nullptr) {
-                            s << "Cannot get type of the null argument at index " << index;
+                            errMsg = "Cannot get type of the null argument at index " +
+                                     std::to_string(index);
                             success = false;
                             break;
                         }
@@ -336,9 +341,11 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                         napi_value objStr;
                         napi_coerce_to_string(env, jsObj, &objStr);
                         const char *objStrValue = napi_util::get_string_value(env, objStr);
+                        stringstream s;
                         s << "Cannot marshal JavaScript argument " << objStrValue << " at index "
                           << index
                           << " to Java type.";
+                        errMsg = s.str();
                     }
                 }
                 break;
@@ -347,13 +354,14 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 throw NativeScriptException("Unsupported cast type");
         }
     } else {
-        s << "Cannot marshal JavaScript argument at index " << index << " to Java type.";
+        errMsg = "Cannot marshal JavaScript argument at index " + std::to_string(index) +
+                 " to Java type.";
         success = false;
     }
 
     if (!success) {
         m_error.index = index;
-        m_error.msg = s.str();
+        m_error.msg = std::move(errMsg);
     }
 
     return success;
@@ -422,7 +430,9 @@ JsArgToArrayConverter::~JsArgToArrayConverter() {
             env.DeleteLocalRef(m_argsAsObject[index]);
         }
 
-        delete[] m_argsAsObject;
+        if (m_argsAsObject != m_inlineArgs) {
+            delete[] m_argsAsObject;
+        }
     }
 }
 

@@ -41,7 +41,8 @@ namespace tns {
                                      napi_value implementationObject,
                                      bool isInterface,
                                      napi_value *jsThisProxy,
-                                     const std::string &baseClassName = std::string());
+                                     const std::string &baseClassName = std::string(),
+                                     MetadataNode *node = nullptr);
 
         static jclass ResolveClass(napi_env env, const std::string &baseClassName,
                                    const std::string &fullClassName,
@@ -52,28 +53,34 @@ namespace tns {
 
         static napi_value
         GetArrayElement(napi_env env, napi_value array, uint32_t index,
-                        const std::string &arraySignature);
+                        const std::string &arraySignature,
+                        ObjectManager *objectManager = nullptr, jobject arrayObject = nullptr);
 
         static void
         SetArrayElement(napi_env env, napi_value array, uint32_t index,
-                        const std::string &arraySignature, napi_value value);
+                        const std::string &arraySignature, napi_value value,
+                        ObjectManager *objectManager = nullptr, jobject arrayObject = nullptr);
 
         static int GetArrayLength(napi_env env, napi_value arr);
 
         static napi_value
         CallJavaMethod(napi_env env, napi_value caller, const std::string &className,
                        const std::string &methodName, MetadataEntry *entry, bool isFromInterface,
-                       bool isStatic, napi_callback_info info,  size_t argc, napi_value* argv);
+                       bool isStatic, napi_callback_info info,  size_t argc, napi_value* argv,
+                       ObjectManager *objectManager = nullptr);
 
         static napi_value
         CallJSMethod(napi_env env, JNIEnv *jEnv, napi_value jsObject,jclass claz,
                      const std::string &methodName,int javaObjectId, jobjectArray args);
         static napi_value
         GetJavaField(napi_env env, napi_value caller,
-                     FieldCallbackData *fieldData);
+                     FieldCallbackData *fieldData, ObjectManager *objectManager = nullptr,
+                     JniLocalRef targetJavaObject = JniLocalRef());
 
         static void SetJavaField(napi_env env, napi_value target,
-                                 napi_value value, FieldCallbackData *fieldData);
+                                 napi_value value, FieldCallbackData *fieldData,
+                                 ObjectManager *objectManager = nullptr,
+                                 JniLocalRef targetJavaObject = JniLocalRef());
 
         static napi_value RunOnMainThreadCallback(napi_env env, napi_callback_info info);
 

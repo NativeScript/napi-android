@@ -11,8 +11,10 @@ using namespace std;
 using namespace tns;
 
 JsArgConverter::JsArgConverter(napi_env env, napi_value caller, napi_value *args, size_t argc,
-                               const std::string &methodSignature, MetadataEntry *entry)
-        : m_env(env), m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
+                               const std::string &methodSignature, MetadataEntry *entry, JNIEnv *jniEnv,
+                               ObjectManager *objectManager)
+        : m_env(env), m_jniEnv(jniEnv), m_objectManager(objectManager), m_isValid(true),
+          m_methodSignature(methodSignature), m_error(Error()) {
     int napiProvidedArgumentsLength = argc;
     m_argsLen = 1 + napiProvidedArgumentsLength;
 
@@ -46,8 +48,9 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value caller, napi_value *args
 
 JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
                                bool hasImplementationObject, const std::string &methodSignature,
-                               MetadataEntry *entry)
-        : m_env(env), m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
+                               MetadataEntry *entry, JNIEnv *jniEnv, ObjectManager *objectManager)
+        : m_env(env), m_jniEnv(jniEnv), m_objectManager(objectManager), m_isValid(true),
+          m_methodSignature(methodSignature), m_error(Error()) {
     m_argsLen = !hasImplementationObject ? argc : argc - 1;
 
     if (m_argsLen > 0) {
@@ -114,7 +117,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
 
     char buff[1024];
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
 
     if (arg == nullptr) {
         SetConvertedObject(index, nullptr);
@@ -166,10 +169,11 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
 
                 JniLocalRef obj;
 
-                auto runtime = Runtime::GetRuntime(m_env);
-                auto objectManager = runtime->GetObjectManager();
+                auto objectManager = m_objectManager != nullptr
+                                     ? m_objectManager
+                                     : Runtime::GetRuntime(m_env)->GetObjectManager();
 
-                JEnv jEnv;
+                JEnv jEnv = GetJEnv();
 
                 switch (castType) {
                     case CastType::Char:
@@ -357,7 +361,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
 
     jvalue value = {0};
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
 
     const char typePrefix = typeSignature[0];
 
@@ -437,7 +441,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
 bool JsArgConverter::ConvertJavaScriptBoolean(napi_env env, napi_value jsValue, int index) {
     bool success;
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
 
     if (typeSignature == "Z") {
         bool argValue;
@@ -469,7 +473,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
 
     const jsize arrLength = jsLen;
 
-    const auto &arraySignature = m_tokens.at(index);
+    const auto &arraySignature = m_tokens[index];
 
     std::string elementType = arraySignature.substr(1);
 
@@ -478,7 +482,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
     jclass elementClass;
     std::string strippedClassName;
 
-    JEnv jenv;
+    JEnv jenv = GetJEnv();
     switch (elementTypePrefix) {
         case 'Z': {
             arr = jenv.NewBooleanArray(arrLength);
@@ -594,7 +598,10 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
                 napi_get_element(env, jsArr, i, &element);
-                JsArgToArrayConverter c(env, element, false, (int) Type::Null);
+                JsArgToArrayConverter c(env, element, false, (int) Type::Null,
+                                        m_objectManager != nullptr
+                                        ? m_objectManager
+                                        : Runtime::GetRuntime(env)->GetObjectManager());
                 jobject o = c.GetConvertedArg();
                 jenv.SetObjectArrayElement((jobjectArray) arr, (int) i, o);
             }
@@ -616,7 +623,7 @@ template<typename T>
 bool JsArgConverter::ConvertFromCastFunctionObject(T value, int index) {
     bool success = false;
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
 
     const char typeSignaturePrefix = typeSignature[0];
 
@@ -677,7 +684,7 @@ JsArgConverter::Error JsArgConverter::GetError() const {
 
 JsArgConverter::~JsArgConverter() {
     if (m_argsLen > 0) {
-        JEnv env;
+        JEnv env = GetJEnv();
         for (int i = 0; i < m_args_refs_size; i++) {
             int index = m_args_refs[i];
             if (index != -1) {

@@ -222,7 +222,7 @@ napi_value Timers::ClearTimer(napi_env env, napi_callback_info info) {
 }
 
 napi_value Timers::SetTimer(napi_env env, napi_callback_info info, bool repeatable) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(8)
 
     auto thiz = reinterpret_cast<Timers *>(data);
 

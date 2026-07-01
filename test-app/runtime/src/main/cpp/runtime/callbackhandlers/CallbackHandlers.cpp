@@ -91,7 +91,8 @@ void CallbackHandlers::Init(napi_env env) {
 
 napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, const string &className,
                                  const string &methodName, MetadataEntry *entry,
-                                 bool isFromInterface, bool isStatic, napi_callback_info info, size_t argc, napi_value* argv) {
+                                 bool isFromInterface, bool isStatic, napi_callback_info info, size_t argc, napi_value* argv,
+                                 ObjectManager *objectManager) {
 
     JEnv jEnv;
     jclass clazz;
@@ -213,9 +214,16 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
         DEBUG_WRITE("CallJavaMethod on class %s", methodName.c_str());
     }
 
+    // The caller (MethodCallback) passes a cached ObjectManager*; only fall back
+    // to the locked env->runtime map lookup when invoked without one. Resolved
+    // before the converter so object-arg conversion can reuse it too.
+    if (objectManager == nullptr) {
+        objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+    }
+
     JsArgConverter argConverter = (entry != nullptr && entry->isExtensionFunction)
-                                  ? JsArgConverter(env, caller, argv, argc, *sig, entry)
-                                  : JsArgConverter(env, argv, argc, false, *sig, entry);
+                                  ? JsArgConverter(env, caller, argv, argc, *sig, entry, (JNIEnv *) jEnv, objectManager)
+                                  : JsArgConverter(env, argv, argc, false, *sig, entry, (JNIEnv *) jEnv, objectManager);
 
 
     if (!argConverter.IsValid()) {
@@ -227,14 +235,10 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
 
     jvalue *javaArgs = argConverter.ToArgs();
 
-    auto runtime = Runtime::GetRuntime(env);
-    auto objectManager = runtime->GetObjectManager();
-
     if (!isStatic) {
         int objectId = -1;
 
-        callerJavaObject = objectManager->GetJavaObjectByJsObject(caller, &objectId);
-        isSuper = objectManager->GetIsSuper(objectId, caller);
+        callerJavaObject = objectManager->GetJavaObjectByJsObject(caller, &objectId, &isSuper);
 
         if (callerJavaObject.IsNull()) {
             stringstream ss;
@@ -445,7 +449,8 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
                                         napi_value implementationObject,
                                         bool isInterface,
                                         napi_value *jsThisProxy,
-                                        const std::string &baseClassName) {
+                                        const std::string &baseClassName,
+                                        MetadataNode *node) {
     bool success;
 
     DEBUG_WRITE("RegisterInstance called for '%s'", fullClassName.c_str());
@@ -461,7 +466,7 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
 
     int javaObjectID = objectManager->GenerateNewObjectID();
 
-    objectManager->Link(jsObject, javaObjectID, nullptr);
+    objectManager->Link(jsObject, javaObjectID, nullptr, node);
 
     // resolve constructor
     auto mi = MethodCache::ResolveConstructorSignature(env, argWrapper, fullClassName,
@@ -508,14 +513,17 @@ bool CallbackHandlers::RegisterInstance(napi_env env, napi_value jsObject,
 
     jEnv.CallVoidMethod(runtime->GetJavaRuntime(), MAKE_INSTANCE_STRONG_ID, instance, javaObjectID);
 
-    AdjustAmountOfExternalAllocatedMemory(env);
+    // Reuse the runtime we already resolved instead of re-querying via env.
+    runtime->AdjustAmountOfExternalAllocatedMemory();
+    runtime->TryCallGC();
 
     JniLocalRef localInstance(instance);
     success = !localInstance.IsNull();
 
     if (success) {
-        jclass instanceClass = jEnv.FindClass(fullClassName);
-        objectManager->SetJavaClass(jsObject, instanceClass);
+        // ResolveClass already cached this exact (global) jclass under
+        // fullClassName, so reuse it instead of a redundant FindClass lookup.
+        objectManager->SetJavaClass(jsObject, generatedJavaClass);
         *jsThisProxy = objectManager->GetOrCreateProxy(javaObjectID, jsObject);
     } else {
         DEBUG_WRITE_FORCE("RegisterInstance failed with null new instance class: %s",
@@ -571,25 +579,35 @@ string CallbackHandlers::ResolveClassName(napi_env env, jclass &clazz) {
 }
 
 napi_value CallbackHandlers::GetArrayElement(napi_env env, napi_value array,
-                                             uint32_t index, const string &arraySignature) {
-    return arrayElementAccessor.GetArrayElement(env, array, index, arraySignature);
+                                             uint32_t index, const string &arraySignature,
+                                             ObjectManager *objectManager, jobject arrayObject) {
+    return arrayElementAccessor.GetArrayElement(env, array, index, arraySignature,
+                                                objectManager, arrayObject);
 }
 
 void CallbackHandlers::SetArrayElement(napi_env env, napi_value array,
                                        uint32_t index,
-                                       const string &arraySignature, napi_value value) {
+                                       const string &arraySignature, napi_value value,
+                                       ObjectManager *objectManager, jobject arrayObject) {
 
-    arrayElementAccessor.SetArrayElement(env, array, index, arraySignature, value);
+    arrayElementAccessor.SetArrayElement(env, array, index, arraySignature, value,
+                                         objectManager, arrayObject);
 }
 
 napi_value CallbackHandlers::GetJavaField(napi_env env, napi_value caller,
-                                          FieldCallbackData *fieldData) {
-    return fieldAccessor.GetJavaField(env, caller, fieldData);
+                                          FieldCallbackData *fieldData,
+                                          ObjectManager *objectManager,
+                                          JniLocalRef targetJavaObject) {
+    return fieldAccessor.GetJavaField(env, caller, fieldData, objectManager,
+                                      std::move(targetJavaObject));
 }
 
 void CallbackHandlers::SetJavaField(napi_env env, napi_value target,
-                                    napi_value value, FieldCallbackData *fieldData) {
-    fieldAccessor.SetJavaField(env, target, value, fieldData);
+                                    napi_value value, FieldCallbackData *fieldData,
+                                    ObjectManager *objectManager,
+                                    JniLocalRef targetJavaObject) {
+    fieldAccessor.SetJavaField(env, target, value, fieldData, objectManager,
+                               std::move(targetJavaObject));
 }
 
 void CallbackHandlers::AdjustAmountOfExternalAllocatedMemory(napi_env env) {
@@ -814,7 +832,7 @@ napi_value CallbackHandlers::TimeCallback(napi_env env, napi_callback_info info)
 
 napi_value
 CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN_VARGS();
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(8)
 
     if (argc != 1) {
         napi_throw_error(env, "0", "Unexpected arguments count!");
@@ -1263,7 +1281,7 @@ void CallbackHandlers::RemoveEnvEntries(napi_env env) {
 
 napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info info) {
     try {
-        NAPI_CALLBACK_BEGIN_VARGS()
+        NAPI_CALLBACK_BEGIN_VARGS_FAST(8)
 
         napi_value newTarget;
         napi_get_new_target(env, info, &newTarget);
@@ -1368,7 +1386,7 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
 
 napi_value
 CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN_VARGS();
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(2)
 
     try {
         if (argc != 1) {

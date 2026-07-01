@@ -109,7 +109,6 @@ if (QUICKJS OR QUICKJS_NG)
 
     set(SOURCES ${SOURCES}
             # quickjs
-            ${QJS_SOURCE_DIR}/cutils.c
             ${QJS_SOURCE_DIR}/libregexp.c
             ${QJS_SOURCE_DIR}/libunicode.c
             ${QJS_SOURCE_DIR}/quickjs.c
@@ -120,6 +119,12 @@ if (QUICKJS OR QUICKJS_NG)
 
 
     )
+
+    if (NOT QUICKJS_NG)
+        set(SOURCES ${SOURCES}
+            ${QJS_SOURCE_DIR}/cutils.c
+        )
+    endif ()
 
     include_directories(
             src/main/cpp/napi/quickjs

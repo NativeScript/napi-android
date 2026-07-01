@@ -130,7 +130,7 @@ std::string buildStringFromArg(napi_env env, napi_value val) {
 }
 
 std::string buildLogString(napi_env env, napi_callback_info info, int startingIndex = 0) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(16)
 
     std::stringstream ss;
 

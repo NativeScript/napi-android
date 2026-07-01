@@ -2,13 +2,14 @@ apply plugin: 'com.android.library'
 
 // can be: "V8-11", "V8-10","V8-13", "JSC", "HERMES", "QUICKJS", "QUICKJS_NG", "SHERMES", "PRIMJS"
 
-def jsEngine = "QUICKJS_NG"
+def jsEngine = "V8-13"
+
 def hasEngine = project.hasProperty("engine")
 if (hasEngine) {
     jsEngine = engine
 }
 
-def hasHostObjects = project.hasProperty("useHostObjects")
+def hasHostObjects = true; //project.hasProperty("useHostObjects")
 def isNapiModule = project.hasProperty("asNapiModule");
 
 printf("Compiling NativeScript with %s.\n", jsEngine)
@@ -135,7 +136,7 @@ android {
 
                if (jsEngine == "QUICKJS" || jsEngine == "QUICKJS_NG") {
                     arguments.add("-DQUICKJS=1")
-                    arguments.add("-DUSE_MIMALLOC=1")
+//                    arguments.add("-DUSE_MIMALLOC=1")
                    if (jsEngine == "QUICKJS_NG") {
                        arguments.add("-DQUICKJS_NG=1")
                    }

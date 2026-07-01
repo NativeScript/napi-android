@@ -568,7 +568,8 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     DEBUG_WRITE("createJSInstanceNative class %s", proxyClassName.c_str());
 
-    jsInstance = MetadataNode::CreateExtendedJSWrapper(env, m_objectManager, proxyClassName, javaObjectID);
+    MetadataNode *extNode = nullptr;
+    jsInstance = MetadataNode::CreateExtendedJSWrapper(env, m_objectManager, proxyClassName, javaObjectID, &extNode);
 
     if (napi_util::is_null_or_undefined(env, jsInstance)) {
         throw NativeScriptException(
@@ -585,7 +586,7 @@ Runtime::CreateJSInstanceNative(JNIEnv *_jEnv, jobject obj, jobject javaObject, 
 
     DEBUG_WRITE("createJSInstanceNative: implementationObject");
 
-    m_objectManager->Link(jsInstance, javaObjectID, nullptr);
+    m_objectManager->Link(jsInstance, javaObjectID, nullptr, extNode);
 }
 
 jint Runtime::GenerateNewObjectId(JNIEnv *jEnv, jobject obj) {

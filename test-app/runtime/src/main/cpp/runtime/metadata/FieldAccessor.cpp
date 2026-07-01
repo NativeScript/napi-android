@@ -8,15 +8,15 @@ using namespace std;
 using namespace tns;
 
 napi_value
-FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *fieldData) {
+FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *fieldData,
+                            ObjectManager *objectManager, JniLocalRef targetJavaObject) {
     JEnv jEnv;
 
-    auto runtime = Runtime::GetRuntime(env);
-    auto objectManager = runtime->GetObjectManager();
+    if (objectManager == nullptr) {
+        objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+    }
 
     napi_value fieldResult;
-
-    JniLocalRef targetJavaObject;
 
     auto &fieldMetadata = fieldData->metadata;
 
@@ -44,8 +44,11 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
     }
 
     if (!isStatic) {
-        // Using fast, target is always the original *this*
-        targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        // The caller usually pre-resolves this (single probe); only fall back to
+        // resolving here when it wasn't supplied.
+        if (targetJavaObject.IsNull()) {
+            targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        }
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;
@@ -191,13 +194,13 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
 }
 
 void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value value,
-                                 FieldCallbackData *fieldData) {
+                                 FieldCallbackData *fieldData, ObjectManager *objectManager,
+                                 JniLocalRef targetJavaObject) {
     JEnv jEnv;
 
-    auto runtime = Runtime::GetRuntime(env);
-    auto objectManager = runtime->GetObjectManager();
-
-    JniLocalRef targetJavaObject;
+    if (objectManager == nullptr) {
+        objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+    }
 
     auto &fieldMetadata = fieldData->metadata;
 
@@ -230,8 +233,11 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
     }
 
     if (!isStatic) {
-        // Using fast, target is always the original *this*
-        targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        // The caller usually pre-resolves this (single probe); only fall back to
+        // resolving here when it wasn't supplied.
+        if (targetJavaObject.IsNull()) {
+            targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        }
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;

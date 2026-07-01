@@ -11,9 +11,19 @@
 namespace tns {
     class ArrayElementAccessor {
     public:
-        napi_value GetArrayElement(napi_env env, napi_value array, uint32_t index, const std::string& arraySignature);
+        // `objectManager` and `arrayObject` may be supplied pre-resolved by the
+        // caller (e.g. the host indexed interceptor or an array-loop helper) to
+        // avoid a locked env->runtime lookup and re-resolving the Java array on
+        // every element. Both fall back to resolving internally when omitted.
+        napi_value GetArrayElement(napi_env env, napi_value array, uint32_t index,
+                                   const std::string& arraySignature,
+                                   ObjectManager* objectManager = nullptr,
+                                   jobject arrayObject = nullptr);
 
-        void SetArrayElement(napi_env env, napi_value array, uint32_t index, const std::string& arraySignature, napi_value value);
+        void SetArrayElement(napi_env env, napi_value array, uint32_t index,
+                             const std::string& arraySignature, napi_value value,
+                             ObjectManager* objectManager = nullptr,
+                             jobject arrayObject = nullptr);
 
     private:
         napi_value ConvertToJsValue(napi_env env, ObjectManager* objectManager, JEnv& jEnv, const std::string& elementSignature, const void* value);

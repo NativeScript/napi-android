@@ -146,7 +146,7 @@ napi_value ModuleInternal::RequireCallback(napi_env env, napi_callback_info info
 }
 
 napi_value ModuleInternal::RequireCallbackImpl(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(4)
 
     if (argc != 2) {
         throw NativeScriptException(string("require should be called with two parameters"));

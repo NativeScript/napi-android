@@ -21,9 +21,9 @@ namespace tns {
     class JsArgConverter {
     public:
 
-        JsArgConverter(napi_env env, napi_value caller, napi_value* args, size_t argc, const std::string& methodSignature, MetadataEntry* entry);
+        JsArgConverter(napi_env env, napi_value caller, napi_value* args, size_t argc, const std::string& methodSignature, MetadataEntry* entry, JNIEnv* jniEnv = nullptr, ObjectManager* objectManager = nullptr);
 
-        JsArgConverter(napi_env env, napi_value* args, size_t argc, bool hasImplementationObject, const std::string& methodSignature, MetadataEntry* entry);
+        JsArgConverter(napi_env env, napi_value* args, size_t argc, bool hasImplementationObject, const std::string& methodSignature, MetadataEntry* entry, JNIEnv* jniEnv = nullptr, ObjectManager* objectManager = nullptr);
 
         JsArgConverter(napi_env env, napi_value* args, size_t argc, const std::string& methodSignature);
 
@@ -80,6 +80,19 @@ namespace tns {
         bool ConvertFromCastFunctionObject(T value, int index);
 
         napi_env m_env;
+
+        // Current thread's JNIEnv* threaded down from the caller (avoids
+        // re-querying the JavaVM via GetEnv); nullptr => construct locally.
+        JNIEnv* m_jniEnv = nullptr;
+
+        // Returns a JEnv reusing the threaded JNIEnv* when available.
+        inline JEnv GetJEnv() const {
+            return m_jniEnv != nullptr ? JEnv(m_jniEnv, JEnv::Adopt::Trusted) : JEnv();
+        }
+
+        // Cached ObjectManager threaded from the caller (avoids a locked
+        // env->runtime lookup per object-typed argument).
+        ObjectManager* m_objectManager = nullptr;
 
         int m_argsLen;
 
