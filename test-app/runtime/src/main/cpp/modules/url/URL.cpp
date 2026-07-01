@@ -196,7 +196,13 @@ napi_value URL::New(napi_env env, napi_callback_info info) {
     url_aggregator url;
     std::string_view url_string_view(url_buffer.data(), url_buffer.size());
 
-    if (argc > 1) {
+    // Only treat the 2nd argument as a base URL when it is provided and is
+    // neither undefined nor null; otherwise fall through to the no-base parse.
+    bool hasBase = argc > 1 &&
+                   !napi_util::is_of_type(env, argv[1], napi_undefined) &&
+                   !napi_util::is_of_type(env, argv[1], napi_null);
+
+    if (hasBase) {
         // Handle base URL
         size_t base_str_size;
         NAPI_GUARD(napi_get_value_string_utf8(env, argv[1], nullptr, 0, &base_str_size)) {
