@@ -9,7 +9,7 @@ if (hasEngine) {
     jsEngine = engine
 }
 
-def hasHostObjects = true; //project.hasProperty("useHostObjects")
+def hasHostObjects = project.hasProperty("useHostObjects")
 def isNapiModule = project.hasProperty("asNapiModule");
 
 printf("Compiling NativeScript with %s.\n", jsEngine)
