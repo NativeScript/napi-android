@@ -45,15 +45,22 @@ extern const uint32_t qjsc_repl_size;
 extern const uint8_t qjsc_standalone[];
 extern const uint32_t qjsc_standalone_size;
 
+#if defined(EMSCRIPTEN) || defined(__wasi__)
+// Standalone executables (the --compile option and detecting/running an
+// executable with appended bytecode) can't work in these environments.
+#define emscripten_or_wasi 1
+#else
+#define emscripten_or_wasi 0
+#endif
+
+static int qjs__argc;
+static char **qjs__argv;
+
 // Must match standalone.js
 #define TRAILER_SIZE 12
 static const char trailer_magic[] = "quickjs2";
 static const int trailer_magic_size = sizeof(trailer_magic) - 1;
 static const int trailer_size = TRAILER_SIZE;
-
-static int qjs__argc;
-static char **qjs__argv;
-
 
 static bool is_standalone(const char *exe)
 {
@@ -372,11 +379,12 @@ static const JSMallocFunctions mi_mf = {
 
 #define PROG_NAME "qjs"
 
-void help(void)
+void help(int exit_status)
 {
     printf("QuickJS-ng version %s\n"
            "usage: " PROG_NAME " [options] [file [args]]\n"
            "-h  --help         list options\n"
+           "-v  --version      print version string and then exit\n"
            "-e  --eval EXPR    evaluate EXPR\n"
            "-i  --interactive  go to interactive mode\n"
            "-C  --script       load as JS classic script (default=autodetect)\n"
@@ -385,32 +393,34 @@ void help(void)
            "    --std          make 'std', 'os' and 'bjson' available to script\n"
            "-T  --trace        trace memory allocation\n"
            "-d  --dump         dump the memory usage stats\n"
-           "-D  --dump-flags   flags for dumping debug data (see DUMP_* defines)\n"
-           "-c  --compile FILE compile the given JS file as a standalone executable\n"
-           "-o  --out FILE     output file for standalone executables\n"
-           "    --exe          select the executable to use as the base, defaults to the current one\n"
-           "    --memory-limit n       limit the memory usage to 'n' Kbytes\n"
+           "-D  --dump-flags   flags for dumping debug data (see DUMP_* defines)\n",
+           JS_GetVersion());
+    if (!emscripten_or_wasi)
+        printf("-c  --compile FILE compile the given JS file as a standalone executable\n"
+               "-o  --out FILE     output file for standalone executables\n"
+               "    --exe          select the executable to use as the base, defaults to the current one\n");
+    printf("    --memory-limit n       limit the memory usage to 'n' Kbytes\n"
            "    --stack-size n         limit the stack size to 'n' Kbytes\n"
-           "-q  --quit         just instantiate the interpreter and quit\n", JS_GetVersion());
-    exit(1);
+           "-q  --quit         just instantiate the interpreter and quit\n");
+    exit(exit_status);
 }
 
 int main(int argc, char **argv)
 {
     JSRuntime *rt;
     JSContext *ctx;
-    JSValue ret = JS_UNDEFINED;
     struct trace_malloc_data trace_data = { NULL };
     int r = 0;
     int optind = 1;
+    JSValue ret = JS_UNDEFINED;
     char exebuf[JS__PATH_MAX];
     size_t exebuf_size = sizeof(exebuf);
     char *compile_file = NULL;
     char *exe = NULL;
-    char *expr = NULL;
-    char *dump_flags_str = NULL;
     char *out = NULL;
     int standalone = 0;
+    char *expr = NULL;
+    char *dump_flags_str = NULL;
     int interactive = 0;
     int dump_memory = 0;
     int dump_flags = 0;
@@ -428,8 +438,8 @@ int main(int argc, char **argv)
     qjs__argv = argv;
 
     /* check if this is a standalone executable */
-
-    if (!js_exepath(exebuf, &exebuf_size) && is_standalone(exebuf)) {
+    if (!emscripten_or_wasi &&
+            !js_exepath(exebuf, &exebuf_size) && is_standalone(exebuf)) {
         standalone = 1;
         goto start;
     }
@@ -441,7 +451,7 @@ int main(int argc, char **argv)
        the script */
     while (optind < argc && *argv[optind] == '-') {
         char *arg = argv[optind] + 1;
-        const char *longopt = "";
+        char *longopt = "";
         char *optarg = NULL;
         /* a single - is not an option, it also stops argument scanning */
         if (!*arg)
@@ -465,8 +475,11 @@ int main(int argc, char **argv)
                     optarg = arg;
             }
             if (opt == 'h' || opt == '?' || !strcmp(longopt, "help")) {
-                help();
-                continue;
+                help(0);
+            }
+            if (opt == 'v' || !strcmp(longopt, "version")) {
+                printf("%s\n",JS_GetVersion());
+                return 0;
             }
             if (opt == 'e' || !strcmp(longopt, "eval")) {
                 if (!optarg) {
@@ -545,7 +558,8 @@ int main(int argc, char **argv)
                 stack_size = parse_limit(optarg);
                 break;
             }
-            if (opt == 'c' || !strcmp(longopt, "compile")) {
+            if (!emscripten_or_wasi &&
+                    (opt == 'c' || !strcmp(longopt, "compile"))) {
                 if (!optarg) {
                     if (optind >= argc) {
                         fprintf(stderr, "qjs: missing file for -c\n");
@@ -556,7 +570,7 @@ int main(int argc, char **argv)
                 compile_file = optarg;
                 break;
             }
-            if (opt == 'o' || !strcmp(longopt, "out")) {
+            if (!emscripten_or_wasi && (opt == 'o' || !strcmp(longopt, "out"))) {
                 if (!optarg) {
                     if (optind >= argc) {
                         fprintf(stderr, "qjs: missing file for -o\n");
@@ -567,7 +581,7 @@ int main(int argc, char **argv)
                 out = optarg;
                 break;
             }
-            if (!strcmp(longopt, "exe")) {
+            if (!emscripten_or_wasi && !strcmp(longopt, "exe")) {
                 if (!optarg) {
                     if (optind >= argc) {
                         fprintf(stderr, "qjs: missing file for --exe\n");
@@ -583,12 +597,12 @@ int main(int argc, char **argv)
             } else {
                 fprintf(stderr, "qjs: unknown option '--%s'\n", longopt);
             }
-            help();
+            help(1);
         }
     }
 
-    if (compile_file && !out)
-        help();
+    if (!emscripten_or_wasi && compile_file && !out)
+        help(1);
 
 start:
 
@@ -621,7 +635,7 @@ start:
     }
 
     /* loader for ES6 modules */
-    JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);
+    JS_SetModuleLoaderFunc2(rt, NULL, js_module_loader, js_module_check_attributes, NULL);
 
     /* exit on unhandled promise rejections */
     JS_SetHostPromiseRejectionTracker(rt, js_std_promise_rejection_tracker, NULL);

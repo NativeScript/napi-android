@@ -1,9 +1,9 @@
 /*
  * QuickJS command line compiler
  *
- * Copyright (c) 2018-2024 Fabrice Bellard
- * Copyright (c) 2023-2025 Ben Noordhuis
- * Copyright (c) 2023-2025 Saúl Ibarra Corretgé
+ * Copyright (c) 2018-2026 Fabrice Bellard
+ * Copyright (c) 2023-2026 Ben Noordhuis
+ * Copyright (c) 2023-2026 Saúl Ibarra Corretgé
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -419,7 +419,7 @@ int main(int argc, char **argv)
 
     while (optind < argc && *argv[optind] == '-') {
         char *arg = argv[optind] + 1;
-        const char *longopt = "";
+        char *longopt = "";
         char *optarg = NULL;
         /* a single - is not an option, it also stops argument scanning */
         if (!*arg)
@@ -645,7 +645,7 @@ int main(int argc, char **argv)
         }
 
         /* add the module loader */
-        fprintf(fo, "  JS_SetModuleLoaderFunc(rt, NULL, js_module_loader, NULL);\n");
+        fprintf(fo, "  JS_SetModuleLoaderFunc2(rt, NULL, js_module_loader, js_module_check_attributes, NULL);\n");
 
         fprintf(fo,
                 "  ctx = JS_NewCustomContext(rt);\n"

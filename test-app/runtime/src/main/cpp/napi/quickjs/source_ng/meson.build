@@ -1,11 +1,10 @@
 project(
   'quickjs-ng',
   'c',
-  version: '0.11.0',
+  version: '0.15.1',
   default_options: [
     'c_std=gnu11,c11',
     'warning_level=3',
-    'default_library=static',
   ],
   license: 'MIT',
   license_files: 'LICENSE',
@@ -14,6 +13,8 @@ project(
 
 host_system = host_machine.system()
 cc = meson.get_compiler('c')
+
+add_project_arguments('-DQUICKJS_NG_BUILD', language: 'c')
 
 qjs_gcc_warning_args = [
   '-Wno-unsafe-buffer-usage',
@@ -33,9 +34,11 @@ qjs_gcc_warning_args = [
   '-Wno-array-bounds',
   '-Wno-format-truncation',
 ]
-qjs_gcc_args = [
-  '-funsigned-char',
-]
+qjs_gcc_args = []
+
+if host_system != 'sunos'
+  qjs_gcc_args += '-funsigned-char'
+endif
 
 if host_system == 'darwin'
   # https://github.com/quickjs-ng/quickjs/issues/453
@@ -131,7 +134,6 @@ qjs_sys_deps += dependency('threads', required: false)
 qjs_sys_deps += dependency('dl', required: false)
 
 qjs_srcs = files(
-  'cutils.c',
   'dtoa.c',
   'libregexp.c',
   'libunicode.c',
@@ -147,6 +149,10 @@ qjs_libc_hdrs = files('quickjs-libc.h')
 
 if qjs_libc
   qjs_hdrs += qjs_libc_hdrs
+  add_project_arguments(
+    '-DQJS_BUILD_LIBC',
+    language: 'c'
+  )
 endif
 
 qjs_parser = get_option('parser')
@@ -161,29 +167,14 @@ if not qjs_parser
   qjs_c_args += ['-DQJS_DISABLE_PARSER']
 endif
 
-qjs_libc_lib = static_library(
-  'quickjs-libc',
-  qjs_libc_srcs,
-
-  dependencies: qjs_sys_deps,
-  c_args: qjs_c_args,
-  gnu_symbol_visibility: 'hidden',
-)
-
 qjs_lib = library(
   'qjs',
   qjs_srcs,
-
-  # export public headers
-  generator(
-    find_program('cp', 'xcopy'),
-    output: ['@PLAINNAME@'],
-    arguments: ['@INPUT@', '@OUTPUT@'],
-  ).process(qjs_hdrs),
+  qjs_libc ? qjs_libc_srcs : [],
 
   dependencies: qjs_sys_deps,
-  link_whole: qjs_libc ? qjs_libc_lib : [],
   c_args: qjs_c_args,
+  c_shared_args: ['-DBUILDING_QJS_SHARED'],
   gnu_symbol_visibility: 'hidden',
 
   install: true,
@@ -194,12 +185,56 @@ qjs_export_variables = [
   f'have_parser=@qjs_parser@'
 ]
 
+# This note is only of interest on Windows.
+# Be conservative here: only pass -DUSING_QJS_SHARED iff default_library ==
+# 'shared', thus qjs is guaranteed to be a DLL. Not passing -DUSING_QJS_SHARED if
+# qjs is a DLL is not harmful, but passing the definition for DLL qjs is desired.
+# Conversely, if -DUSING_QJS_SHARED is passed for static qjs, the consumers
+# will not compile.
+qjs_dep_args = get_option('default_library') == 'shared' ? ['-DUSING_QJS_SHARED'] : []
+
 qjs_dep = declare_dependency(
+  compile_args: qjs_dep_args,
   link_with: qjs_lib,
   dependencies: qjs_sys_deps,
-  include_directories: qjs_lib.private_dir_include(),
+  include_directories: include_directories('.'),
   variables: qjs_export_variables,
 )
+
+if host_system != 'windows'
+  qjs_module_dep = declare_dependency(
+    compile_args: [qjs_dep_args, '-DQUICKJS_NG_MODULE_BUILD'],
+    include_directories: include_directories('.'),
+  )
+else
+  qjs_module_dep = declare_dependency(
+    compile_args: [qjs_dep_args, '-DQUICKJS_NG_MODULE_BUILD'],
+    include_directories: include_directories('.'),
+    # Windows can't resolve symbols at runtime thus we explicitly link to qjs.
+    dependencies: qjs_dep,
+  )
+endif
+
+if qjs_libc
+  qjs_libc_dep = declare_dependency(
+    include_directories: include_directories('.'),
+    dependencies: qjs_dep,
+  )
+else
+  qjs_libc_lib = static_library(
+    'quickjs-libc',
+    qjs_libc_srcs,
+
+    c_args: qjs_c_args,
+    dependencies: [qjs_sys_deps, qjs_dep],
+    gnu_symbol_visibility: 'hidden',
+  )
+  qjs_libc_dep = declare_dependency(
+    link_with: qjs_libc_lib,
+    # Pick up quickjs-libc.h.
+    include_directories: include_directories('.'),
+  )
+endif
 
 if host_system == 'emscripten'
   qjs_wasm_export_name = 'getQuickJs'
@@ -257,6 +292,8 @@ import('pkgconfig').generate(
   url: 'https://github.com/quickjs-ng/quickjs',
   version: meson.project_version(),
   variables: qjs_export_variables,
+  # Export -DUSING_QJS_SHARED, if needed, in the pkgconfig file.
+  extra_cflags: qjs_dep_args,
 )
 
 if not qjs_parser
@@ -272,9 +309,7 @@ qjsc_exe = executable(
   qjsc_srcs,
 
   c_args: qjs_c_args,
-  link_with: qjs_libc ? [] : qjs_libc_lib,
-  dependencies: qjs_dep,
-
+  dependencies: [qjs_dep, qjs_libc_dep],
   install: true,
 )
 
@@ -298,8 +333,7 @@ qjs_exe = executable(
   qjs_exe_srcs,
 
   c_args: qjs_c_args,
-  link_with: qjs_libc ? [] : qjs_libc_lib,
-  dependencies: [qjs_dep, mimalloc_dep],
+  dependencies: [qjs_dep, qjs_libc_dep, mimalloc_dep],
   export_dynamic: true,
 
   install: true,
@@ -379,10 +413,9 @@ if tests.allowed()
     run262_exe = executable(
       'run-test262',
       'run-test262.c',
-      qjs_libc_srcs,
 
       c_args: qjs_c_args,
-      dependencies: qjs_dep,
+      dependencies: [qjs_dep, qjs_libc_dep]
     )
 
     test(
@@ -488,16 +521,29 @@ if tests.allowed()
     ),
   )
 
+  # LRE test
+  test(
+    'lre',
+    executable(
+      'lre-test',
+      'lre-test.c',
+      'libregexp.c',
+      'libunicode.c',
+
+      c_args: qjs_c_args,
+      build_by_default: false,
+    ),
+  )
+
   # Function.toString() test
   test(
     'function_source',
     executable(
       'function_source',
       'gen/function_source.c',
-      qjs_libc_srcs,
 
       c_args: qjs_c_args,
-      dependencies: qjs_dep,
+      dependencies: [qjs_dep, qjs_libc_dep],
       build_by_default: false,
     ),
   )
@@ -506,7 +552,6 @@ endif
 # Unicode generator
 unicode_gen = executable(
   'unicode_gen',
-  'cutils.c',
   'unicode_gen.c',
 
   c_args: qjs_c_args,
@@ -602,34 +647,38 @@ alias_target('codegen',
 )
 
 if examples.allowed()
+  if host_system == 'windows' and get_option('default_library') != 'shared'
+    warning('Binary modules used with static qjs on Windows.')
+    warning(
+      'There might be runtime errors when the modules are used due to',
+      'two copies of qjs in memory.'
+    )
+    warning('Please use "-Ddefault_library=shared" if possible.')
+  endif
   executable(
     'hello',
     'gen/hello.c',
-    qjs_libc_srcs,
 
     c_args: qjs_c_args,
-    dependencies: qjs_dep,
+    dependencies: [qjs_dep, qjs_libc_dep]
   )
 
   executable(
     'hello_module',
     'gen/hello_module.c',
-    qjs_libc_srcs,
 
     c_args: qjs_c_args,
-    dependencies: qjs_dep,
+    dependencies: [qjs_dep, qjs_libc_dep]
   )
 
   subdir('examples')
 
   executable(
     'test_fib',
-    'examples/fib.c',
     'gen/test_fib.c',
-    qjs_libc_srcs,
 
     c_args: qjs_c_args,
-    dependencies: qjs_dep,
+    dependencies: [qjs_dep, qjs_libc_dep],
     export_dynamic: true,
   )
 endif
