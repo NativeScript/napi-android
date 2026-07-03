@@ -3,6 +3,7 @@
 #include "ArgConverter.h"
 #include "NativeScriptAssert.h"
 #include "Runtime.h"
+#include "ObjectManager.h"
 #include <sstream>
 
 using namespace std;
@@ -72,11 +73,9 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
     JEnv jEnv;
 
     if (!m_javaException.IsNull()) {
-        std::string excClassName;
-        if (env) {
-            auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
-            excClassName = objectManager->GetClassName((jobject)m_javaException);
-        }
+        // Static lookup avoids needing the runtime/ObjectManager here, which may
+        // be unavailable while an exception is being rethrown to Java.
+        std::string excClassName = ObjectManager::GetClassName((jobject)m_javaException);
 
         if (excClassName == "com/tns/NativeScriptException") {
             ex = m_javaException;
@@ -99,8 +98,7 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
         if (ex == nullptr) {
             ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_JSVALUE_CTOR_ID, (jstring)msg, (jstring)stackTrace, reinterpret_cast<jlong>(m_javascriptException)));
         } else {
-            auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
-            auto excClassName = objectManager->GetClassName(ex);
+            auto excClassName = ObjectManager::GetClassName(ex);
             if (excClassName != "com/tns/NativeScriptException") {
                 ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_THROWABLE_CTOR_ID, (jstring)msg, (jstring)stackTrace, ex));
             }
@@ -172,9 +170,7 @@ napi_value NativeScriptException::WrapJavaToJsException(napi_env env) {
 
     JEnv jenv;
 
-    auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
-
-    string excClassName = objectManager->GetClassName((jobject)m_javaException);
+    string excClassName = ObjectManager::GetClassName((jobject)m_javaException);
     if (excClassName == "com/tns/NativeScriptException") {
         jfieldID fieldID = jenv.GetFieldID(jenv.GetObjectClass(m_javaException), "jsValueAddress", "J");
         jlong addr = jenv.GetLongField(m_javaException, fieldID);

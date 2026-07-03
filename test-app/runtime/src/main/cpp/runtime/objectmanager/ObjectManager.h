@@ -63,9 +63,9 @@ namespace tns {
 
         bool IsRuntimeJsObject(napi_value object);
 
-        std::string GetClassName(jobject javaObject);
+        static std::string GetClassName(jobject javaObject);
 
-        std::string GetClassName(jclass clazz);
+        static std::string GetClassName(jclass clazz);
 
         int GenerateNewObjectID();
 
@@ -196,9 +196,9 @@ namespace tns {
 
         DirectBuffer m_outBuff;
 
-        jclass JAVA_LANG_CLASS;
+        static jclass JAVA_LANG_CLASS;
 
-        jmethodID GET_NAME_METHOD_ID;
+        static jmethodID GET_NAME_METHOD_ID;
 
         jmethodID GET_JAVAOBJECT_BY_ID_METHOD_ID;
 

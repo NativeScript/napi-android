@@ -12,6 +12,12 @@
 using namespace std;
 using namespace tns;
 
+// GetClassName is static so exception handling can resolve a Java class name
+// without retrieving the runtime/ObjectManager (which may be unavailable
+// mid-exception). These JNI ids are process-global once looked up.
+jclass ObjectManager::JAVA_LANG_CLASS = nullptr;
+jmethodID ObjectManager::GET_NAME_METHOD_ID = nullptr;
+
 ObjectManager::ObjectManager(jobject javaRuntimeObject) :
         m_javaRuntimeObject(javaRuntimeObject),
         m_cache(NewWeakGlobalRefCallback, DeleteWeakGlobalRefCallback, ValidateWeakGlobalRefCallback, 1000, this),
