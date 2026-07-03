@@ -40,6 +40,40 @@
 using namespace tns;
 using namespace std;
 
+namespace {
+    // queueMicrotask(callback) per spec:
+    // https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask
+    // Implemented via Promise.resolve().then(callback) so it schedules a real
+    // microtask on every engine the napi runtime targets (V8, QuickJS, Hermes,
+    // JSC). This preserves ordering with Promise microtasks and runs before timers.
+    napi_value QueueMicrotaskCallback(napi_env env, napi_callback_info info) {
+        size_t argc = 1;
+        napi_value argv[1];
+        napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+
+        napi_valuetype type = napi_undefined;
+        if (argc >= 1) {
+            napi_typeof(env, argv[0], &type);
+        }
+        if (argc < 1 || type != napi_function) {
+            napi_throw_type_error(env, nullptr,
+                                  "queueMicrotask: callback must be a function");
+            return nullptr;
+        }
+
+        napi_value global, promiseCtor, resolveFn, resolved, thenFn;
+        napi_get_global(env, &global);
+        napi_get_named_property(env, global, "Promise", &promiseCtor);
+        napi_get_named_property(env, promiseCtor, "resolve", &resolveFn);
+        napi_call_function(env, promiseCtor, resolveFn, 0, nullptr, &resolved);
+        napi_get_named_property(env, resolved, "then", &thenFn);
+        napi_value thenArgs[1] = {argv[0]};
+        napi_call_function(env, resolved, thenFn, 1, thenArgs, nullptr);
+
+        return nullptr;
+    }
+}
+
 bool tns::LogEnabled = false;
 
 void Runtime::Init(JavaVM *vm) {
@@ -311,6 +345,8 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     ArrayHelper::Init(env);
 
     Performance::createPerformance(env, global);
+
+    napi_util::napi_set_function(env, global, "queueMicrotask", QueueMicrotaskCallback);
 
     m_arrayBufferHelper.CreateConvertFunctions(env, global, m_objectManager);
 
