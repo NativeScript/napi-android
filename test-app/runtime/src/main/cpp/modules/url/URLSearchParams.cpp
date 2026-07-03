@@ -420,32 +420,31 @@ napi_value URLSearchParams::ForEach(napi_env env, napi_callback_info info) {
     napi_value callback = argv[0];
     napi_value thisArg = argc >= 2 ? argv[1] : nullptr;
 
-    auto keys = instance->GetURLSearchParams()->get_keys();
-    while (keys.has_next()) {
-        if (auto key = keys.next()) {
-            if (auto value = instance->GetURLSearchParams()->get(key.value())) {
-                napi_value args[3];
-                NAPI_GUARD(
-                        napi_create_string_utf8(env, value.value().data(), value.value().length(),
-                                                &args[0])) {
-                    return nullptr;
-                }
-                NAPI_GUARD(napi_create_string_utf8(env, key.value().data(), key.value().length(),
-                                                   &args[1])) {
-                    return nullptr;
-                }
-                args[2] = jsThis;
+    // Use get_entries() so duplicate keys (e.g. ?a=1&a=2) each yield their own
+    // value, instead of get_keys()+get() which returns the first value repeatedly.
+    auto entries = instance->GetURLSearchParams()->get_entries();
+    while (entries.has_next()) {
+        if (auto entry = entries.next()) {
+            auto &[key, value] = entry.value();
+            napi_value args[3];
+            NAPI_GUARD(napi_create_string_utf8(env, value.data(), value.length(), &args[0])) {
+                return nullptr;
+            }
+            NAPI_GUARD(napi_create_string_utf8(env, key.data(), key.length(), &args[1])) {
+                return nullptr;
+            }
+            args[2] = jsThis;
 
-                napi_value global;
-                NAPI_GUARD(napi_get_global(env, &global)) {
-                    return nullptr;
-                }
+            napi_value global;
+            NAPI_GUARD(napi_get_global(env, &global)) {
+                return nullptr;
+            }
 
-                napi_value result;
-                NAPI_GUARD(napi_call_function(env, thisArg ? thisArg : global, callback, 3, args,
-                                              &result)) {
-                    return nullptr;
-                }
+            napi_value result;
+            NAPI_GUARD(napi_call_function(env, thisArg ? thisArg : global, callback, 3, args,
+                                          &result)) {
+                // If the callback throws, stop iteration.
+                return nullptr;
             }
         }
     }
