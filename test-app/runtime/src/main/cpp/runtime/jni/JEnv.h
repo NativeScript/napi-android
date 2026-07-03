@@ -26,6 +26,10 @@ namespace tns {
 
         jsize GetArrayLength(jarray array);
 
+        inline bool isSameObject(jobject obj1, jobject obj2) {
+            return m_env->IsSameObject(obj1, obj2) == JNI_TRUE;
+        }
+
         jmethodID GetMethodID(jclass clazz, const std::string &name, const std::string &sig);
 
         jmethodID GetStaticMethodID(jclass clazz, const std::string &name, const std::string &sig);

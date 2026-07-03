@@ -14,7 +14,7 @@ using namespace tns;
 
 ObjectManager::ObjectManager(jobject javaRuntimeObject) :
         m_javaRuntimeObject(javaRuntimeObject),
-        m_cache(NewWeakGlobalRefCallback, DeleteWeakGlobalRefCallback, 1000, this),
+        m_cache(NewWeakGlobalRefCallback, DeleteWeakGlobalRefCallback, ValidateWeakGlobalRefCallback, 1000, this),
         m_currentObjectId(0),
         m_jsObjectProxyCreator(nullptr),
         m_jsObjectCtor(nullptr),
@@ -732,6 +732,14 @@ jweak ObjectManager::NewWeakGlobalRefCallback(const int &javaObjectID, void *sta
 void ObjectManager::DeleteWeakGlobalRefCallback(const jweak &object, void *state) {
     JEnv jEnv;
     jEnv.DeleteWeakGlobalRef(object);
+}
+
+bool ObjectManager::ValidateWeakGlobalRefCallback(const int &javaObjectID, const jweak &object,
+                                                  void *state) {
+    JEnv jEnv;
+    // A weak ref that is now IsSameObject(NULL) points to a collected object and
+    // must not be reused; report it as invalid so the cache evicts it.
+    return !jEnv.isSameObject(object, NULL);
 }
 
 napi_value ObjectManager::GetEmptyObject() {

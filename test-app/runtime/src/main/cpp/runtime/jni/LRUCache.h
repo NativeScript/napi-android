@@ -45,8 +45,8 @@ class LRUCache {
 
         // Constuctor specifies the cached function and
         // the maximum number of records to be stored
-        LRUCache(value_type (*loadCallback)(const key_type&, void*), void (*evictCallback)(const value_type&, void*), size_t capacity, void* state)
-            : m_loadCallback(loadCallback), m_capacity(capacity), m_evictCallback(evictCallback), m_state(state) {
+        LRUCache(value_type (*loadCallback)(const key_type&, void*), void (*evictCallback)(const value_type&, void*), bool (*cacheValidCallback)(const key_type&, const value_type&, void*), size_t capacity, void* state)
+            : m_loadCallback(loadCallback), m_capacity(capacity), m_evictCallback(evictCallback), m_cacheValidCallback(cacheValidCallback), m_state(state) {
             assert(m_loadCallback != nullptr);
             assert((0 < m_capacity) && (m_capacity < 10000));
         }
@@ -56,6 +56,15 @@ class LRUCache {
 
             // Attempt to find existing record
             auto it = m_key_to_value.find(k);
+
+            if (m_cacheValidCallback != nullptr && it != m_key_to_value.end()) {
+                // Check if the cached value is still valid (e.g. a jweak that no
+                // longer points to a live object); if not, evict and treat as miss.
+                if (!m_cacheValidCallback(k, (*it).second.first, m_state)) {
+                    evictKey(k);
+                    it = m_key_to_value.end();
+                }
+            }
 
             if (it == m_key_to_value.end()) {
 
@@ -97,6 +106,18 @@ class LRUCache {
         }
 
     private:
+
+        // Evict a specific key (used when a cached value is no longer valid).
+        void evictKey(const key_type& key) {
+            auto it = m_key_to_value.find(key);
+            if (it != m_key_to_value.end()) {
+                if (m_evictCallback != nullptr) {
+                    m_evictCallback((*it).second.first, m_state);
+                }
+                m_key_tracker.erase((*it).second.second);
+                m_key_to_value.erase(it);
+            }
+        }
 
         // Record a fresh key-value pair in the cache
         void insert(const key_type& k, const value_type& v) {
@@ -140,6 +161,8 @@ class LRUCache {
         value_type (*m_loadCallback)(const key_type&, void*);
 
         void (*m_evictCallback)(const value_type&, void*);
+
+        bool (*m_cacheValidCallback)(const key_type&, const value_type&, void*);
 
         // Maximum number of key-value pairs to be retained
         const size_t m_capacity;

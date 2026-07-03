@@ -177,6 +177,8 @@ namespace tns {
 
         static void DeleteWeakGlobalRefCallback(const jweak &object, void *state);
 
+        static bool ValidateWeakGlobalRefCallback(const int &javaObjectID, const jweak &object, void *state);
+
         jobject m_javaRuntimeObject;
 
         napi_env m_env;
