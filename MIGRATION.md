@@ -12,7 +12,9 @@ Plan: `~/.claude/plans/we-want-to-migrate-modular-prism.md`
 | # | old hash | subject | disposition | new commit | notes |
 |---|----------|---------|-------------|------------|-------|
 | 1 | 2bab8f5 | fix(URL): allow undefined 2nd args (#1826) | ported | ef20f1d | `URL::New` (modules/url/URL.cpp): gate base-URL branch on `argv[1]` not being undefined/null via `napi_util::is_of_type`; ported expanded `testURLImpl.js` verbatim (JS is engine-agnostic). Verified: native recompile (V8-13, all ABIs) exit 0. |
-| 2 | 94ddb15 | fix: `exit(0)` causes ANR due to destroyed mutex (#1820) | ported | this commit | Old fix was in `MetadataNode::BuildMetadata`; in napi runtime that error path moved to `MetadataBuilder.cpp:55` (identical direct-boot/locked-screen comment). Changed `exit(0)` → `_Exit(0)`. Verified: native recompile exit 0. |
+| 2 | 94ddb15 | fix: `exit(0)` causes ANR due to destroyed mutex (#1820) | ported | b46586b | Old fix was in `MetadataNode::BuildMetadata`; in napi runtime that error path moved to `MetadataBuilder.cpp:55` (identical direct-boot/locked-screen comment). Changed `exit(0)` → `_Exit(0)`. Verified: native recompile exit 0. |
+| — | f290ed2 | perf: optimizations around generating JS classes from Metadata (#1824) | already-present | — | Large metadata-subsystem perf refactor (13 files). Confirmed by user: already implemented in the napi runtime's rewritten metadata code. Skipped. |
+| 3 | a983931 | fix: gradle error when compileSdk or targetSdk is provided (#1825) | ported | this commit | `test-app/app/build.gradle`: add `as int` cast to provided `compileSdk`/`targetSdk` in `computeCompileSdkVersion`/`computeTargetSdkVersion` (props arrive as String from `-P`). Verified: `:app:help -PcompileSdk=35 -PtargetSdk=35` config eval exit 0. |
 
 ## Verified duplication-check seeds (from planning; confirm at implementation time)
 
