@@ -8,6 +8,7 @@
 #include "js_native_api.h"
 #include "URL.h"
 #include "URLSearchParams.h"
+#include "URLPattern.h"
 
 namespace tns {
     class NSRuntimeModules {
@@ -15,6 +16,7 @@ namespace tns {
         static void Init(napi_env env) {
             URL::Init(env);
             URLSearchParams::Init(env);
+            URLPattern::Init(env);
         }
     };
 }

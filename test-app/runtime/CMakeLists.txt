@@ -95,6 +95,7 @@ file(GLOB_RECURSE MODULE_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/*.cpp"
         "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/**/*.cpp"
 )
+# modules/url: URL, URLSearchParams, URLPattern (backed by vendored ada)
 
 set(SOURCES ${RUNTIME_FILES} ${MODULE_FILES})
 
