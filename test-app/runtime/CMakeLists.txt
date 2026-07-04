@@ -21,11 +21,11 @@ endif ()
 set(COMMON_CMAKE_ARGUMENTS "-Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy")
 set(MI_OVERRIDE OFF)
 
-if (V8_13)
-    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++20")
-elseif ()
-    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++17")
-endif ()
+# All engines build with C++20: the vendored ada 3.3.0 (used by the URL module,
+# compiled for every engine) requires C++20 (std::endian, concepts). Previously
+# only V8_13 got -std=c++20 (and the empty `elseif ()` set nothing for the rest),
+# so non-V8-13 engine builds failed on ada.h.
+set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++20")
 
 if (SHERMES)
     set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -frtti")
@@ -88,6 +88,7 @@ include_directories(
 )
 
 # Search for all CPP files in runtime/ directory and add them to our sources
+# (includes runtime/inspector/WorkerInspectorClient.cpp for the V8 worker inspector)
 file(GLOB_RECURSE RUNTIME_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/*.cpp"
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/**/*.cpp"
