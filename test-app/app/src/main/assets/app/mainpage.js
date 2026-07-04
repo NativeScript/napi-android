@@ -76,5 +76,6 @@ require('./tests/testURLSearchParamsImpl.js');
 require('./tests/testURLPattern.js');
 require('./tests/testQueueMicrotask.js');
 require('./tests/testConcurrentAccess.js');
+require('./tests/testClassForNameDiscovery.js');
 
 

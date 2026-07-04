@@ -689,7 +689,11 @@ public class Runtime {
         try {
             this.logger = logger;
 
-            this.dexFactory = new DexFactory(logger, classLoader, dexDir, dexThumb, classStorageService);
+            // Only inject generated proxies into the app's PathClassLoader on the main
+            // thread, so Class.forName() (used by framework components like FragmentFactory)
+            // can find them.
+            boolean isMainThread = this.workerId == 0;
+            this.dexFactory = new DexFactory(logger, classLoader, dexDir, dexThumb, classStorageService, isMainThread);
 
             if (logger.isEnabled()) {
                 logger.write("Initializing NativeScript JAVA");
