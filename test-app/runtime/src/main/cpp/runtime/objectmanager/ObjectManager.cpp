@@ -239,7 +239,16 @@ JniLocalRef ObjectManager::GetJavaObjectByJsObject(napi_value object, int *objec
         *objectId = javaObjectId;
     }
 
-    if (javaObjectId != -1) return {GetJavaObjectByID(javaObjectId), true};
+    if (javaObjectId != -1) {
+        try {
+            return {GetJavaObjectByID(javaObjectId), true};
+        } catch (NativeScriptException &e) {
+            // Surface which object failed instead of a bare error — this usually
+            // means the id belongs to a different runtime/thread.
+            throw NativeScriptException("Failed to get Java object by ID. id=" +
+                                        std::to_string(javaObjectId) + ". " + e.what());
+        }
+    }
 
     return {};
 }
