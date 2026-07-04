@@ -29,6 +29,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Collections;
+import dalvik.annotation.optimization.CriticalNative;
+import dalvik.annotation.optimization.FastNative;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -52,9 +54,31 @@ public class Runtime {
 
     private native void createJSInstanceNative(int runtimeId, Object javaObject, int javaObjectID, String canonicalName);
 
-    private native int generateNewObjectId(int runtimeId);
+    // Dynamic JNI lookup for @CriticalNative / @FastNative is unimplemented on
+    // Android 8-10 and buggy on Android 11; it works reliably only on Android 12+
+    // (API 31). For 8-11 the annotated methods are bound via RegisterNatives in
+    // JNI_OnLoad; older devices fall back to the auto-bound *Legacy variants.
+    private static final boolean SUPPORTS_OPTIMIZED_NATIVE = android.os.Build.VERSION.SDK_INT >= 26;
 
-    private native boolean notifyGc(int runtimeId, int[] javaObjectIds);
+    @CriticalNative
+    private static native int generateNewObjectIdCritical(int runtimeId);
+    private static native int generateNewObjectIdLegacy(int runtimeId);
+
+    private static int generateNewObjectId(int runtimeId) {
+        return SUPPORTS_OPTIMIZED_NATIVE
+                ? generateNewObjectIdCritical(runtimeId)
+                : generateNewObjectIdLegacy(runtimeId);
+    }
+
+    @FastNative
+    private native boolean notifyGcFast(int runtimeId, int[] javaObjectIds);
+    private native boolean notifyGcLegacy(int runtimeId, int[] javaObjectIds);
+
+    private boolean notifyGc(int runtimeId, int[] javaObjectIds) {
+        return SUPPORTS_OPTIMIZED_NATIVE
+                ? notifyGcFast(runtimeId, javaObjectIds)
+                : notifyGcLegacy(runtimeId, javaObjectIds);
+    }
 
     private native void lock(int runtimeId);
 
@@ -62,11 +86,33 @@ public class Runtime {
 
     private native void passExceptionToJsNative(int runtimeId, Throwable ex, String message, String fullStackTrace, String jsStackTrace, boolean isDiscarded, boolean isPendingError);
 
-    private static native int getCurrentRuntimeId();
+    @CriticalNative
+    private static native int getCurrentRuntimeIdCritical();
+    private static native int getCurrentRuntimeIdLegacy();
 
-    public static native int getPointerSize();
+    public static int getCurrentRuntimeId() {
+        return SUPPORTS_OPTIMIZED_NATIVE ? getCurrentRuntimeIdCritical() : getCurrentRuntimeIdLegacy();
+    }
 
-    public static native void SetManualInstrumentationMode(String mode);
+    @CriticalNative
+    private static native int getPointerSizeCritical();
+    private static native int getPointerSizeLegacy();
+
+    public static int getPointerSize() {
+        return SUPPORTS_OPTIMIZED_NATIVE ? getPointerSizeCritical() : getPointerSizeLegacy();
+    }
+
+    @FastNative
+    private static native void setManualInstrumentationModeFast(String mode);
+    private static native void setManualInstrumentationModeLegacy(String mode);
+
+    public static void SetManualInstrumentationMode(String mode) {
+        if (SUPPORTS_OPTIMIZED_NATIVE) {
+            setManualInstrumentationModeFast(mode);
+        } else {
+            setManualInstrumentationModeLegacy(mode);
+        }
+    }
 
     private static native void WorkerGlobalOnMessageCallback(int runtimeId, String message);
 

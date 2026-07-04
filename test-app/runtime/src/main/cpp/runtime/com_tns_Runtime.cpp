@@ -2,6 +2,7 @@
 #include "NativeScriptException.h"
 #include "CallbackHandlers.h"
 #include <sstream>
+#include <android/log.h>
 
 #ifdef __HERMES__
 #include <fbjni/fbjni.h>
@@ -9,6 +10,52 @@
 
 using namespace std;
 using namespace tns;
+
+// Forward declarations for the natives that must be explicitly registered via
+// RegisterNatives. Dynamic JNI lookup of @CriticalNative / @FastNative methods
+// is unimplemented on Android 8-10 and buggy on Android 11, so for those
+// versions the Java side dispatches to the auto-bound *Legacy variants instead.
+// On Android 12+ (and 8+ via RegisterNatives) the optimized variants are used.
+static jint generateNewObjectIdCritical_impl(jint runtimeId);
+static jboolean notifyGcFast_impl(JNIEnv* env, jobject obj, jint runtimeId, jintArray object_ids);
+static jint getCurrentRuntimeIdCritical_impl();
+static jint getPointerSizeCritical_impl();
+static void setManualInstrumentationModeFast_impl(JNIEnv* env, jclass clazz, jstring mode);
+
+static void RegisterOptimizedNatives(JNIEnv* env) {
+    jclass cls = env->FindClass("com/tns/Runtime");
+    if (cls == nullptr) {
+        __android_log_print(ANDROID_LOG_ERROR, "TNS.Native",
+                            "Failed to find com/tns/Runtime for RegisterNatives");
+        return;
+    }
+
+    // @CriticalNative: signatures must omit JNIEnv* / jclass.
+    static const JNINativeMethod criticalMethods[] = {
+        {const_cast<char*>("generateNewObjectIdCritical"), const_cast<char*>("(I)I"), reinterpret_cast<void*>(generateNewObjectIdCritical_impl)},
+        {const_cast<char*>("getCurrentRuntimeIdCritical"), const_cast<char*>("()I"), reinterpret_cast<void*>(getCurrentRuntimeIdCritical_impl)},
+        {const_cast<char*>("getPointerSizeCritical"),      const_cast<char*>("()I"), reinterpret_cast<void*>(getPointerSizeCritical_impl)},
+    };
+    // @FastNative: standard JNI ABI (JNIEnv*, jobject/jclass, ...).
+    static const JNINativeMethod fastMethods[] = {
+        {const_cast<char*>("notifyGcFast"),                     const_cast<char*>("(I[I)Z"),                 reinterpret_cast<void*>(notifyGcFast_impl)},
+        {const_cast<char*>("setManualInstrumentationModeFast"), const_cast<char*>("(Ljava/lang/String;)V"), reinterpret_cast<void*>(setManualInstrumentationModeFast_impl)},
+    };
+
+    if (env->RegisterNatives(cls, criticalMethods,
+                             sizeof(criticalMethods) / sizeof(criticalMethods[0])) < 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "TNS.Native",
+                            "RegisterNatives failed for @CriticalNative methods");
+        env->ExceptionClear();
+    }
+    if (env->RegisterNatives(cls, fastMethods,
+                             sizeof(fastMethods) / sizeof(fastMethods[0])) < 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "TNS.Native",
+                            "RegisterNatives failed for @FastNative methods");
+        env->ExceptionClear();
+    }
+    env->DeleteLocalRef(cls);
+}
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     try {
@@ -18,6 +65,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
         });
 #endif
         Runtime::Init(vm);
+
+        JNIEnv* env = nullptr;
+        if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK && env != nullptr) {
+            RegisterOptimizedNatives(env);
+        }
     } catch (NativeScriptException& e) {
         e.ReThrowToJava(nullptr);
     } catch (std::exception e) {
@@ -34,13 +86,20 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
 
 
 
-extern "C" JNIEXPORT void Java_com_tns_Runtime_SetManualInstrumentationMode(JNIEnv* _env, jclass obj, jstring mode) {
+// @FastNative ABI: standard JNI signature (registered via RegisterNatives).
+static void setManualInstrumentationModeFast_impl(JNIEnv* env, jclass clazz, jstring mode) {
     try {
         Runtime::SetManualInstrumentationMode(mode);
     } catch (...) {
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToJava(nullptr);
     }
+}
+
+// Auto-bound legacy variant for Android < 8.0 / where dynamic lookup of the
+// annotated method is unavailable.
+extern "C" JNIEXPORT void Java_com_tns_Runtime_setManualInstrumentationModeLegacy(JNIEnv* _env, jclass clazz, jstring mode) {
+    setManualInstrumentationModeFast_impl(_env, clazz, mode);
 }
 
 extern "C" JNIEXPORT void Java_com_tns_Runtime_initNativeScript(JNIEnv* _env, jobject obj, jint runtimeId, jstring filesPath, jstring nativeLibDir, jboolean verboseLoggingEnabled, jboolean isDebuggable, jstring packageName, jobjectArray args, jstring callingDir, jint maxLogcatObjectSize, jboolean forceLog) {
@@ -196,13 +255,15 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_createJSInstanceNative(JNIEnv* _e
 
 }
 
-extern "C" JNIEXPORT jint Java_com_tns_Runtime_generateNewObjectId(JNIEnv* env, jobject obj, jint runtimeId) {
+// @CriticalNative ABI: no JNIEnv* / jclass. GenerateNewObjectId ignores its
+// env/obj args (it just increments a counter), so this is safe with nullptrs.
+static jint generateNewObjectIdCritical_impl(jint runtimeId) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime == nullptr) {
         return 0;
     }
     try {
-        return runtime->GenerateNewObjectId(env, obj);
+        return runtime->GenerateNewObjectId(nullptr, nullptr);
     } catch (NativeScriptException& e) {
         e.ReThrowToJava( runtime->GetNapiEnv());
     } catch (std::exception e) {
@@ -218,7 +279,12 @@ extern "C" JNIEXPORT jint Java_com_tns_Runtime_generateNewObjectId(JNIEnv* env, 
     return 0;
 }
 
-extern "C" JNIEXPORT jboolean Java_com_tns_Runtime_notifyGc(JNIEnv* jEnv, jobject obj, jint runtimeId, jintArray object_ids) {
+extern "C" JNIEXPORT jint Java_com_tns_Runtime_generateNewObjectIdLegacy(JNIEnv* env, jclass clazz, jint runtimeId) {
+    return generateNewObjectIdCritical_impl(runtimeId);
+}
+
+// @FastNative ABI: standard JNI signature (registered via RegisterNatives).
+static jboolean notifyGcFast_impl(JNIEnv* jEnv, jobject obj, jint runtimeId, jintArray object_ids) {
     auto runtime = TryGetRuntime(runtimeId);
     if (runtime == nullptr) {
         return JNI_FALSE;
@@ -227,6 +293,10 @@ extern "C" JNIEXPORT jboolean Java_com_tns_Runtime_notifyGc(JNIEnv* jEnv, jobjec
     runtime->NotifyGC(jEnv, obj, object_ids);
 
     return true;
+}
+
+extern "C" JNIEXPORT jboolean Java_com_tns_Runtime_notifyGcLegacy(JNIEnv* jEnv, jobject obj, jint runtimeId, jintArray object_ids) {
+    return notifyGcFast_impl(jEnv, obj, runtimeId, object_ids);
 }
 
 extern "C" JNIEXPORT void Java_com_tns_Runtime_lock(JNIEnv* env, jobject obj, jint runtimeId) {
@@ -265,16 +335,27 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_passExceptionToJsNative(JNIEnv* j
 
 }
 
-extern "C" JNIEXPORT jint Java_com_tns_Runtime_getPointerSize(JNIEnv* env, jclass obj) {
+// @CriticalNative ABI: no JNIEnv* / jclass.
+static jint getPointerSizeCritical_impl() {
     return sizeof(void*);
 }
 
-extern "C" JNIEXPORT jint Java_com_tns_Runtime_getCurrentRuntimeId(JNIEnv* _env, jclass obj) {
+extern "C" JNIEXPORT jint Java_com_tns_Runtime_getPointerSizeLegacy(JNIEnv* env, jclass clazz) {
+    return getPointerSizeCritical_impl();
+}
+
+// @CriticalNative ABI: no JNIEnv* / jclass. Runtime::Current() is a thread-local
+// C++ lookup, so no JNI is used here.
+static jint getCurrentRuntimeIdCritical_impl() {
     auto rt = Runtime::Current();
     if (rt == nullptr) {
         return -1;
     }
     return rt->GetId();
+}
+
+extern "C" JNIEXPORT jint Java_com_tns_Runtime_getCurrentRuntimeIdLegacy(JNIEnv* _env, jclass clazz) {
+    return getCurrentRuntimeIdCritical_impl();
 }
 
 extern "C" JNIEXPORT void Java_com_tns_Runtime_WorkerGlobalOnMessageCallback(JNIEnv* env, jclass obj, jint runtimeId, jstring msg) {
