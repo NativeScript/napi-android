@@ -19,6 +19,7 @@
 #include "ArgConverter.h"
 #include "JsArgConverter.h"
 #include "GlobalHelpers.h"
+#include "WorkerWrapper.h"
 #include <regex>
 
 #ifdef USE_MIMALLOC
@@ -61,28 +62,6 @@ void CallbackHandlers::Init(napi_env env) {
     DISABLE_VERBOSE_LOGGING_METHOD_ID = jEnv.GetMethodID(RUNTIME_CLASS, "disableVerboseLogging",
                                                          "()V");
     assert(ENABLE_VERBOSE_LOGGING_METHOD_ID != nullptr);
-
-    INIT_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "initWorker",
-                                                   "(Ljava/lang/String;Ljava/lang/String;I)V");
-
-    assert(INIT_WORKER_METHOD_ID != nullptr);
-
-    SEND_MESSAGE_TO_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS,
-                                                              "sendMessageFromMainToWorker",
-                                                              "(ILjava/lang/String;)V");
-    assert(SEND_MESSAGE_TO_WORKER_METHOD_ID != nullptr);
-
-    SEND_MESSAGE_TO_MAIN_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS,
-                                                            "sendMessageFromWorkerToMain",
-                                                            "(Ljava/lang/String;)V");
-    assert(SEND_MESSAGE_TO_MAIN_METHOD_ID != nullptr);
-
-    TERMINATE_WORKER_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "workerObjectTerminate",
-                                                        "(I)V");
-    assert(TERMINATE_WORKER_METHOD_ID != nullptr);
-
-    WORKER_SCOPE_CLOSE_METHOD_ID = jEnv.GetStaticMethodID(RUNTIME_CLASS, "workerScopeClose", "()V");
-    assert(WORKER_SCOPE_CLOSE_METHOD_ID != nullptr);
 
     MetadataNode::Init(env);
 
@@ -1345,20 +1324,23 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         // Will throw if path is invalid or doesn't exist
         ModuleInternal::CheckFileExists(env, workerPath, currentDir);
 
-        auto workerId = nextWorkerId++;
+        // Resolve the JNI handles used by the worker thread bootstrap while we
+        // are still on the parent (main, for the first worker) thread.
+        WorkerWrapper::EnsureJniCached();
+
+        auto workerId = WorkerWrapper::NextWorkerId();
         napi_value workerIdValue;
         napi_create_int32(env, workerId, &workerIdValue);
         napi_set_named_property(env, jsThis, "workerId", workerIdValue);
 
-        id2WorkerMap.emplace(workerId, napi_util::make_ref(env, jsThis));
-
         DEBUG_WRITE("Called Worker constructor id=%d", workerId);
 
-        JEnv jEnv;
-        JniLocalRef filePath(jEnv.NewStringUTF(workerPath.c_str()));
-        JniLocalRef dirPath(jEnv.NewStringUTF(currentDir.c_str()));
-        jEnv.CallStaticVoidMethod(RUNTIME_CLASS, INIT_WORKER_METHOD_ID, (jstring) filePath,
-                                  (jstring) dirPath, workerId);
+        // THREAD_PRIORITY_BACKGROUND (android.os.Process) == 10
+        const int kThreadPriorityBackground = 10;
+        auto wrapper = std::make_shared<WorkerWrapper>(env, workerId, workerPath, currentDir,
+                                                       kThreadPriorityBackground, jsThis);
+        WorkerWrapper::Insert(workerId, wrapper);
+        wrapper->Start();
 
         napi_value stack;
         napi_value error;
@@ -1407,18 +1389,16 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
 
         std::string msg = tns::JsonStringifyObject(env, argv[0], false);
 
-        // get worker's ID that is associated on the other side - in Java
+        // get worker's ID that is associated with this Worker object
         napi_value jsId;
         napi_get_named_property(env, jsThis, "workerId", &jsId);
         auto id = napi_util::get_int32(env, jsId);
 
-        JEnv jEnv;
-
-        jstring jmsg = jEnv.NewStringUTF(msg.c_str());
-        JniLocalRef jmsgRef(jmsg);
-
-        jEnv.CallStaticVoidMethod(RUNTIME_CLASS, SEND_MESSAGE_TO_WORKER_METHOD_ID, id,
-                                  (jstring) jmsgRef);
+        auto wrapper = WorkerWrapper::GetById(id);
+        if (wrapper != nullptr) {
+            wrapper->PostMessage(std::make_shared<worker::Message>(
+                    worker::Message::MakeData(std::move(msg))));
+        }
 
         DEBUG_WRITE(
                 "MAIN: WorkerObjectPostMessageCallback called postMessage on Worker object(id=%d)",
@@ -1436,54 +1416,6 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
     }
     return nullptr;
 }
-
-void CallbackHandlers::WorkerGlobalOnMessageCallback(napi_env env, jstring message) {
-    NapiScope scope(env);
-    try {
-        napi_value globalObject;
-        napi_get_global(env, &globalObject);
-
-        napi_value callback;
-        napi_get_named_property(env, globalObject, "onmessage", &callback);
-
-        if (napi_util::is_of_type(env, callback, napi_function)) {
-            std::string msgString = ArgConverter::jstringToString(message);
-            napi_value dataObject = tns::JsonParseString(env, msgString.c_str());
-
-            napi_value obj;
-            napi_create_object(env, &obj);
-            if (napi_util::is_of_type(env, dataObject, napi_object)) {
-                napi_set_named_property(env, obj, "data", dataObject);
-            }
-
-            napi_value args[1] = {
-                    obj
-            };
-
-            napi_value result;
-            napi_status status = napi_call_function(env, globalObject, callback, 1, args, &result);
-            if (status == napi_pending_exception) {
-                napi_value error;
-                napi_get_and_clear_last_exception(env, &error);
-                CallWorkerScopeOnErrorHandle(env, error);
-            }
-        } else {
-            DEBUG_WRITE(
-                    "WORKER: WorkerGlobalOnMessageCallback couldn't fire a worker's `onmessage` callback because it isn't implemented!");
-        }
-    } catch (NativeScriptException &ex) {
-        ex.ReThrowToNapi(env);
-    } catch (std::exception e) {
-        std::stringstream ss;
-        ss << "Error: c++ exception: " << e.what() << std::endl;
-        NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToNapi(env);
-    } catch (...) {
-        NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToNapi(env);
-    }
-}
-
 
 napi_value
 CallbackHandlers::WorkerGlobalPostMessageCallback(napi_env env, napi_callback_info info) {
@@ -1507,11 +1439,11 @@ CallbackHandlers::WorkerGlobalPostMessageCallback(napi_env env, napi_callback_in
         napi_value objToStringify = argv[0];
         std::string msg = tns::JsonStringifyObject(env, objToStringify, false);
 
-        JEnv jenv;
-        auto jmsg = jenv.NewStringUTF(msg.c_str());
-        JniLocalRef jmsgRef(jmsg);
-
-        jenv.CallStaticVoidMethod(RUNTIME_CLASS, SEND_MESSAGE_TO_MAIN_METHOD_ID, (jstring) jmsgRef);
+        auto wrapper = WorkerWrapper::FromEnv(env);
+        if (wrapper != nullptr) {
+            wrapper->PostMessageToParent(std::make_shared<worker::Message>(
+                    worker::Message::MakeData(std::move(msg))));
+        }
 
         DEBUG_WRITE("WORKER: WorkerGlobalPostMessageCallback called.");
     } catch (NativeScriptException &ex) {
@@ -1527,64 +1459,6 @@ CallbackHandlers::WorkerGlobalPostMessageCallback(napi_env env, napi_callback_in
     }
 
     return nullptr;
-}
-
-void CallbackHandlers::WorkerObjectOnMessageCallback(napi_env env, jint workerId, jstring message) {
-    NapiScope scope(env);
-    try {
-
-        auto workerFound = CallbackHandlers::id2WorkerMap.find(workerId);
-
-        if (workerFound == CallbackHandlers::id2WorkerMap.end()) {
-            DEBUG_WRITE(
-                    "MAIN: WorkerObjectOnMessageCallback no worker instance was found with workerId=%d.",
-                    workerId);
-            return;
-        }
-
-        napi_ref workerPersistent = workerFound->second;
-
-        napi_value worker;
-        napi_get_reference_value(env, workerPersistent, &worker);
-
-        napi_value global;
-        napi_get_global(env, &global);
-
-        napi_value callback;
-        napi_get_named_property(env, worker, "onmessage", &callback);
-
-        if (napi_util::is_of_type(env, callback, napi_function)) {
-            std::string msgString = ArgConverter::jstringToString(message);
-
-            napi_value dataObject = tns::JsonParseString(env, msgString.c_str());
-
-            napi_value obj;
-            napi_create_object(env, &obj);
-            napi_set_named_property(env, obj, "data", dataObject);
-
-            napi_value args[1] = {obj};
-
-            napi_value result;
-            napi_status status = napi_call_function(env, worker, callback, 1, args, &result);
-            if (status != napi_ok) {
-                throw NativeScriptException("Error calling onmessage callback");
-            }
-        } else {
-            DEBUG_WRITE(
-                    "MAIN: WorkerObjectOnMessageCallback couldn't fire a worker(id=%d) object's `onmessage` callback because it isn't implemented.",
-                    workerId);
-        }
-    } catch (NativeScriptException &ex) {
-        ex.ReThrowToNapi(env);
-    } catch (std::exception e) {
-        std::stringstream ss;
-        ss << "Error: c++ exception: " << e.what() << std::endl;
-        NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToNapi(env);
-    } catch (...) {
-        NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToNapi(env);
-    }
 }
 
 napi_value CallbackHandlers::WorkerObjectTerminateCallback(napi_env env, napi_callback_info info) {
@@ -1618,10 +1492,10 @@ napi_value CallbackHandlers::WorkerObjectTerminateCallback(napi_env env, napi_ca
         napi_get_boolean(env, true, &trueValue);
         napi_set_named_property(env, thiz, "isTerminated", trueValue);
 
-        JEnv jenv;
-        jenv.CallStaticVoidMethod(RUNTIME_CLASS, TERMINATE_WORKER_METHOD_ID, id);
-
-        CallbackHandlers::ClearWorkerPersistent(env, id);
+        auto wrapper = WorkerWrapper::GetById(id);
+        if (wrapper != nullptr) {
+            wrapper->Terminate();
+        }
     } catch (NativeScriptException &ex) {
         ex.ReThrowToNapi(env);
     } catch (std::exception e) {
@@ -1677,8 +1551,10 @@ napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callba
             CallWorkerScopeOnErrorHandle(env, err);
         }
 
-        JEnv jenv;
-        jenv.CallStaticVoidMethod(RUNTIME_CLASS, WORKER_SCOPE_CLOSE_METHOD_ID);
+        auto wrapper = WorkerWrapper::FromEnv(env);
+        if (wrapper != nullptr) {
+            wrapper->Close();
+        }
     } catch (NativeScriptException &ex) {
         ex.ReThrowToNapi(env);
     } catch (std::exception e) {
@@ -1743,12 +1619,15 @@ void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value err
                     line = pframes[0].line;
                     filename = pframes[0].filename;
                 }
-                Runtime::GetRuntime(env)->PassUncaughtExceptionFromWorkerToMainHandler(
-                        pmessage,
-                        pstack,
-                        ArgConverter::convertToJsString(env, filename),
-                        line
-                );
+                auto wrapper = WorkerWrapper::FromEnv(env);
+                if (wrapper != nullptr) {
+                    wrapper->PassUncaughtExceptionFromWorkerToParent(
+                            ArgConverter::ConvertToString(env, pmessage),
+                            filename,
+                            ArgConverter::ConvertToString(env, pstack),
+                            line);
+                }
+                return;
             } else if (!napi_util::is_null_or_undefined(env, result)) {
                 bool handled;
                 napi_get_value_bool(env, result, &handled);
@@ -1764,12 +1643,14 @@ void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value err
             line = frames[0].line;
             filename = frames[0].filename;
         }
-        Runtime::GetRuntime(env)->PassUncaughtExceptionFromWorkerToMainHandler(
-                message,
-                stack,
-                ArgConverter::convertToJsString(env, filename),
-                line
-        );
+        auto wrapper = WorkerWrapper::FromEnv(env);
+        if (wrapper != nullptr) {
+            wrapper->PassUncaughtExceptionFromWorkerToParent(
+                    ArgConverter::ConvertToString(env, message),
+                    filename,
+                    ArgConverter::ConvertToString(env, stack),
+                    line);
+        }
 
 
     } catch (NativeScriptException &ex) {
@@ -1783,130 +1664,6 @@ void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value err
         NativeScriptException nsEx(std::string("Error: c++ exception!"));
         nsEx.ReThrowToNapi(env);
     }
-}
-
-void CallbackHandlers::CallWorkerObjectOnErrorHandle(napi_env env, jint workerId, jstring message,
-                                                     jstring stackTrace, jstring filename,
-                                                     jint lineno, jstring threadName) {
-    NapiScope scope(env);
-    try {
-        auto workerFound = CallbackHandlers::id2WorkerMap.find(workerId);
-
-        if (workerFound == CallbackHandlers::id2WorkerMap.end()) {
-            DEBUG_WRITE(
-                    "MAIN: CallWorkerObjectOnErrorHandle no worker instance was found with workerId=%d.",
-                    workerId);
-            return;
-        }
-
-        napi_ref workerPersistent = workerFound->second;
-
-        napi_value worker;
-        napi_get_reference_value(env, workerPersistent, &worker);
-
-        napi_value callback;
-        napi_get_named_property(env, worker, "onerror", &callback);
-
-        if (napi_util::is_of_type(env, callback, napi_function)) {
-            napi_value errEvent;
-            napi_value msgValue = ArgConverter::jstringToJsString(env, message);
-            napi_value codeValue;
-            napi_create_string_utf8(env, "",0, &codeValue);
-            napi_create_error(env,codeValue, msgValue, &errEvent);
-            napi_value stack_main_thread;
-            napi_get_named_property(env, worker, "__stack__", &stack_main_thread);
-            std::string main_stack = napi_util::get_string_value(env, stack_main_thread);
-
-            std::string curr_stack = ArgConverter::jstringToString(stackTrace);
-
-            std::string full_stack = curr_stack + "\n" + main_stack.substr(main_stack.find_first_of("\n") + 1) ;
-
-            napi_value full_stack_value;
-            napi_create_string_utf8(env, full_stack.c_str(), full_stack.size(), &full_stack_value);
-
-            napi_set_named_property(env, errEvent, "stack", full_stack_value);
-
-            napi_value args[1] = {errEvent};
-
-            napi_value result;
-            napi_status status = napi_call_function(env, worker, callback, 1, args, &result);
-            if (status != napi_ok) {
-                napi_value exception;
-                napi_get_and_clear_last_exception(env, &exception);
-                if (!napi_util::is_null_or_undefined(env, exception)) {
-                    throw NativeScriptException(env, exception,
-                                                "Error calling onerror on Worker Object");
-                } else {
-                    throw NativeScriptException("Error calling onerror on Worker Object");
-                }
-            }
-
-            bool handled;
-            napi_get_value_bool(env, result, &handled);
-
-            if (handled) {
-                return;
-            }
-        }
-
-        // Exception wasn't handled, or is critical -> Throw exception
-        std::string strMessage = ArgConverter::jstringToString(message);
-        std::string strFilename = ArgConverter::jstringToString(filename);
-        std::string strThreadname = ArgConverter::jstringToString(threadName);
-        std::string strStackTrace = ArgConverter::jstringToString(stackTrace);
-
-        DEBUG_WRITE(
-                "Unhandled exception in '%s' thread. file: %s, line %d, message: %s\nStackTrace: %s",
-                strThreadname.c_str(), strFilename.c_str(), lineno, strMessage.c_str(),
-                strStackTrace.c_str());
-    } catch (NativeScriptException &ex) {
-        ex.ReThrowToNapi(env);
-    } catch (std::exception e) {
-        std::stringstream ss;
-        ss << "Error: c++ exception: " << e.what() << std::endl;
-        NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToNapi(env);
-    } catch (...) {
-        NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToNapi(env);
-    }
-}
-
-void CallbackHandlers::ClearWorkerPersistent(napi_env env, int workerId) {
-    NapiScope scope(env);
-    DEBUG_WRITE("ClearWorkerPersistent called for workerId=%d", workerId);
-
-    auto workerFound = CallbackHandlers::id2WorkerMap.find(workerId);
-
-    if (workerFound == CallbackHandlers::id2WorkerMap.end()) {
-        DEBUG_WRITE(
-                "MAIN | WORKER: ClearWorkerPersistent no worker instance was found with workerId=%d ! The worker may already be terminated.",
-                workerId);
-        return;
-    }
-
-    napi_ref workerPersistent = workerFound->second;
-    napi_delete_reference(env, workerPersistent);
-
-    id2WorkerMap.erase(workerId);
-}
-
-void CallbackHandlers::TerminateWorkerThread(napi_env env) {
-    JSEnterScope
-    try {
-        Runtime::GetRuntime(env)->DestroyRuntime();
-    } catch (NativeScriptException &e) {
-        e.ReThrowToJava(nullptr);
-    } catch (std::exception e) {
-        std::stringstream ss;
-        ss << "Error: c++ exception: " << e.what() << std::endl;
-        NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToJava(nullptr);
-    } catch (...) {
-        NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToJava(nullptr);
-    }
-
 }
 
 robin_hood::unordered_map<uint64_t, CallbackHandlers::CacheEntry> CallbackHandlers::cache_;
@@ -1917,10 +1674,8 @@ robin_hood::unordered_map<uint64_t, CallbackHandlers::FrameCallbackCacheEntry> C
 std::atomic_int64_t CallbackHandlers::count_ = {0};
 std::atomic_uint64_t CallbackHandlers::frameCallbackCount_ = {0};
 
-int CallbackHandlers::nextWorkerId = 0;
 int CallbackHandlers::lastCallId = -1;
 napi_value CallbackHandlers::lastCallValue = nullptr;
-robin_hood::unordered_map<int, napi_ref> CallbackHandlers::id2WorkerMap;
 
 short CallbackHandlers::MAX_JAVA_STRING_ARRAY_LENGTH = 100;
 jclass CallbackHandlers::RUNTIME_CLASS = nullptr;
@@ -1931,11 +1686,6 @@ jmethodID CallbackHandlers::MAKE_INSTANCE_STRONG_ID = nullptr;
 jmethodID CallbackHandlers::GET_TYPE_METADATA = nullptr;
 jmethodID CallbackHandlers::ENABLE_VERBOSE_LOGGING_METHOD_ID = nullptr;
 jmethodID CallbackHandlers::DISABLE_VERBOSE_LOGGING_METHOD_ID = nullptr;
-jmethodID CallbackHandlers::INIT_WORKER_METHOD_ID = nullptr;
-jmethodID CallbackHandlers::SEND_MESSAGE_TO_MAIN_METHOD_ID = nullptr;
-jmethodID CallbackHandlers::SEND_MESSAGE_TO_WORKER_METHOD_ID = nullptr;
-jmethodID CallbackHandlers::TERMINATE_WORKER_METHOD_ID = nullptr;
-jmethodID CallbackHandlers::WORKER_SCOPE_CLOSE_METHOD_ID = nullptr;
 
 NumericCasts CallbackHandlers::castFunctions;
 

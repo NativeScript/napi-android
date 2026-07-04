@@ -77,6 +77,8 @@ include_directories(
         src/main/cpp/runtime/sighandler
         src/main/cpp/runtime/timers
         src/main/cpp/runtime/util
+        # workers: native worker threading & messaging (WorkerWrapper, ConcurrentQueue, LooperTasks)
+        src/main/cpp/runtime/workers
         src/main/cpp/runtime/jsonhelper
         src/main/cpp/runtime/version
         src/main/cpp/runtime/weakref

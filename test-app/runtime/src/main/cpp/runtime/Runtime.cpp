@@ -38,6 +38,7 @@
 #endif
 
 #include "NSRuntimeModules.h"
+#include "LooperTasks.h"
 
 using namespace tns;
 using namespace std;
@@ -298,10 +299,7 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     m_objectManager->Init(env);
 
     m_module.Init(env, ArgConverter::jstringToString(callingDir));
-    /*
-     * Attach `Worker` object constructor only to the main thread (isolate)'s global object
-     * Workers should not be created from within other Workers, for now
-     */
+
     if (!s_mainThreadInitialized) {
         m_isMainThread = true;
 
@@ -328,23 +326,11 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 
         ALooper_addFd(m_mainLooper, m_mainLooper_fd[0], ALOOPER_POLL_CALLBACK, ALOOPER_EVENT_INPUT,
                       CallbackHandlers::RunOnMainThreadFdCallback, nullptr);
-
-        napi_value worker;
-        napi_define_class(env, "Worker", strlen("Worker"), CallbackHandlers::NewThreadCallback,
-                          nullptr, 0, nullptr, &worker);
-        napi_value prototype = napi_util::get_prototype(env, worker);
-        napi_util::napi_set_function(env, prototype, "postMessage",
-                                     CallbackHandlers::WorkerObjectPostMessageCallback, nullptr);
-        napi_util::napi_set_function(env, prototype, "terminate",
-                                     CallbackHandlers::WorkerObjectTerminateCallback, nullptr);
-        napi_util::napi_set_function(env, prototype, "close",
-                                     CallbackHandlers::WorkerGlobalCloseCallback, nullptr);
-
-        napi_set_named_property(env, global, "Worker", worker);
     }
         /*
          * Emulate a `WorkerGlobalScope`
-         * Attach 'postMessage', 'close' to the global object
+         * Attach 'postMessage', 'close' to the global object of every non-main
+         * (worker) env.
          */
     else {
         m_isMainThread = false;
@@ -355,6 +341,22 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
         napi_util::napi_set_function(env, global, "terminate",
                                      CallbackHandlers::WorkerGlobalCloseCallback, nullptr);
         napi_util::define_property(env, global, "__ns__worker", napi_util::get_true(env));
+    }
+
+    /*
+     * Attach the `Worker` object constructor to EVERY env's global object so
+     * that nested workers (a worker spawning its own workers) are supported.
+     */
+    {
+        napi_value worker;
+        napi_define_class(env, "Worker", strlen("Worker"), CallbackHandlers::NewThreadCallback,
+                          nullptr, 0, nullptr, &worker);
+        napi_value prototype = napi_util::get_prototype(env, worker);
+        napi_util::napi_set_function(env, prototype, "postMessage",
+                                     CallbackHandlers::WorkerObjectPostMessageCallback, nullptr);
+        napi_util::napi_set_function(env, prototype, "terminate",
+                                     CallbackHandlers::WorkerObjectTerminateCallback, nullptr);
+        napi_set_named_property(env, global, "Worker", worker);
     }
 
     napi_util::define_property(env, global, "global", nullptr, GlobalAccessorCallback);
@@ -377,6 +379,13 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     m_arrayBufferHelper.CreateConvertFunctions(env, global, m_objectManager);
 
     m_loopTimer->Init(env);
+
+    // Per-runtime task queue bound to this thread's looper. Child workers post
+    // their outbound messages/errors/cleanup onto their parent runtime's queue.
+    // Looper.prepare() has already run for worker threads (initWorkerRuntime),
+    // so ALooper_forThread() returns the looper that runWorkerLoop() will pump.
+    m_looperTasks = std::make_shared<LooperTasks>();
+    m_looperTasks->Initialize(ALooper_forThread());
 
     s_mainThreadInitialized = true;
 
@@ -439,6 +448,9 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 
 void Runtime::DestroyRuntime() {
     is_destroying = true;
+    if (m_looperTasks != nullptr) {
+        m_looperTasks->Terminate();
+    }
     MetadataNode::onDisposeEnv(env);
     ArgConverter::onDisposeEnv(env);
     tns::GlobalHelpers::onDisposeEnv(env);
@@ -520,9 +532,19 @@ void Runtime::RunModule(const char *moduleName) {
     m_module.Load(env, moduleName);
 }
 
-void Runtime::RunWorker(jstring scriptFile) {
-    string filePath = ArgConverter::jstringToString(scriptFile);
+void Runtime::RunWorker(const std::string &filePath) {
     m_module.LoadWorker(env, filePath);
+}
+
+void Runtime::DisposeWorkerRuntime(Runtime *runtime) {
+    // `env` is referenced by the (engine-specific) JSEnterScope macro below.
+    napi_env env = runtime->env;
+    {
+        JSEnterScope
+        runtime->DestroyRuntime();
+    }
+    // ~Runtime frees the underlying engine runtime (js_free_runtime under V8).
+    delete runtime;
 }
 
 jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {

@@ -161,29 +161,6 @@ extern "C" JNIEXPORT void Java_com_tns_Runtime_runModule(JNIEnv* _env, jobject o
     }
 }
 
-extern "C" JNIEXPORT void Java_com_tns_Runtime_runWorker(JNIEnv* _env, jobject obj, jint runtimeId, jstring scriptFile) {
-    auto runtime = TryGetRuntime(runtimeId);
-    if (runtime == nullptr) {
-        return;
-    }
-
-    NapiScope scope(runtime->GetNapiEnv());
-
-    try {
-        runtime->RunWorker(scriptFile);
-    } catch (NativeScriptException& e) {
-        e.ReThrowToJava(runtime->GetNapiEnv());
-    } catch (std::exception e) {
-        stringstream ss;
-        ss << "Error: c++ exception: " << e.what() << endl;
-        NativeScriptException nsEx(ss.str());
-        nsEx.ReThrowToJava(runtime->GetNapiEnv());
-    } catch (...) {
-        NativeScriptException nsEx(std::string("Error: c++ exception!"));
-        nsEx.ReThrowToJava(runtime->GetNapiEnv());
-    }
-}
-
 extern "C" JNIEXPORT jobject Java_com_tns_Runtime_runScript(JNIEnv* _env, jobject obj, jint runtimeId, jstring scriptFile) {
     jobject result = nullptr;
 
@@ -356,67 +333,6 @@ static jint getCurrentRuntimeIdCritical_impl() {
 
 extern "C" JNIEXPORT jint Java_com_tns_Runtime_getCurrentRuntimeIdLegacy(JNIEnv* _env, jclass clazz) {
     return getCurrentRuntimeIdCritical_impl();
-}
-
-extern "C" JNIEXPORT void Java_com_tns_Runtime_WorkerGlobalOnMessageCallback(JNIEnv* env, jclass obj, jint runtimeId, jstring msg) {
-    // Worker Thread runtime
-    auto runtime = TryGetRuntime(runtimeId);
-    if (runtime == nullptr) {
-        // TODO: Pete: Log message informing the developer of the failure
-        DEBUG_WRITE("WorkerGlobalOnMessageCallback: worker runtime not loaded.");
-        return;
-    }
-
-    CallbackHandlers::WorkerGlobalOnMessageCallback(runtime->GetNapiEnv(), msg);
-}
-
-extern "C" JNIEXPORT void Java_com_tns_Runtime_WorkerObjectOnMessageCallback(JNIEnv* env, jclass obj, jint runtimeId, jint workerId, jstring msg) {
-    // Main Thread runtime
-    auto runtime = TryGetRuntime(runtimeId);
-    if (runtime == nullptr) {
-         DEBUG_WRITE("WorkerObjectOnMessageCallback: worker runtime not loaded.");
-        return;
-    }
-
-    CallbackHandlers::WorkerObjectOnMessageCallback(runtime->GetNapiEnv(), workerId, msg);
-}
-
-extern "C" JNIEXPORT void Java_com_tns_Runtime_TerminateWorkerCallback(JNIEnv* env, jclass obj, jint runtimeId) {
-    // Worker Thread runtime
-    auto runtime = TryGetRuntime(runtimeId);
-    if (runtime == nullptr) {
-        DEBUG_WRITE("TerminateWorkerCallback: trying to call terminate before worker is loaded.");
-        return;
-    }
-    auto napiEnv = runtime->GetNapiEnv();
-    CallbackHandlers::TerminateWorkerThread(napiEnv);
-    delete runtime;
-}
-
-extern "C" JNIEXPORT void Java_com_tns_Runtime_ClearWorkerPersistent(JNIEnv* env, jclass obj, jint runtimeId, jint workerId) {
-    // Worker Thread runtime
-    auto runtime = TryGetRuntime(runtimeId);
-    if (runtime == nullptr) {
-         DEBUG_WRITE("ClearWorkerPersistent: trying to call before worker is loaded.");
-         return;
-    }
-
-    CallbackHandlers::ClearWorkerPersistent(runtime->GetNapiEnv(), workerId);
-}
-
-extern "C" JNIEXPORT void Java_com_tns_Runtime_CallWorkerObjectOnErrorHandleMain(JNIEnv* env, jclass obj, jint runtimeId, jint workerId, jstring message, jstring stackTrace, jstring filename, jint lineno, jstring threadName) {
-    // Main Thread runtime
-    auto runtime = TryGetRuntime(runtimeId);
-    if (runtime == nullptr) {
-         DEBUG_WRITE("CallWorkerObjectOnErrorHandleMain: trying to call before worker is loaded.");
-         return;
-    }
-
-    try {
-        CallbackHandlers::CallWorkerObjectOnErrorHandle(runtime->GetNapiEnv(), workerId, message, stackTrace, filename, lineno, threadName);
-    } catch (NativeScriptException& e) {
-        e.ReThrowToJava(runtime->GetNapiEnv());
-    }
 }
 
 extern "C" JNIEXPORT void Java_com_tns_Runtime_ResetDateTimeConfigurationCache(JNIEnv* _env, jclass obj, jint runtimeId) {
