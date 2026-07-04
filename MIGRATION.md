@@ -7,6 +7,16 @@ old runtime's HEAD (129 commits total).
 
 Plan: `~/.claude/plans/we-want-to-migrate-modular-prism.md`
 
+**Status:** the full range `2bab8f5..HEAD` has been triaged. ~60 `build(deps)`/CI/`chore`/`release`
+commits are out of scope (fork tooling). Of the substantive commits: **21 ported/partial**
+(all native/Java build-verified), several **already-present**, and the rest **deferred** with
+rationale (each deferred row says why + what's needed to complete it). Deferred clusters:
+**ESM** (`052cb21` + its dependents `7782720f`/`288491f`/`5ceb3d4`/`92c2654`/`45ed1f6`),
+**@CriticalNative** pair (`085bc4f`+`3c956cf`), **DexFactory** pair (`c9d41e6`+`fce8e29`),
+**timers** (`bfd7650`), **URLSearchParams spec** (`89893ae`), **workers→C++** (`a84d3c7`),
+**inspector** (`55da2da`/`4b5ab0a`), **NDK r27d** (`0387a8d`). Verification here is compile/link
++ config-eval; on-device behavior is noted per-row where relevant.
+
 **Disposition:** `ported` · `already-present` · `partial` · `skipped` · `deferred`
 
 | # | old hash | subject | disposition | new commit | notes |
@@ -43,6 +53,13 @@ Plan: `~/.claude/plans/we-want-to-migrate-modular-prism.md`
 | 20 | 49da71b | fix: circular dependencies when using proguard (#1910) | ported | this commit | Comment out the `buildMetadata` task's `dependsOn compile*ArtProfile` and `dependsOn optimize*Resources` (app/build.gradle) — they created a circular task dependency under proguard/R8. Verified: `:app:help` config eval exit 0. **Caveat:** full effect only in a release R8 build. |
 | 21 | 2b6cb03 | fix: ensure dex cache directory exists before proxy generation (#1938) | ported | this commit | `RuntimeHelper.java`: `mkdirs()` the `code_cache/secondary-dexes` dir and fall back to `appDir/secondary-dexes` when it's missing/unwritable. `ProxyGenerator.java` (runtime-binding-generator): create the parent dir before `createNewFile()` — prevents ENOENT crashes on newer Android. Verified: app + generators compile exit 0. |
 | — | c9d41e6 + fce8e29 | fix(DexFactory): inject DEX into parent class loader (#1951) + register with a single class loader (#1968) | deferred | — | Enables `Class.forName()` to find runtime-generated proxies (e.g. FragmentFactory). Implementation is **reflection into hidden `BaseDexClassLoader.pathList`/`dexElements` + private `addDexPath`/`makePathElements`**, branched by API level (24+/23/<23); the bug `fce8e29` fixes (dex registered with two class loaders) only crashes on **non-debuggable release builds**, and hidden-API access is restricted on Android 9+. `fce8e29` supersedes `c9d41e6`'s approach, so port the **combined end-state**, and validate on real devices across Android versions + a release build. Same device/version/release-only risk profile as [[085bc4f]] — **deferred as a pair**. Also port `testClassForNameDiscovery.js`. |
+| — | bfd7650 | fix(timers): order timers with the Java MessageQueue instead of ALooper fds | deferred | — | **Applicable** — the fork's `timers/Timers.cpp` uses the same `ALooper_addFd` pipe mechanism this replaces (Timers.cpp:64-68), and has no `TimerHandler.java`. But it's a large (~300-line) ordering-sensitive rewrite: a per-runtime `TimerHandler` on the Java MessageQueue via `sendMessageAtTime`, anonymous due-tokens, sub-millisecond due-time sort, FIFO ties with `postDelayed(0)`. Its whole purpose (setTimeout vs Handler ordering) is only validatable by running the regression tests **on-device**, and a subtle port bug would regress a working timer subsystem — so it warrants a dedicated device-tested effort, not a compile-only port. Also port `testNativeTimers.js`. **Deferred (applicable).** |
+| — | 89893ae | fix: URLSearchParams construction and iteration spec compliance (#1970) | deferred | — | **Applicable** but large: a 659-line wholesale rewrite of URLSearchParams construction (from string/record/iterable) and iteration (`entries`/`keys`/`values` iterator objects) in the V8 impl, plus 413 lines of spec tests. The fork's napi `URLSearchParams` already handles common cases; this is spec edge-cases requiring a careful full V8→napi rewrite validated by the tests **on-device**. Deferred as a focused follow-up (the earlier forEach delta from #1895 is already in `c9920e4`). |
+| — | 92c2654 | fix: anchor relative dynamic imports at the file:// referrer's directory (#1976) | deferred | — | ESM-only: touches `ModuleInternalCallbacks.cpp` (deferred ESM file) + `.mjs` tests. Deferred with [[052cb21]]. |
+| — | 45ed1f6 | fix: normalize "." and ".." in resolved module paths to dedupe modules (#1977) | deferred | — | ESM-only: `ModuleInternalCallbacks.cpp` + `.mjs` tests. Deferred with [[052cb21]]. |
+| — | a84d3c7 | feat(workers): move worker threading and messaging to C++ + SharedArrayBuffer (#1972) | deferred | — | **Large (21 files)** — a major architectural refactor moving worker threading/messaging into C++ (mirroring iOS) plus SharedArrayBuffer. Its own dedicated effort; deferred from the outset. |
+| — | 55da2da | feat(inspector): serve source maps to DevTools via Network.loadNetworkResource (#1969) | deferred | — | V8-inspector feature (DevTools source maps). Depends on the inspector subsystem; DevTools-validated. Large feature — deferred. |
+| — | 4b5ab0a | feat(inspector): attach Chrome DevTools to Web Worker isolates (#1973) | deferred | — | V8-inspector feature (worker DevTools); depends on the inspector + worker subsystems (see [[a84d3c7]]). Large feature — deferred. |
 | 4 | 3423e6f | feat: support 16 KB page sizes, gradle 8.5 (#1818) | partial | ca93e66 | **Ported:** 16 KB `-Wl,-z,max-page-size=16384` link option for arm64-v8a/x86_64 in `runtime/CMakeLists.txt` (verified present in ninja LINK_FLAGS); bumped `NS_DEFAULT_COMPILE_SDK_VERSION`/`NS_DEFAULT_BUILD_TOOLS_VERSION` 34→35 (both installed). **Skipped:** gradle-wrapper 8.4→8.7 and AGP 8.3.2→8.5.0 (new already newer: gradle 8.14.3 / AGP 8.12.1); STL `c++_shared`→`c++_static` (new deliberately uses `c++_shared` for multi-engine libc++ — would break engine `.so` setup). Verified: native reconfigure+relink exit 0. |
 
 ## Verified duplication-check seeds (from planning; confirm at implementation time)
