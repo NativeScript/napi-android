@@ -5,6 +5,8 @@
 #include <csignal>
 #include <sstream>
 #include <mutex>
+#include <cstdlib>
+#include <exception>
 #include <dlfcn.h>
 #include "zipconf.h"
 #include "NativeScriptException.h"
@@ -41,6 +43,27 @@ using namespace tns;
 using namespace std;
 
 namespace {
+    // std::terminate handler: log an uncaught native exception (with its message
+    // where available) before aborting, so the crash is diagnosable instead of a
+    // bare abort.
+    void LogAndAbortUncaught() {
+        try {
+            throw;  // rethrow the current in-flight exception
+        } catch (const tns::NativeScriptException &e) {
+            __android_log_print(ANDROID_LOG_FATAL, "TNS.Native",
+                                "Uncaught NativeScriptException: %s", e.what());
+        } catch (const std::exception &e) {
+            __android_log_print(ANDROID_LOG_FATAL, "TNS.Native",
+                                "Uncaught std::exception: %s", e.what());
+        } catch (...) {
+            __android_log_print(ANDROID_LOG_FATAL, "TNS.Native",
+                                "Uncaught unknown native exception");
+        }
+
+        // Preserve default abort behavior so crashes are visible to tooling.
+        std::_Exit(EXIT_FAILURE);
+    }
+
     // queueMicrotask(callback) per spec:
     // https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask
     // Implemented via Promise.resolve().then(callback) so it schedules a real
@@ -95,6 +118,9 @@ void Runtime::Init(JavaVM *vm) {
         sigaction(SIGABRT, &action, NULL);
         sigaction(SIGSEGV, &action, NULL);
     }
+
+    // Log uncaught native exceptions before aborting.
+    std::set_terminate(LogAndAbortUncaught);
 }
 /**
  * Returns the runtime based on the current thread id

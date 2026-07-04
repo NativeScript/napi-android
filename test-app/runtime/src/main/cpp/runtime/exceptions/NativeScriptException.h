@@ -32,6 +32,9 @@ class NativeScriptException {
         void ReThrowToNapi(napi_env env);
         void ReThrowToJava(napi_env env);
 
+        // The stored message, for logging uncaught native exceptions.
+        const char* what() const noexcept { return m_message.c_str(); }
+
         static void Init();
 
         /*
