@@ -8,14 +8,15 @@ old runtime's HEAD (129 commits total).
 Plan: `~/.claude/plans/we-want-to-migrate-modular-prism.md`
 
 **Status:** the full range `2bab8f5..HEAD` has been triaged. ~60 `build(deps)`/CI/`chore`/`release`
-commits are out of scope (fork tooling). Of the substantive commits: **21 ported/partial**
+commits are out of scope (fork tooling). Of the substantive commits: **23 ported/partial**
 (all native/Java build-verified), several **already-present**, and the rest **deferred** with
 rationale (each deferred row says why + what's needed to complete it). Deferred clusters:
 **ESM** (`052cb21` + its dependents `7782720f`/`288491f`/`5ceb3d4`/`92c2654`/`45ed1f6`),
-**@CriticalNative** pair (`085bc4f`+`3c956cf`), **DexFactory** pair (`c9d41e6`+`fce8e29`),
 **timers** (`bfd7650`), **URLSearchParams spec** (`89893ae`), **workers→C++** (`a84d3c7`),
-**inspector** (`55da2da`/`4b5ab0a`), **NDK r27d** (`0387a8d`). Verification here is compile/link
-+ config-eval; on-device behavior is noted per-row where relevant.
+**inspector** (`55da2da`/`4b5ab0a`), **NDK r27d** (`0387a8d`). The **@CriticalNative** pair
+(`085bc4f`+`3c956cf`) and **DexFactory** pair (`c9d41e6`+`fce8e29`) are now **ported** (compile-verified;
+they carry device/version/release-only runtime risk — validate on real devices). Verification here is
+compile/link + config-eval; on-device behavior is noted per-row where relevant.
 
 **Disposition:** `ported` · `already-present` · `partial` · `skipped` · `deferred`
 
