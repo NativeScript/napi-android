@@ -173,12 +173,25 @@ public class DexFactory {
         Class<?> result = null;
         String classNameToLoad = isInterface ? fullClassName : desiredDexClassName;
 
-        if (injectIntoParentClassLoader && classLoader instanceof BaseDexClassLoader
-                && injectDexIntoClassLoader((BaseDexClassLoader) classLoader, jarFilePath)) {
+        if (injectIntoParentClassLoader && classLoader instanceof BaseDexClassLoader) {
+            // If the proxy class is already loadable through the app class loader,
+            // reuse it instead of injecting a duplicate dex. Runtime-implemented
+            // interfaces all share the same generated proxy name (e.g.
+            // com.tns.gen.java.lang.Runnable), so a second implementation must NOT
+            // re-inject a jar defining a class already present in the class loader —
+            // ART rejects duplicate dex files in the same hierarchy. The generic
+            // proxy dispatches to the right JS object at call time, so reusing it is
+            // correct.
             try {
                 result = classLoader.loadClass(classNameToLoad);
-            } catch (ClassNotFoundException e) {
-                // fall through to the isolated DexClassLoader below
+            } catch (ClassNotFoundException notInjectedYet) {
+                if (injectDexIntoClassLoader((BaseDexClassLoader) classLoader, jarFilePath)) {
+                    try {
+                        result = classLoader.loadClass(classNameToLoad);
+                    } catch (ClassNotFoundException e) {
+                        // fall through to the isolated DexClassLoader below
+                    }
+                }
             }
         }
 
