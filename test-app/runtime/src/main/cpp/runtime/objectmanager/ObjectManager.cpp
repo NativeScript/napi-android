@@ -319,64 +319,118 @@ bool ObjectManager::IsHostObject(napi_value object) {
 napi_value ObjectManager::HostObjectGet(napi_env env, napi_value host,
                                         napi_value property, void *data) {
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    // Numeric keys on arrays: straight into the native element accessor. On V8
-    // these arrive via the indexed interceptor (HostObjectIndexedGet); engines
-    // that route everything through get() (e.g. QuickJS) hit it here.
-    if (proxy->isArray && !proxy->arraySignature.empty() &&
-        napi_util::is_of_type(env, property, napi_number)) {
-        uint32_t index = 0;
-        napi_get_value_uint32(env, property, &index);
-        return HostObjectIndexedGet(env, host, index, data);
-    }
+    try {
+        // Numeric keys on arrays: straight into the native element accessor. On V8
+        // these arrive via the indexed interceptor (HostObjectIndexedGet); engines
+        // that route everything through get() (e.g. QuickJS) hit it here.
+        if (proxy->isArray && !proxy->arraySignature.empty() &&
+            napi_util::is_of_type(env, property, napi_number)) {
+            uint32_t index = 0;
+            napi_get_value_uint32(env, property, &index);
+            return HostObjectIndexedGet(env, host, index, data);
+        }
 
-    // Everything else (incl. map/forEach/toString/Symbol.iterator/length, which
-    // are now native methods on the array prototype) forwards to the instance.
-    napi_value target = napi_util::get_ref_value(env, proxy->target);
-    napi_value result = nullptr;
-    napi_get_property(env, target, property, &result);
-    return result;
+        // Everything else (incl. map/forEach/toString/Symbol.iterator/length, which
+        // are now native methods on the array prototype) forwards to the instance.
+        napi_value target = napi_util::get_ref_value(env, proxy->target);
+        napi_value result = nullptr;
+        napi_get_property(env, target, property, &result);
+        return result;
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectGet").ReThrowToNapi(env);
+    }
+    return nullptr;
 }
 
 void ObjectManager::HostObjectSet(napi_env env, napi_value host,
                                   napi_value property, napi_value value,
                                   void *data) {
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    if (proxy->isArray && !proxy->arraySignature.empty() &&
-        napi_util::is_of_type(env, property, napi_number)) {
-        uint32_t index = 0;
-        napi_get_value_uint32(env, property, &index);
-        HostObjectIndexedSet(env, host, index, value, data);
-        return;
+    try {
+        if (proxy->isArray && !proxy->arraySignature.empty() &&
+            napi_util::is_of_type(env, property, napi_number)) {
+            uint32_t index = 0;
+            napi_get_value_uint32(env, property, &index);
+            HostObjectIndexedSet(env, host, index, value, data);
+            return;
+        }
+        napi_value target = napi_util::get_ref_value(env, proxy->target);
+        napi_set_property(env, target, property, value);
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectSet").ReThrowToNapi(env);
     }
-    napi_value target = napi_util::get_ref_value(env, proxy->target);
-    napi_set_property(env, target, property, value);
 }
 
 int ObjectManager::HostObjectHas(napi_env env, napi_value host,
                                   napi_value property, void *data) {
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    napi_value target = napi_util::get_ref_value(env, proxy->target);
-    bool result = false;
-    napi_has_property(env, target, property, &result);
-    return result;
+    try {
+        napi_value target = napi_util::get_ref_value(env, proxy->target);
+        bool result = false;
+        napi_has_property(env, target, property, &result);
+        return result;
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectHas").ReThrowToNapi(env);
+    }
+    return false;
 }
 
 int ObjectManager::HostObjectDelete(napi_env env, napi_value host,
                                      napi_value property, void *data) {
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    napi_value target = napi_util::get_ref_value(env, proxy->target);
-    bool result = false;
-    napi_delete_property(env, target, property, &result);
-    return result;
+    try {
+        napi_value target = napi_util::get_ref_value(env, proxy->target);
+        bool result = false;
+        napi_delete_property(env, target, property, &result);
+        return result;
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectDelete").ReThrowToNapi(env);
+    }
+    return false;
 }
 
 napi_value ObjectManager::HostObjectOwnKeys(napi_env env, napi_value host,
                                             void *data) {
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    napi_value target = napi_util::get_ref_value(env, proxy->target);
-    napi_value names = nullptr;
-    napi_get_property_names(env, target, &names);
-    return names;
+    try {
+        napi_value target = napi_util::get_ref_value(env, proxy->target);
+        napi_value names = nullptr;
+        napi_get_property_names(env, target, &names);
+        return names;
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectOwnKeys").ReThrowToNapi(env);
+    }
+    return nullptr;
 }
 
 // Fast path for numeric indices on java arrays: call straight into the native
@@ -386,26 +440,47 @@ napi_value ObjectManager::HostObjectOwnKeys(napi_env env, napi_value host,
 napi_value ObjectManager::HostObjectIndexedGet(napi_env env, napi_value host,
                                                uint32_t index, void *data) {
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    // The proxy already knows the java object id + ObjectManager, so resolve the
-    // backing array directly (no locked env->runtime lookup, no host probe).
-    jobject arr = proxy->instanceInfo
-                  ? (jobject) proxy->objectManager->GetJavaObjectByID(
-                          proxy->instanceInfo->JavaObjectID)
-                  : nullptr;
-    return CallbackHandlers::GetArrayElement(env, host, index, proxy->arraySignature,
-                                             proxy->objectManager, arr);
+    try {
+        // The proxy already knows the java object id + ObjectManager, so resolve
+        // the backing array directly (no locked env->runtime lookup, no host probe).
+        jobject arr = proxy->instanceInfo
+                      ? (jobject) proxy->objectManager->GetJavaObjectByID(
+                              proxy->instanceInfo->JavaObjectID)
+                      : nullptr;
+        return CallbackHandlers::GetArrayElement(env, host, index, proxy->arraySignature,
+                                                 proxy->objectManager, arr);
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectIndexedGet").ReThrowToNapi(env);
+    }
+    return nullptr;
 }
 
 void ObjectManager::HostObjectIndexedSet(napi_env env, napi_value host,
                                          uint32_t index, napi_value value,
                                          void *data) {
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    jobject arr = proxy->instanceInfo
-                  ? (jobject) proxy->objectManager->GetJavaObjectByID(
-                          proxy->instanceInfo->JavaObjectID)
-                  : nullptr;
-    CallbackHandlers::SetArrayElement(env, host, index, proxy->arraySignature,
-                                      value, proxy->objectManager, arr);
+    try {
+        jobject arr = proxy->instanceInfo
+                      ? (jobject) proxy->objectManager->GetJavaObjectByID(
+                              proxy->instanceInfo->JavaObjectID)
+                      : nullptr;
+        CallbackHandlers::SetArrayElement(env, host, index, proxy->arraySignature,
+                                          value, proxy->objectManager, arr);
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectIndexedSet").ReThrowToNapi(env);
+    }
 }
 
 // Mirrors the old "super" accessor: `proxy.super` resolves to `target.super`.
@@ -414,10 +489,21 @@ napi_value ObjectManager::HostObjectSuperGetter(napi_env env,
     void *data = nullptr;
     napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
-    napi_value target = napi_util::get_ref_value(env, proxy->target);
-    napi_value superValue = nullptr;
-    napi_get_named_property(env, target, "super", &superValue);
-    return superValue;
+    try {
+        napi_value target = napi_util::get_ref_value(env, proxy->target);
+        napi_value superValue = nullptr;
+        napi_get_named_property(env, target, "super", &superValue);
+        return superValue;
+    } catch (NativeScriptException &e) {
+        e.ReThrowToNapi(env);
+    } catch (std::exception &e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what();
+        NativeScriptException(ss.str()).ReThrowToNapi(env);
+    } catch (...) {
+        NativeScriptException("Error: unknown c++ exception in HostObjectSuperGetter").ReThrowToNapi(env);
+    }
+    return nullptr;
 }
 
 void ObjectManager::HostObjectProxyFinalizer(napi_env env, void *data,
