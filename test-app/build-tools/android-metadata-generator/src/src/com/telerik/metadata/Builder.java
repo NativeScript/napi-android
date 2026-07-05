@@ -456,6 +456,30 @@ public class Builder {
             for (int i = outerClasses.size() - 1; i >= 0; i--) {
                 outer = outerClasses.get(i);
                 String outerClassname = ClassUtil.getSimpleName(outer);
+
+                // A Kotlin companion object is stored as a package-level sibling
+                // node named "<Enclosing>$<Companion>" (see createCompanionNode),
+                // not as a direct child. When the companion itself declares nested
+                // classes, those nested classes carry the companion in their outer
+                // chain. Descend into the companion sibling here instead of calling
+                // createChild, which would create a shadow "<Companion>" child that
+                // hides the real companion node and drops its members.
+                NativeClassDescriptor outerEnclosing = ClassUtil.getEnclosingClass(outer);
+                if (node.parentNode != null && isNestedClassKotlinCompanionObject(outerEnclosing, outer)) {
+                    String companionNodeName = node.getName() + "$" + outerClassname;
+                    TreeNode companionChild = node.parentNode.getChild(companionNodeName);
+                    if (companionChild == null) {
+                        companionChild = node.createCompanionNode(outerClassname);
+                        companionChild.nodeType = outer.isInterface() ? TreeNode.Interface
+                                : TreeNode.Class;
+                        if (outer.isStatic()) {
+                            companionChild.nodeType |= TreeNode.Static;
+                        }
+                    }
+                    node = companionChild;
+                    continue;
+                }
+
                 TreeNode child = node.getChild(outerClassname);
                 if (child == null) {
                     child = node.createChild(outerClassname);
@@ -470,8 +494,15 @@ public class Builder {
         }
 
         TreeNode child = node.getChild(name);
+        boolean clazzIsCompanion = isNestedClassKotlinCompanionObject(outer, clazz);
+        if (child == null && clazzIsCompanion && node.parentNode != null) {
+            // The companion may already have been created as a package-level
+            // sibling if one of its nested classes was processed first; reuse it
+            // instead of creating a duplicate companion node.
+            child = node.parentNode.getChild(node.getName() + "$" + name);
+        }
         if (child == null) {
-            if (isNestedClassKotlinCompanionObject(outer, clazz)) {
+            if (clazzIsCompanion) {
                 child = node.createCompanionNode(name);
             } else {
                 child = node.createChild(name);
