@@ -1627,7 +1627,6 @@ void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value err
                             ArgConverter::ConvertToString(env, pstack),
                             line);
                 }
-                return;
             } else if (!napi_util::is_null_or_undefined(env, result)) {
                 bool handled;
                 napi_get_value_bool(env, result, &handled);
