@@ -51,7 +51,16 @@ namespace tns {
 
         ~NapiRegex() {
             if (ref != nullptr && env != nullptr) {
+#ifdef __V8__
+                node_api_post_finalizer(env, [](napi_env env, void *d, void*) {
+                    napi_delete_reference(env, (napi_ref) d);
+                }, ref, nullptr);
+#else
                 napi_delete_reference(env, ref);
+#endif
+
+
+
             }
         }
     };
