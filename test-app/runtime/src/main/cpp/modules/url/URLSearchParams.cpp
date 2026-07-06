@@ -194,7 +194,7 @@ namespace {
         // Release the state when the iterator is collected. Ref deletion is
         // deferred on V8 (deleting a reference synchronously inside a finalizer
         // is illegal there).
-        napi_add_finalizer(env, iterator, st, [](napi_env e, void *d, void *) {
+        napi_add_finalizer(env, iterator, st, [](napi_env env, void *d, void *) {
 #ifdef __V8__
             node_api_post_finalizer(e, [](napi_env env, void *d, void *) {
 #endif
