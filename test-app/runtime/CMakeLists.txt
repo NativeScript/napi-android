@@ -291,11 +291,26 @@ target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${
 #target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${ANDROID_ABI}/libclang_rt.asan-aarch64-android.so)
 
 if (HERMES)
-    # libhermesvm.so (+ libjsi.so) are extracted from the hermes-engine AAR into
-    # src/main/libs/hermes/<abi>.
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libhermesvm.so)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libjsi.so)
+    # Select debug or release Hermes .so files based on build type.
+    # Optimized builds use the MinSizeRel release libraries; all other builds
+    # (including regular debug and debugOptimized-with-inspector) use the debug
+    # libraries, which include HERMES_ENABLE_DEBUGGER and full debug info.
+    if (OPTIMIZED_BUILD OR OPTIMIZED_WITH_INSPECTOR_BUILD)
+        set(HERMES_LIB_VARIANT release)
+    else ()
+        set(HERMES_LIB_VARIANT debug)
+    endif ()
+
+    set(HERMES_LIB_DIR ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${HERMES_LIB_VARIANT}/${ANDROID_ABI})
+    MESSAGE(STATUS "# Hermes lib variant: ${HERMES_LIB_VARIANT} (${HERMES_LIB_DIR})")
+
+    target_link_libraries(NativeScript ${HERMES_LIB_DIR}/libhermesvm.so)
+    target_link_libraries(NativeScript ${HERMES_LIB_DIR}/libjsi.so)
     add_compile_definitions(NativeScript, PRIVATE __HERMES__)
+
+    # napi_create_host_object / napi_get_host_object_data / napi_is_host_object
+    # are compiled into libhermesvm.so (via hermesNapi) when USE_HOST_OBJECT is
+    # set at Hermes build time. No separate .so to link here.
 endif ()
 
 if (JSC)
