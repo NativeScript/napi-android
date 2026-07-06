@@ -5,14 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#ifndef HERMES_CDP_RUNTIMEDOMAINAGENT_H
-#define HERMES_CDP_RUNTIMEDOMAINAGENT_H
+#pragma once
 
 #include <optional>
 
-#include "CDPDebugAPI.h"
-#include "DomainAgent.h"
-#include "RemoteObjectConverters.h"
+#include <hermes/cdp/CDPDebugAPI.h>
+#include <hermes/cdp/DomainAgent.h>
+#include <hermes/cdp/RemoteObjectConverters.h>
 
 namespace facebook {
 namespace hermes {
@@ -29,7 +28,7 @@ class RuntimeDomainAgent : public DomainAgent {
   RuntimeDomainAgent(
       int32_t executionContextID,
       HermesRuntime &runtime,
-      debugger::AsyncDebuggerAPI &asyncDebuggerAPI,
+      const debugger::AsyncDebuggerAPI &asyncDebuggerAPI,
       SynchronizedOutboundCallback messageCallback,
       std::shared_ptr<RemoteObjectsTable> objTable,
       ConsoleMessageStorage &consoleMessageStorage,
@@ -115,7 +114,7 @@ class RuntimeDomainAgent : public DomainAgent {
       const ObjectSerializationOptions &serializationOptions);
 
   HermesRuntime &runtime_;
-  debugger::AsyncDebuggerAPI &asyncDebuggerAPI_;
+  const debugger::AsyncDebuggerAPI &asyncDebuggerAPI_;
   ConsoleMessageStorage &consoleMessageStorage_;
   ConsoleMessageDispatcher &consoleMessageDispatcher_;
 
@@ -137,5 +136,3 @@ class RuntimeDomainAgent : public DomainAgent {
 } // namespace cdp
 } // namespace hermes
 } // namespace facebook
-
-#endif // HERMES_CDP_RUNTIMEDOMAINAGENT_H

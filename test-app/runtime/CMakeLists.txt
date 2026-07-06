@@ -27,7 +27,8 @@ set(MI_OVERRIDE OFF)
 # so non-V8-13 engine builds failed on ada.h.
 set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++20")
 
-if (SHERMES)
+if (HERMES)
+    # Hermes/JSI headers require RTTI.
     set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -frtti")
 else ()
     set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -fno-rtti")
@@ -157,20 +158,11 @@ if (PRIMJS)
 endif ()
 
 if (HERMES)
+    # Hermes is the static-hermes (hermesvm) engine. Headers are extracted from
+    # the hermes-engine AAR into napi/hermes/include.
     include_directories(
             src/main/cpp/napi/hermes
             src/main/cpp/napi/hermes/include
-            src/main/cpp/napi/common
-    )
-    set(SOURCES ${SOURCES}
-            src/main/cpp/napi/hermes/jsr.cpp
-    )
-endif ()
-
-if (SHERMES)
-    include_directories(
-            src/main/cpp/napi/hermes
-            src/main/cpp/napi/hermes/include_shermes
             src/main/cpp/napi/common
     )
     set(SOURCES ${SOURCES}
@@ -298,15 +290,10 @@ MESSAGE(STATUS "# CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS})
 target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${ANDROID_ABI}/libzip.a)
 #target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${ANDROID_ABI}/libclang_rt.asan-aarch64-android.so)
 
-if (SHERMES)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/shermes/${ANDROID_ABI}/libhermesvm.so)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/shermes/${ANDROID_ABI}/libjsi.so)
-    add_compile_definitions(NativeScript, PRIVATE __HERMES__)
-    add_compile_definitions(NativeScript, PRIVATE __SHERMES__)
-endif ()
-
 if (HERMES)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libhermes.so)
+    # libhermesvm.so (+ libjsi.so) are extracted from the hermes-engine AAR into
+    # src/main/libs/hermes/<abi>.
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libhermesvm.so)
     target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libjsi.so)
     add_compile_definitions(NativeScript, PRIVATE __HERMES__)
 endif ()
@@ -389,7 +376,7 @@ if (QUICKJS)
     else ()
         target_link_libraries(NativeScript ${system-log} ${system-z} ${system-android})
     endif ()
-elseif (HERMES OR SHERMES)
+elseif (HERMES)
     find_package(fbjni REQUIRED CONFIG)
     target_link_libraries(NativeScript ${system-log} ${system-z} fbjni::fbjni ${system-android})
 elseif (JSC OR V8 OR PRIMJS)

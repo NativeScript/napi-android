@@ -5,14 +5,22 @@
 #ifndef TEST_APP_JSR_H
 #define TEST_APP_JSR_H
 
-#include "hermes/hermes.h"
-#ifdef __SHERMES__
-#include "hermes/hermes_node_api.h"
-#else
-#include "hermes/hermes_api.h"
-#endif
+#include <memory>
+#include <mutex>
+#include <unordered_map>
 
+// hermes.h transitively provides everything we need on the runtime side:
+//   - facebook::hermes::makeThreadSafeHermesRuntime / HermesRuntime
+//   - facebook::hermes::IHermes (via <jsi/hermes-interfaces.h>)
+//   - facebook::jsi::castInterface (via <jsi/jsi.h>)
+//   - hermes::vm::RuntimeConfig (via <hermes/Public/RuntimeConfig.h>)
+#include "hermes/hermes.h"
 #include "jsi/threadsafe.h"
+
+// Node-API surface exported by libhermesvm.so: hermes_napi_create_env,
+// hermes_run_script, hermes_run_bytecode plus the standard napi_* functions.
+#include "napi/hermes_napi.h"
+
 #include "jsr_common.h"
 
 class JSR {

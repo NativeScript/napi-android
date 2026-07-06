@@ -7,7 +7,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const readline = require('readline');
 
-const VALID_ENGINES = ['V8-10',"V8-11","V8-13", 'QUICKJS', "QUICKJS_NG", 'HERMES', 'JSC', 'SHERMES', 'PRIMJS'];
+const VALID_ENGINES = ['V8-10',"V8-11","V8-13", 'QUICKJS', "QUICKJS_NG", 'HERMES', 'JSC', 'PRIMJS'];
 const HOST_OBJECTS_SUPPORTED = new Set(['V8-10','V8-11',"V8-13", 'QUICKJS',"QUICKJS_NG", 'PRIMJS']);
 
 // Host objects are enabled by default whenever the selected engine supports

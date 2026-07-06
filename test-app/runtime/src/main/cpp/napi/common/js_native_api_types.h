@@ -34,6 +34,7 @@ typedef struct napi_handle_scope__ *napi_escapable_handle_scope;
 typedef struct napi_callback_info__ *napi_callback_info;
 typedef struct napi_deferred__* napi_deferred;
 
+typedef napi_env__* node_api_basic_env;
 
 typedef enum
 {
@@ -56,6 +57,8 @@ typedef enum
 typedef napi_value (*napi_callback)(napi_env env, napi_callback_info callbackInfo);
 
 typedef void (*napi_finalize)(napi_env env, void *finalizeData, void *finalizeHint);
+
+typedef napi_finalize node_api_basic_finalize;
 
 typedef struct {
   // One of utf8name or name should be NULL.

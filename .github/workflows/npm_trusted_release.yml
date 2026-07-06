@@ -77,7 +77,7 @@ jobs:
           set -euo pipefail
           case "$ENGINE" in
             all)
-              echo 'engines=["v8","hermes","jsc","quickjs","quickjs-ng","shermes","primjs"]' >> "$GITHUB_OUTPUT"
+              echo 'engines=["v8","hermes","jsc","quickjs","quickjs-ng","primjs"]' >> "$GITHUB_OUTPUT"
               ;;
             v8|hermes|jsc|quickjs|quickjs-ng|shermes|primjs)
               printf 'engines=["%s"]\n' "$ENGINE" >> "$GITHUB_OUTPUT"
