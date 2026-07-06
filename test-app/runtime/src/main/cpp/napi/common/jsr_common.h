@@ -7,6 +7,8 @@
 
 #include "js_native_api.h"
 
+typedef struct napi_runtime__ *napi_runtime;
+
 napi_status js_create_runtime(napi_runtime* runtime);
 napi_status js_create_napi_env(napi_env* env, napi_runtime runtime);
 napi_status js_set_runtime_flags(const char* flags);

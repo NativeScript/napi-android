@@ -3,8 +3,28 @@
 
 #include "js_native_api_types.h"
 
-#if !defined __cplusplus || (defined(_MSC_VER) && _MSC_VER < 1900)
-typedef uint16_t char16_t;
+// If you need __declspec(dllimport), either include <node_api.h> instead, or
+// define NAPI_EXTERN as __declspec(dllimport) on the compiler's command line.
+#ifndef NAPI_EXTERN
+#ifdef _WIN32
+#define NAPI_EXTERN __declspec(dllexport)
+#elif defined(__wasm__)
+#define NAPI_EXTERN                                                            \
+  __attribute__((visibility("default")))                                       \
+  __attribute__((__import_module__("napi")))
+#else
+#define NAPI_EXTERN __attribute__((visibility("default")))
+#endif
+#endif
+
+#define NAPI_AUTO_LENGTH SIZE_MAX
+
+#ifdef __cplusplus
+#define EXTERN_C_START extern "C" {
+#define EXTERN_C_END }
+#else
+#define EXTERN_C_START
+#define EXTERN_C_END
 #endif
 
 EXTERN_C_START
