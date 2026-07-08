@@ -7,7 +7,7 @@
 
 #include "js_native_api.h"
 #include "js_native_api_types.h"
-#include <JavaScriptCore/JavaScript.h>
+#include "JavaScriptCore/JavaScript.h"
 #include <unordered_set>
 #include <list>
 #include <thread>
@@ -17,7 +17,8 @@ struct napi_env__ {
     JSGlobalContextRef context{};
     JSValueRef last_exception{};
     napi_extended_error_info last_error{nullptr, nullptr, 0, napi_ok};
-    std::unordered_set<napi_value> active_ref_values{};
+    // Strong (protected) napi references, released on env teardown. Weak
+    // references are backed by native JSC weak handles inside napi_ref__.
     std::list<napi_ref> strong_refs{};
 
     JSValueRef constructor_info_symbol{};

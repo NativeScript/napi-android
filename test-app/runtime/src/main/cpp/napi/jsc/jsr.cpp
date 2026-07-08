@@ -1,12 +1,12 @@
 #include "jsr.h"
 
-napi_status js_create_runtime(napi_runtime *runtime) {
+napi_status js_create_runtime(jsr_ns_runtime *runtime) {
     if (!runtime) return napi_invalid_arg;
-    *runtime = (napi_runtime) JSGlobalContextCreateInGroup(nullptr, nullptr);
+    *runtime = (jsr_ns_runtime) JSGlobalContextCreateInGroup(nullptr, nullptr);
     return napi_ok;
 }
 
-napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
+napi_status js_create_napi_env(napi_env* env, jsr_ns_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
 
     *env = new napi_env__((JSGlobalContextRef) runtime);
@@ -46,7 +46,7 @@ napi_status js_free_napi_env(napi_env env) {
     return  napi_ok;
 }
 
-napi_status js_free_runtime(napi_runtime runtime) {
+napi_status js_free_runtime(jsr_ns_runtime runtime) {
 //    JSContextGroupRelease((JSContextGroupRef) runtime);
     return napi_ok;
 }
