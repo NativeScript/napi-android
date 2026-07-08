@@ -232,6 +232,10 @@ android {
         minSdkVersion minSdkVer
         targetSdkVersion computeTargetSdkVersion()
         ndk {
+            if (ns_engine == "JSC") {
+                outLogger.withStyle(Style.Info).println "\t ! JSC engine only ships arm64-v8a and x86_64 prebuilts; " +
+                        "the app will be built for those ABIs only (armeabi-v7a and x86 are excluded)."
+            }
             if (onlyX86) {
                 // The updated JSC only ships 64-bit libraries, so fall back to
                 // x86_64 when a single-ABI (emulator) build is requested.

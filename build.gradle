@@ -330,10 +330,6 @@ task copyFilesToProjectTemeplate {
             into "$DIST_FRAMEWORK_PATH"
         }
 
-        ant.propertyfile(file: "$TEST_APP_PATH/gradle.properties") {
-            entry(key: "ns_engine", value: "V8")
-        }
-
         copy {
             from "$TEST_APP_PATH/gradle-helpers/paths.gradle"
             into "$DIST_FRAMEWORK_PATH/gradle-helpers"
