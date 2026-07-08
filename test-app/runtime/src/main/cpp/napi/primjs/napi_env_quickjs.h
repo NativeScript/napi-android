@@ -10,23 +10,9 @@
 #ifndef SRC_NAPI_QUICKJS_NAPI_ENV_QUICKJS_H_
 #define SRC_NAPI_QUICKJS_NAPI_ENV_QUICKJS_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif  // __cplusplus
-#include "quickjs/include/quickjs.h"
-#ifdef __cplusplus
-}
-#endif  // __cplusplus
-
 #include "js_native_api.h"
+#include "quickjs.h"
 EXTERN_C_START
-
-NAPI_EXTERN napi_env napi_new_env();
-
-NAPI_EXTERN void napi_free_env(napi_env);
-
-NAPI_EXTERN void napi_setup_loader(napi_env env, const char* name);
-
 
 NAPI_EXTERN void napi_attach_quickjs(napi_env env, LEPUSContext* ctx);
 

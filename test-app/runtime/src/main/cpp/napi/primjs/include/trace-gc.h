@@ -4,6 +4,7 @@
 
 #ifndef SRC_GC_TRACE_GC_H_
 #define SRC_GC_TRACE_GC_H_
+#include <string>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,10 +15,13 @@ extern "C" {
 
 struct LEPUSRuntime;
 
+#ifdef USE_PRIMJS_NAPI
+#include "primjs_napi_defines.h"
+#endif
 typedef struct napi_env__ *napi_env;
 typedef struct napi_value__ *napi_value;
-class napi_handle_scope__;
-typedef void napi_func(napi_env env, napi_handle_scope__ *scope);
+class NAPIHandleScope;
+typedef void napi_func(napi_env env, NAPIHandleScope *scope);
 
 enum HandleType {
   HANDLE_TYPE_UNDEFINED,
@@ -62,6 +66,19 @@ class PtrHandles {
   void ResizeHandles();
 };
 
+class CheckTools {
+ public:
+  CheckTools();
+  ~CheckTools();
+  bool PushTid(int tid);
+  bool IsValidTid(int tid);
+
+ private:
+  int tid_idx;
+  int tid_size;
+  int *tids;
+};
+
 class HandleScope {
  public:
   HandleScope(LEPUSRuntime *rt);
@@ -80,22 +97,22 @@ class HandleScope {
   int handle_prev_idx;
 };
 
-class napi_handle_scope__ {
+class NAPIHandleScope {
  public:
-  napi_handle_scope__(napi_env env, LEPUSContext *ctx, napi_func *func = nullptr);
-  explicit napi_handle_scope__(LEPUSContext *ctx)
+  NAPIHandleScope(napi_env env, LEPUSContext *ctx, napi_func *func = nullptr);
+  explicit NAPIHandleScope(LEPUSContext *ctx)
       : env_(nullptr),
         ctx_(ctx),
         handle_tail_(nullptr),
         reset_napi_env(nullptr) {
     is_gc = ctx_ == nullptr ? false : LEPUS_IsGCMode(ctx_);
     if (is_gc) {
-      prev_ = reinterpret_cast<napi_handle_scope__ *>(GetNapiScope(ctx_));
+      prev_ = reinterpret_cast<NAPIHandleScope *>(GetNapiScope(ctx_));
       SetNapiScope(ctx_, this);
     }
   }
 
-  inline ~napi_handle_scope__() {
+  inline ~NAPIHandleScope() {
     Handle *curr = handle_tail_;
     while (curr) {
       Handle *temp = curr;
@@ -112,8 +129,8 @@ class napi_handle_scope__ {
     }
   }
 
-  napi_handle_scope__(const napi_handle_scope__ &) = delete;
-  void operator=(const napi_handle_scope__ &) = delete;
+  NAPIHandleScope(const NAPIHandleScope &) = delete;
+  void operator=(const NAPIHandleScope &) = delete;
 
   napi_value Escape(napi_value v);
 
@@ -123,15 +140,23 @@ class napi_handle_scope__ {
     Handle *prev;
   };
   Handle *GetHandle() { return handle_tail_; }
-  napi_handle_scope__ *GetPrevScope() { return prev_; }
+  NAPIHandleScope *GetPrevScope() { return prev_; }
 
   napi_env env_;
   LEPUSContext *ctx_;
   bool is_gc;
-  napi_handle_scope__ *prev_;
+  NAPIHandleScope *prev_;
   Handle *handle_tail_;
   napi_func *reset_napi_env;
 };
 
+class GCObserver {
+ public:
+  virtual ~GCObserver() = default;
+  virtual void OnGC(std::string mem_info) = 0;
+};
+#ifdef USE_PRIMJS_NAPI
+#include "primjs_napi_undefs.h"
+#endif
 
 #endif  // SRC_GC_TRACE_GC_H_
