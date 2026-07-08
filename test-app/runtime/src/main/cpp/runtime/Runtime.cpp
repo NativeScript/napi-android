@@ -28,9 +28,6 @@
 #include "ManualInstrumentation.h"
 #include "GlobalHelpers.h"
 #include "Timers.h"
-#ifdef __JSC__
-#include "WeakRef.h"
-#endif
 
 #ifdef APPLICATION_IN_DEBUG
 // #include "NetworkDomainCallbackHandlers.h"
@@ -235,9 +232,8 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     napi_value global;
     napi_get_global(env, &global);
 
-#ifdef __JSC__
-    tns::WeakRef::Init(env);
-#endif
+    // Newer JSC ships a native `WeakRef` global, so the old polyfill (which was
+    // actually a strong reference and leaked) is no longer needed.
 
 #ifdef APPLICATION_IN_DEBUG
     Console::createConsole(env, JsV8InspectorClient::consoleLogCallback, maxLogcatObjectSize, forceLog);
@@ -582,7 +578,7 @@ napi_env Runtime::GetNapiEnv() {
     return env;
 }
 
-napi_runtime Runtime::GetNapiRuntime() {
+jsr_ns_runtime Runtime::GetNapiRuntime() {
     return rt;
 }
 

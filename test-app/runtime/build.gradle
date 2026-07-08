@@ -2,7 +2,7 @@ apply plugin: 'com.android.library'
 
 // can be: "V8-11", "V8-10","V8-13", "JSC", "HERMES", "QUICKJS", "QUICKJS_NG", "PRIMJS"
 
-def jsEngine = "HERMES"
+def jsEngine = "V8-13"
 
 def hasEngine = project.hasProperty("engine")
 if (hasEngine) {
@@ -136,7 +136,7 @@ android {
 
                if (jsEngine == "QUICKJS" || jsEngine == "QUICKJS_NG") {
                     arguments.add("-DQUICKJS=1")
-//                    arguments.add("-DUSE_MIMALLOC=1")
+                    arguments.add("-DUSE_MIMALLOC=1")
                    if (jsEngine == "QUICKJS_NG") {
                        arguments.add("-DQUICKJS_NG=1")
                    }
@@ -177,7 +177,13 @@ android {
         ndk {
             minSdkVersion NS_DEFAULT_MIN_SDK_VERSION as int
             if (onlyX86) {
-                abiFilters 'x86'
+                // The updated JSC only ships 64-bit libraries, so fall back to
+                // x86_64 when a single-ABI (emulator) build is requested.
+                abiFilters jsEngine == "JSC" ? 'x86_64' : 'x86'
+            } else if (jsEngine == "JSC") {
+                // The newer JSC engine only provides arm64-v8a and x86_64
+                // prebuilts, so restrict the runtime to those two ABIs.
+                abiFilters 'x86_64', 'arm64-v8a'
             } else {
                 abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
             }

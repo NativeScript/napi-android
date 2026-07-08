@@ -145,9 +145,8 @@ endif ()
 if (PRIMJS)
     set(SOURCES ${SOURCES}
             src/main/cpp/napi/primjs/jsr.cpp
-            src/main/cpp/napi/primjs/code_cache.cc
-            src/main/cpp/napi/primjs/primjs-api.cc
-            src/main/cpp/napi/primjs/napi_env.cc
+            src/main/cpp/napi/primjs/js_native_api_adapter.cc
+            src/main/cpp/napi/primjs/js_native_api_extensions.cc
     )
     include_directories(
             src/main/cpp/napi/primjs
@@ -314,7 +313,7 @@ if (HERMES)
 endif ()
 
 if (JSC)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/jsc/${ANDROID_ABI}/libjsc.so)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/jsc/${ANDROID_ABI}/libJavaScriptCore.so)
     add_compile_definitions(NativeScript, PRIVATE __JSC__)
 endif ()
 
@@ -338,8 +337,12 @@ if (V8_13)
 endif ()
 
 if (PRIMJS)
-    # target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libnapi.so)
+    # libnapi.so provides the napi host/setup entry points (napi_new_env,
+    # napi_attach_quickjs, napi_setup_loader, the quickjs<->napi bridges, ...)
+    # and installs the value-op vtable consumed by js_native_api_adapter.cc.
+    # It depends on libquick.so (the quickjs engine); link both.
     target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libquick.so)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libnapi.so)
     add_compile_definitions(NativeScript, PRIVATE __PRIMJS__)
 endif ()
 

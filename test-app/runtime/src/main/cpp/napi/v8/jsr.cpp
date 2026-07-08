@@ -31,9 +31,9 @@ std::unique_ptr<v8::Platform> JSR::platform = nullptr;
 bool JSR::s_mainThreadInitialized = false;
 std::unordered_map<napi_env, JSR *> JSR::env_to_jsr_cache;
 
-napi_status js_create_runtime(napi_runtime *runtime) {
+napi_status js_create_runtime(jsr_ns_runtime *runtime) {
     if (!runtime) return napi_invalid_arg;
-    *runtime = (napi_runtime) new JSR();
+    *runtime = (jsr_ns_runtime) new JSR();
 
     return napi_ok;
 }
@@ -65,7 +65,7 @@ napi_status js_unlock_env(napi_env env) {
     return napi_ok;
 }
 
-napi_status js_create_napi_env(napi_env *env, napi_runtime runtime) {
+napi_status js_create_napi_env(napi_env *env, jsr_ns_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
     JSR *jsr = (JSR *) runtime;
     // Must enter explictly
@@ -122,7 +122,7 @@ napi_status js_free_napi_env(napi_env env) {
     return napi_ok;
 }
 
-napi_status js_free_runtime(napi_runtime runtime) {
+napi_status js_free_runtime(jsr_ns_runtime runtime) {
     JSR *jsr = (JSR *) runtime;
     jsr->isolate->Dispose();
     delete jsr;

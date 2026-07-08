@@ -92,7 +92,7 @@ namespace tns {
 
         napi_env GetNapiEnv();
 
-        napi_runtime GetNapiRuntime();
+        jsr_ns_runtime GetNapiRuntime();
 
         static ALooper *GetMainLooper() {
             return m_mainLooper;
@@ -162,7 +162,7 @@ namespace tns {
         int m_id;
         jobject m_runtime;
 
-        napi_runtime rt;
+        jsr_ns_runtime rt;
         napi_env env;
         napi_handle_scope global_scope;
 

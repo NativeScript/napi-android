@@ -427,7 +427,7 @@ static inline napi_status CreateJSValueHandle(napi_env env, JSValue value, struc
     CHECK_ARG(env)
     CHECK_ARG(result)
 
-    RETURN_STATUS_IF_FALSE(!LIST_EMPTY(&env->handleScopeList), napi_handle_scope_empty)
+    RETURN_STATUS_IF_FALSE(!LIST_EMPTY(&env->handleScopeList), napi_handle_scope_mismatch)
 
     napi_handle_scope handleScope = LIST_FIRST(&env->handleScopeList);
 
@@ -483,7 +483,7 @@ napi_status napi_open_handle_scope(napi_env env, napi_handle_scope *result) {
     napi_handle_scope__ *handleScope = (napi_handle_scope__ *) mi_malloc(
             sizeof(napi_handle_scope__));
 
-    RETURN_STATUS_IF_FALSE(handleScope, napi_memory_error)
+    RETURN_STATUS_IF_FALSE(handleScope, napi_handle_scope_mismatch)
     handleScope->type = HANDLE_HEAP_ALLOCATED;
     handleScope->handleCount = 0;
     handleScope->escapeCalled = false;
@@ -529,12 +529,12 @@ napi_status napi_open_escapable_handle_scope(napi_env env, napi_escapable_handle
             sizeof(napi_handle_scope__));
     handleScope->type = HANDLE_HEAP_ALLOCATED;
     handleScope->handleCount = 0;
-    RETURN_STATUS_IF_FALSE(handleScope, napi_memory_error)
+    RETURN_STATUS_IF_FALSE(handleScope, napi_handle_scope_mismatch)
     SLIST_INIT(&handleScope->handleList);
     handleScope->escapeCalled = false;
     LIST_INSERT_HEAD(&env->handleScopeList, handleScope, node);
 
-    *result = handleScope;
+    *result = (napi_escapable_handle_scope) handleScope;
 
     return napi_clear_last_error(env);
 }
@@ -544,23 +544,27 @@ napi_close_escapable_handle_scope(napi_env env, napi_escapable_handle_scope esca
     CHECK_ARG(env)
     CHECK_ARG(escapableScope)
 
-    assert(LIST_FIRST(&env->handleScopeList) == escapableScope &&
+    // Escapable scopes share the napi_handle_scope__ representation; the public
+    // type is opaque and distinct, so cast to operate on the members.
+    napi_handle_scope__ *scope = (napi_handle_scope__ *) escapableScope;
+
+    assert(LIST_FIRST(&env->handleScopeList) == scope &&
            "napi_close_handle_scope() or napi_close_escapable_handle_scope() should follow FILO rule.");
 
     Handle *handle, *tempHandle;
-    SLIST_FOREACH_SAFE(handle, &escapableScope->handleList, node, tempHandle) {
+    SLIST_FOREACH_SAFE(handle, &scope->handleList, node, tempHandle) {
         JS_FreeValue(env->context, handle->value);
         handle->value = JSUndefined;
 
         // Instead of freeing, return the handle to the pool for reuse
-        SLIST_REMOVE(&escapableScope->handleList, handle, Handle, node);
+        SLIST_REMOVE(&scope->handleList, handle, Handle, node);
         if (handle->type == HANDLE_HEAP_ALLOCATED) {
             mi_free(handle);
         }
     }
 
-    LIST_REMOVE(escapableScope, node);
-    mi_free(escapableScope);
+    LIST_REMOVE(scope, node);
+    mi_free(scope);
 
     return napi_clear_last_error(env);
 }
@@ -573,16 +577,20 @@ napi_status napi_escape_handle(napi_env env, napi_escapable_handle_scope scope, 
     CHECK_ARG(scope)
     CHECK_ARG(escapee)
 
-    RETURN_STATUS_IF_FALSE(!scope->escapeCalled, napi_escape_called_twice)
+    // Escapable scopes share the napi_handle_scope__ representation; the public
+    // type is opaque and distinct, so cast to operate on the members.
+    napi_handle_scope__ *hs = (napi_handle_scope__ *) scope;
+
+    RETURN_STATUS_IF_FALSE(!hs->escapeCalled, napi_escape_called_twice)
     // Get the outer handle scope
-    napi_handle_scope handleScope = LIST_NEXT(scope, node);
-    RETURN_STATUS_IF_FALSE(handleScope, napi_handle_scope_empty)
+    napi_handle_scope handleScope = LIST_NEXT(hs, node);
+    RETURN_STATUS_IF_FALSE(handleScope, napi_handle_scope_mismatch)
 
     Handle *handle = (Handle *) mi_malloc(sizeof(Handle));
 
-    RETURN_STATUS_IF_FALSE(handle, napi_memory_error)
+    RETURN_STATUS_IF_FALSE(handle, napi_handle_scope_mismatch)
 
-    scope->escapeCalled = true;
+    hs->escapeCalled = true;
     handle->value = JS_DupValue(env->context, *((JSValue *) escapee));
     SLIST_INSERT_HEAD(&handleScope->handleList, handle, node);
 
@@ -795,7 +803,7 @@ napi_create_reference(napi_env env, napi_value value, uint32_t initialRefCount, 
     CHECK_ARG(result)
 
     *result = (napi_ref__ *) mi_malloc(sizeof(napi_ref__));
-    RETURN_STATUS_IF_FALSE(*result, napi_memory_error)
+    RETURN_STATUS_IF_FALSE(*result, napi_generic_failure)
 
     JSValue jsValue = *((JSValue *) value);
 
@@ -3223,7 +3231,7 @@ napi_create_function(napi_env env, const char *utf8name, size_t length, napi_cal
     CHECK_ARG(result)
 
     FunctionInfo *functionInfo = (FunctionInfo *) mi_malloc(sizeof(FunctionInfo));
-    RETURN_STATUS_IF_FALSE(functionInfo, napi_memory_error)
+    RETURN_STATUS_IF_FALSE(functionInfo, napi_generic_failure)
     functionInfo->data = data;
     functionInfo->callback = cb;
 

@@ -451,7 +451,12 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_reject_deferred(napi_env env,
 NAPI_EXTERN napi_status NAPI_CDECL napi_is_promise(napi_env env,
                                                    napi_value value,
                                                    bool *is_promise);
-
+#ifdef __PRIMJS__
+// Running a script
+NAPI_EXTERN napi_status NAPI_CDECL napi_run_script(napi_env env, const char* script,
+                                                   size_t length, const char* filename,
+                                                   napi_value* result);
+#else
 // Running a script
 NAPI_EXTERN napi_status NAPI_CDECL napi_run_script(napi_env env,
                                                    napi_value script,
@@ -461,6 +466,8 @@ NAPI_EXTERN napi_status NAPI_CDECL napi_run_script_source(napi_env env,
                                                           napi_value script,
                                                           const char* source_url,
                                                           napi_value* result);
+#endif
+
 
 // Memory management
 NAPI_EXTERN napi_status NAPI_CDECL napi_adjust_external_memory(

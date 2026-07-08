@@ -3,9 +3,9 @@
 
 std::unordered_map<napi_env, JSR *> JSR::env_to_jsr_cache;
 
-typedef struct napi_runtime__ {
+typedef struct jsr_ns_runtime__ {
     JSR *hermes;
-} napi_runtime__;
+} jsr_ns_runtime__;
 
 JSR::JSR() {
     hermes::vm::RuntimeConfig config =
@@ -19,9 +19,9 @@ JSR::JSR() {
     rt = (facebook::hermes::HermesRuntime *) &threadSafeRuntime->getUnsafeRuntime();
 }
 
-napi_status js_create_runtime(napi_runtime *runtime) {
+napi_status js_create_runtime(jsr_ns_runtime *runtime) {
     if (runtime == nullptr) return napi_invalid_arg;
-    *runtime = new napi_runtime__();
+    *runtime = new jsr_ns_runtime__();
     (*runtime)->hermes = new JSR();
 
     return napi_ok;
@@ -47,7 +47,7 @@ napi_status js_unlock_env(napi_env env) {
     return napi_ok;
 }
 
-napi_status js_create_napi_env(napi_env *env, napi_runtime runtime) {
+napi_status js_create_napi_env(napi_env *env, jsr_ns_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
 
     // Extract the underlying hermes::vm::Runtime from the JSI HermesRuntime via
@@ -74,7 +74,7 @@ napi_status js_free_napi_env(napi_env env) {
     return napi_ok;
 }
 
-napi_status js_free_runtime(napi_runtime runtime) {
+napi_status js_free_runtime(jsr_ns_runtime runtime) {
     if (runtime == nullptr) return napi_invalid_arg;
     runtime->hermes->threadSafeRuntime.reset();
     runtime->hermes->rt = nullptr;

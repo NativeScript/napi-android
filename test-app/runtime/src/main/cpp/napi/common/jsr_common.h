@@ -7,15 +7,15 @@
 
 #include "js_native_api.h"
 
-typedef struct napi_runtime__ *napi_runtime;
+typedef struct jsr_ns_runtime__ *jsr_ns_runtime;
 
-napi_status js_create_runtime(napi_runtime* runtime);
-napi_status js_create_napi_env(napi_env* env, napi_runtime runtime);
+napi_status js_create_runtime(jsr_ns_runtime* runtime);
+napi_status js_create_napi_env(napi_env* env, jsr_ns_runtime runtime);
 napi_status js_set_runtime_flags(const char* flags);
 napi_status js_lock_env(napi_env env);
 napi_status js_unlock_env(napi_env env);
 napi_status js_free_napi_env(napi_env env);
-napi_status js_free_runtime(napi_runtime runtime);
+napi_status js_free_runtime(jsr_ns_runtime runtime);
 napi_status js_execute_script(napi_env env,
                               napi_value script,
                               const char *file,
