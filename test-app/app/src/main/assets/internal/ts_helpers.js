@@ -12,10 +12,10 @@
         d;
 
       if (
-        typeof global.Reflect === "object" &&
-        typeof global.Reflect.decorate === "function"
+        typeof globalThis.Reflect === "object" &&
+        typeof globalThis.Reflect.decorate === "function"
       ) {
-        r = global.Reflect.decorate(decorators, target, key, desc);
+        r = globalThis.Reflect.decorate(decorators, target, key, desc);
       } else {
         for (var i = decorators.length - 1; i >= 0; i--) {
           if ((d = decorators[i])) {
@@ -56,6 +56,7 @@
   var __extends = function (Child, Parent) {
     var extendNativeClass =
       !!Parent.extend && Parent.extend.toString().indexOf("[native code]") > -1;
+
     if (!extendNativeClass) {
       __extends_ts(Child, Parent);
       return;
@@ -189,18 +190,19 @@
       }
     };
   }
+     Object.defineProperty(globalThis, "__native", { value: __native });
+     Object.defineProperty(globalThis, "__extends", { value: __extends });
+     Object.defineProperty(globalThis, "__decorate", { value: __decorate });
 
-  Object.defineProperty(global, "__native", { value: __native });
-  Object.defineProperty(global, "__extends", { value: __extends });
-  Object.defineProperty(global, "__decorate", { value: __decorate });
 
-  if (!global.__ns__worker) {
-    global.JavaProxy = JavaProxy;
+
+  if (!globalThis.__ns__worker) {
+    globalThis.JavaProxy = JavaProxy;
   }
-  global.Interfaces = Interfaces;
+  globalThis.Interfaces = Interfaces;
 
-  if (global.WeakRef && !global.WeakRef.prototype.get) {
-    global.WeakRef.prototype.get = global.WeakRef.prototype.deref;
+  if (globalThis.WeakRef && !globalThis.WeakRef.prototype.get) {
+    globalThis.WeakRef.prototype.get = globalThis.WeakRef.prototype.deref;
   }
 
   // Native array access: numeric indexing and the map/forEach/toString/
