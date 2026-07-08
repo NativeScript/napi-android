@@ -196,7 +196,7 @@ namespace {
         // is illegal there).
         napi_add_finalizer(env, iterator, st, [](napi_env env, void *d, void *) {
 #ifdef __V8__
-            node_api_post_finalizer(e, [](napi_env env, void *d, void *) {
+            node_api_post_finalizer(env, [](napi_env env, void *d, void *) {
 #endif
                 auto *s = static_cast<IterState *>(d);
                 napi_delete_reference(env, s->src);
