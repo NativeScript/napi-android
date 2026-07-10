@@ -73,9 +73,7 @@ public class Runtime {
     private native boolean notifyGcLegacy(int runtimeId, int[] javaObjectIds);
 
     private boolean notifyGc(int runtimeId, int[] javaObjectIds) {
-        return SUPPORTS_OPTIMIZED_NATIVE
-                ? notifyGcFast(runtimeId, javaObjectIds)
-                : notifyGcLegacy(runtimeId, javaObjectIds);
+        return notifyGcLegacy(runtimeId, javaObjectIds);
     }
 
     private native void lock(int runtimeId);
