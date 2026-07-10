@@ -863,14 +863,13 @@ napi_status napi_set_property(napi_env env,
     CHECK_ARG(env, key);
     CHECK_ARG(env, value);
 
+    // Use the *ForKey APIs so the key can be a string or a symbol; converting to
+    // a JSString would coerce (and break) symbol keys.
     JSValueRef exception{};
-    JSString key_str{ToJSString(env, key, &exception)};
-    CHECK_JSC(env, exception);
-
-    JSObjectSetProperty(
+    JSObjectSetPropertyForKey(
             env->context,
             ToJSObject(env, object),
-            key_str,
+            ToJSValue(key),
             ToJSValue(value),
             kJSPropertyAttributeNone,
             &exception);
@@ -888,13 +887,12 @@ napi_status napi_has_property(napi_env env,
     CHECK_ARG(env, key);
 
     JSValueRef exception{};
-    JSString key_str{ToJSString(env, key, &exception)};
-    CHECK_JSC(env, exception);
-
-    *result = JSObjectHasProperty(
+    *result = JSObjectHasPropertyForKey(
             env->context,
             ToJSObject(env, object),
-            key_str);
+            ToJSValue(key),
+            &exception);
+    CHECK_JSC(env, exception);
     return napi_ok;
 }
 
@@ -907,13 +905,10 @@ napi_status napi_get_property(napi_env env,
     CHECK_ARG(env, result);
 
     JSValueRef exception{};
-    JSString key_str{ToJSString(env, key, &exception)};
-    CHECK_JSC(env, exception);
-
-    *result = ToNapi(JSObjectGetProperty(
+    *result = ToNapi(JSObjectGetPropertyForKey(
             env->context,
             ToJSObject(env, object),
-            key_str,
+            ToJSValue(key),
             &exception));
     CHECK_JSC(env, exception);
 
@@ -925,16 +920,14 @@ napi_status napi_delete_property(napi_env env,
                                  napi_value key,
                                  bool* result) {
     CHECK_ENV(env);
+    CHECK_ARG(env, key);
     CHECK_ARG(env, result);
 
     JSValueRef exception{};
-    JSString key_str{ToJSString(env, key, &exception)};
-    CHECK_JSC(env, exception);
-
-    *result = JSObjectDeleteProperty(
+    *result = JSObjectDeletePropertyForKey(
             env->context,
             ToJSObject(env, object),
-            key_str,
+            ToJSValue(key),
             &exception);
     CHECK_JSC(env, exception);
 
@@ -2603,6 +2596,8 @@ napi_status napi_run_script_source(napi_env env,
 
     JSString script_str{ToJSString(env, script, &exception)};
     CHECK_JSC(env, exception);
+
+
 
     JSValueRef return_value{JSEvaluateScript(
             env->context, script_str, nullptr, JSString(source_url), 0, &exception)};
