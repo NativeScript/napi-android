@@ -424,6 +424,15 @@
         handledPromise(promise);
       }
     };
+  } else if (globalThis.__engine === "JSC") {
+    // JSC's unhandled-rejection callback only fires for rejections that go
+    // unhandled (there is no "handled later" retraction event), and it is
+    // invoked with (promise, reason).
+    globalThis.onUnhandledPromiseRejectionTracker = (promise, reason) => {
+      hasBeenNotifiedProperty.set(promise, false);
+      const error = makeRejectionError(reason);
+      unhandledPromise(promise, error);
+    };
   } else if (globalThis.__engine === "Hermes") {
     HermesInternal.enablePromiseRejectionTracker({
       allRejections: true,
