@@ -40,54 +40,79 @@ void Console::createConsole(napi_env env, ConsoleCallback callback, const int ma
     m_callback = callback;
     m_maxLogcatObjectSize = maxLogcatObjectSize;
 
+    napi_status status;
+
     napi_value console;
-    napi_create_object(env, &console);
+    NAPI_GUARD(napi_create_object(env, &console)) {
+        return;
+    }
 
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {
+        return;
+    }
 
     napi_value assertFunc, errorFunc, infoFunc, logFunc, warnFunc, dirFunc, traceFunc, timeFunc, timeEndFunc;
-    napi_create_function(env, "assert", strlen("assert"), assertCallback, nullptr, &assertFunc);
-    napi_create_function(env, "error", strlen("error"), errorCallback, nullptr, &errorFunc);
-    napi_create_function(env, "info", strlen("info"), infoCallback, nullptr, &infoFunc);
-    napi_create_function(env, "log", strlen("log"), logCallback, nullptr, &logFunc);
-    napi_create_function(env, "warn", strlen("warn"), warnCallback, nullptr, &warnFunc);
-    napi_create_function(env, "dir", strlen("dir"), dirCallback, nullptr, &dirFunc);
-    napi_create_function(env, "trace", strlen("trace"), traceCallback, nullptr, &traceFunc);
-    napi_create_function(env, "time", strlen("time"), timeCallback, nullptr, &timeFunc);
-    napi_create_function(env, "timeEnd", strlen("timeEnd"), timeEndCallback, nullptr, &timeEndFunc);
+    NAPI_GUARD(napi_create_function(env, "assert", strlen("assert"), assertCallback, nullptr, &assertFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "error", strlen("error"), errorCallback, nullptr, &errorFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "info", strlen("info"), infoCallback, nullptr, &infoFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "log", strlen("log"), logCallback, nullptr, &logFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "warn", strlen("warn"), warnCallback, nullptr, &warnFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "dir", strlen("dir"), dirCallback, nullptr, &dirFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "trace", strlen("trace"), traceCallback, nullptr, &traceFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "time", strlen("time"), timeCallback, nullptr, &timeFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_create_function(env, "timeEnd", strlen("timeEnd"), timeEndCallback, nullptr, &timeEndFunc)) {
+        return;
+    }
 
-    napi_set_named_property(env, console, "assert", assertFunc);
-    napi_set_named_property(env, console, "error", errorFunc);
-    napi_set_named_property(env, console, "info", infoFunc);
-    napi_set_named_property(env, console, "log", logFunc);
-    napi_set_named_property(env, console, "warn", warnFunc);
-    napi_set_named_property(env, console, "dir", dirFunc);
-    napi_set_named_property(env, console, "trace", traceFunc);
-    napi_set_named_property(env, console, "time", timeFunc);
-    napi_set_named_property(env, console, "timeEnd", timeEndFunc);
-    napi_set_named_property(env, global, "console", console);
+    NAPI_GUARD(napi_set_named_property(env, console, "assert", assertFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "error", errorFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "info", infoFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "log", logFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "warn", warnFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "dir", dirFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "trace", traceFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "time", timeFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, console, "timeEnd", timeEndFunc)) {}
+    NAPI_GUARD(napi_set_named_property(env, global, "console", console)) {}
 }
 
 std::string transformJSObject(napi_env env, napi_value object) {
+    napi_status status;
     napi_value toStringFunc;
     bool hasToString = false;
 
     // Check if the object has a toString method
-    napi_has_named_property(env, object, "toString", &hasToString);
+    NAPI_GUARD(napi_has_named_property(env, object, "toString", &hasToString)) {}
 
     if (hasToString) {
-        napi_get_named_property(env, object, "toString", &toStringFunc);
+        NAPI_GUARD(napi_get_named_property(env, object, "toString", &toStringFunc)) {}
         if (napi_util::is_of_type(env, toStringFunc, napi_function)) {
             napi_value result;
-            napi_call_function(env, object, toStringFunc, 0, nullptr, &result);
+            NAPI_GUARD(napi_call_function(env, object, toStringFunc, 0, nullptr, &result)) {}
             auto value = ArgConverter::ConvertToString(env, result);
 
             bool is_error = false;
-            napi_is_error(env, object, &is_error);
+            NAPI_GUARD(napi_is_error(env, object, &is_error)) {}
             if (is_error) {
                 napi_value stack;
-                napi_status status = napi_get_named_property(env, object, "stack", &stack);
+                status = napi_get_named_property(env, object, "stack", &stack);
                 if (status == napi_ok && !napi_util::is_null_or_undefined(env, stack)) {
                     auto stack_value = ArgConverter::ConvertToString(env, stack);
                     if (!stack_value.empty() && value.find(stack_value) == std::string::npos) {
@@ -105,26 +130,27 @@ std::string transformJSObject(napi_env env, napi_value object) {
 }
 
 std::string buildStringFromArg(napi_env env, napi_value val) {
+    napi_status status;
     napi_valuetype type;
-    napi_typeof(env, val, &type);
+    NAPI_GUARD(napi_typeof(env, val, &type)) {}
 
     if (type == napi_function) {
         napi_value funcString;
-        napi_coerce_to_string(env, val, &funcString);
+        NAPI_GUARD(napi_coerce_to_string(env, val, &funcString)) {}
         return napi_util::get_string_value(env, funcString);
     } else if (napi_util::is_array(env, val)) {
         napi_value global;
-        napi_get_global(env, &global);
+        NAPI_GUARD(napi_get_global(env, &global)) {}
         return JsonStringifyObject(env, val, false);
     } else if (type == napi_object) {
         return transformJSObject(env, val);
     } else if (type == napi_symbol) {
         napi_value symString;
-        napi_coerce_to_string(env, val, &symString);
+        NAPI_GUARD(napi_coerce_to_string(env, val, &symString)) {}
         return "Symbol(" + ArgConverter::ConvertToString(env, symString) + ")";
     } else {
         napi_value defaultToString;
-        napi_coerce_to_string(env, val, &defaultToString);
+        NAPI_GUARD(napi_coerce_to_string(env, val, &defaultToString)) {}
         return napi_util::get_string_value(env, defaultToString);
     }
 }
@@ -154,18 +180,21 @@ std::string buildLogString(napi_env env, napi_callback_info info, int startingIn
 napi_value Console::assertCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         bool expressionPasses = false;
 
         if (argc > 0) {
             if (napi_util::is_of_type(env, args[0], napi_boolean)) {
-                napi_get_value_bool(env, args[0], &expressionPasses);
+                NAPI_GUARD(napi_get_value_bool(env, args[0], &expressionPasses)) {}
             } else {
                 napi_value boolValue;
-                napi_coerce_to_bool(env, args[0], &boolValue);
-                napi_get_value_bool(env, boolValue, &expressionPasses);
+                NAPI_GUARD(napi_coerce_to_bool(env, args[0], &boolValue)) {}
+                NAPI_GUARD(napi_get_value_bool(env, boolValue, &expressionPasses)) {}
             }
         }
 
@@ -231,7 +260,10 @@ napi_value Console::errorCallback(napi_env env, napi_callback_info info) {
 napi_value Console::infoCallback(napi_env env, napi_callback_info info) {
     size_t argc = 0;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         std::string log = "CONSOLE INFO: ";
@@ -261,7 +293,10 @@ napi_value Console::infoCallback(napi_env env, napi_callback_info info) {
 napi_value Console::logCallback(napi_env env, napi_callback_info info) {
     size_t argc = 0;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         std::string log = "CONSOLE LOG: ";
@@ -291,7 +326,10 @@ napi_value Console::logCallback(napi_env env, napi_callback_info info) {
 napi_value Console::warnCallback(napi_env env, napi_callback_info info) {
     size_t argc = 0;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         std::string log = "CONSOLE WARN: ";
@@ -321,7 +359,10 @@ napi_value Console::warnCallback(napi_env env, napi_callback_info info) {
 napi_value Console::dirCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         std::stringstream ss;
@@ -332,17 +373,25 @@ napi_value Console::dirCallback(napi_env env, napi_callback_info info) {
                 ss << "==== object dump start ====" << std::endl;
 
                 napi_value propNames;
-                napi_get_property_names(env, arg, &propNames);
+                NAPI_GUARD(napi_get_property_names(env, arg, &propNames)) {
+                    return nullptr;
+                }
 
                 uint32_t propertiesLen;
-                napi_get_array_length(env, propNames, &propertiesLen);
+                NAPI_GUARD(napi_get_array_length(env, propNames, &propertiesLen)) {
+                    return nullptr;
+                }
 
                 for (uint32_t i = 0; i < propertiesLen; i++) {
                     napi_value propertyName;
-                    napi_get_element(env, propNames, i, &propertyName);
+                    NAPI_GUARD(napi_get_element(env, propNames, i, &propertyName)) {
+                        return nullptr;
+                    }
 
                     napi_value propertyValue;
-                    napi_get_property(env, arg, propertyName, &propertyValue);
+                    NAPI_GUARD(napi_get_property(env, arg, propertyName, &propertyValue)) {
+                        return nullptr;
+                    }
 
                     bool propIsFunction = napi_util::is_of_type(env, propertyValue, napi_function);
 
@@ -403,7 +452,10 @@ napi_value Console::dirCallback(napi_env env, napi_callback_info info) {
 napi_value Console::traceCallback(napi_env env, napi_callback_info info) {
     size_t argc = 0;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         std::stringstream ss;
@@ -421,16 +473,26 @@ napi_value Console::traceCallback(napi_env env, napi_callback_info info) {
         // Create an error object to get the stack trace
         napi_value error;
         napi_value errorMessage;
-        napi_create_string_utf8(env, "Trace", NAPI_AUTO_LENGTH, &errorMessage);
-        napi_create_error(env, nullptr, errorMessage, &error);
+        NAPI_GUARD(napi_create_string_utf8(env, "Trace", NAPI_AUTO_LENGTH, &errorMessage)) {
+            return nullptr;
+        }
+        NAPI_GUARD(napi_create_error(env, nullptr, errorMessage, &error)) {
+            return nullptr;
+        }
 
         napi_value stack;
-        napi_get_named_property(env, error, "stack", &stack);
+        NAPI_GUARD(napi_get_named_property(env, error, "stack", &stack)) {
+            return nullptr;
+        }
 
         size_t stackLength;
-        napi_get_value_string_utf8(env, stack, nullptr, 0, &stackLength);
+        NAPI_GUARD(napi_get_value_string_utf8(env, stack, nullptr, 0, &stackLength)) {
+            return nullptr;
+        }
         std::string stackStr(stackLength + 1, '\0');
-        napi_get_value_string_utf8(env, stack, &stackStr[0], stackLength + 1, &stackLength);
+        NAPI_GUARD(napi_get_value_string_utf8(env, stack, &stackStr[0], stackLength + 1, &stackLength)) {
+            return nullptr;
+        }
 
         ss << stackStr << std::endl;
 
@@ -460,7 +522,10 @@ napi_value Console::traceCallback(napi_env env, napi_callback_info info) {
 napi_value Console::timeCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         std::string label = "default";
@@ -500,7 +565,10 @@ napi_value Console::timeCallback(napi_env env, napi_callback_info info) {
 napi_value Console::timeEndCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) {
+        return nullptr;
+    }
 
     try {
         std::string label = "default";

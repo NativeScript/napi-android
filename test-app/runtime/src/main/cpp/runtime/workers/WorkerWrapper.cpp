@@ -44,7 +44,8 @@ WorkerWrapper::WorkerWrapper(napi_env parentEnv, int workerId, std::string worke
           isTerminating_(false),
           isDisposed_(false),
           javaLooperRef_(nullptr) {
-    napi_create_reference(parentEnv, workerObject, 1, &poWorker_);
+    napi_status status;
+    NAPI_GUARD(napi_create_reference(parentEnv, workerObject, 1, &poWorker_)) {}
 }
 
 void WorkerWrapper::Start() {
@@ -150,8 +151,11 @@ void WorkerWrapper::DrainPendingTasks() {
     }
 
     NapiScope scope(env);
+    napi_status status;
     napi_value globalObject;
-    napi_get_global(env, &globalObject);
+    NAPI_GUARD(napi_get_global(env, &globalObject)) {
+        return;
+    }
 
     for (auto& message : messages) {
         if (isTerminating_ || isClosing_) {
@@ -159,7 +163,7 @@ void WorkerWrapper::DrainPendingTasks() {
         }
 
         napi_value callback;
-        napi_get_named_property(env, globalObject, "onmessage", &callback);
+        NAPI_GUARD(napi_get_named_property(env, globalObject, "onmessage", &callback)) {}
         if (!napi_util::is_of_type(env, callback, napi_function)) {
             DEBUG_WRITE(
                     "WORKER: couldn't fire a worker's `onmessage` callback because it isn't implemented!");
@@ -167,18 +171,18 @@ void WorkerWrapper::DrainPendingTasks() {
         }
 
         napi_value event;
-        napi_create_object(env, &event);
+        NAPI_GUARD(napi_create_object(env, &event)) {}
         napi_value data = tns::JsonParseString(env, message->data);
         if (!napi_util::is_null_or_undefined(env, data)) {
-            napi_set_named_property(env, event, "data", data);
+            NAPI_GUARD(napi_set_named_property(env, event, "data", data)) {}
         }
 
         napi_value args[1] = {event};
         napi_value result;
-        napi_status status = napi_call_function(env, globalObject, callback, 1, args, &result);
+        status = napi_call_function(env, globalObject, callback, 1, args, &result);
         if (status == napi_pending_exception && !isTerminating_) {
             napi_value error;
-            napi_get_and_clear_last_exception(env, &error);
+            NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {}
             CallbackHandlers::CallWorkerScopeOnErrorHandle(env, error);
         }
     }
@@ -207,8 +211,9 @@ void WorkerWrapper::FireMessageOnParentWorkerObject(int workerId,
         return;
     }
 
+    napi_status status;
     napi_value callback;
-    napi_get_named_property(env, worker, "onmessage", &callback);
+    NAPI_GUARD(napi_get_named_property(env, worker, "onmessage", &callback)) {}
     if (!napi_util::is_of_type(env, callback, napi_function)) {
         DEBUG_WRITE(
                 "MAIN: couldn't fire a worker(id=%d) object's `onmessage` callback because it isn't implemented.",
@@ -217,16 +222,16 @@ void WorkerWrapper::FireMessageOnParentWorkerObject(int workerId,
     }
 
     napi_value event;
-    napi_create_object(env, &event);
+    NAPI_GUARD(napi_create_object(env, &event)) {}
     napi_value data = tns::JsonParseString(env, message->data);
-    napi_set_named_property(env, event, "data", data);
+    NAPI_GUARD(napi_set_named_property(env, event, "data", data)) {}
 
     napi_value args[1] = {event};
     napi_value result;
-    napi_status status = napi_call_function(env, worker, callback, 1, args, &result);
+    status = napi_call_function(env, worker, callback, 1, args, &result);
     if (status == napi_pending_exception) {
         napi_value error;
-        napi_get_and_clear_last_exception(env, &error);
+        NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {}
         // Surface to Java; LooperTasks::Drain wraps this in a try/catch.
         throw NativeScriptException(env, error, "Error calling onmessage on Worker object");
     }
@@ -276,21 +281,22 @@ void WorkerWrapper::FireErrorOnParentWorkerObject(int workerId, const std::strin
         return;
     }
 
+    napi_status status;
     napi_value callback;
-    napi_get_named_property(env, worker, "onerror", &callback);
+    NAPI_GUARD(napi_get_named_property(env, worker, "onerror", &callback)) {}
 
     if (napi_util::is_of_type(env, callback, napi_function)) {
         napi_value errEvent;
         napi_value msgValue;
-        napi_create_string_utf8(env, message.c_str(), NAPI_AUTO_LENGTH, &msgValue);
+        NAPI_GUARD(napi_create_string_utf8(env, message.c_str(), NAPI_AUTO_LENGTH, &msgValue)) {}
         napi_value codeValue;
-        napi_create_string_utf8(env, "", 0, &codeValue);
-        napi_create_error(env, codeValue, msgValue, &errEvent);
+        NAPI_GUARD(napi_create_string_utf8(env, "", 0, &codeValue)) {}
+        NAPI_GUARD(napi_create_error(env, codeValue, msgValue, &errEvent)) {}
 
         // Combine the worker-side stack trace with the Worker object's captured
         // construction stack (main thread), mirroring the old fork behavior.
         napi_value mainStackValue;
-        napi_get_named_property(env, worker, "__stack__", &mainStackValue);
+        NAPI_GUARD(napi_get_named_property(env, worker, "__stack__", &mainStackValue)) {}
         std::string fullStack = stackTrace;
         if (napi_util::is_of_type(env, mainStackValue, napi_string)) {
             std::string mainStack = ArgConverter::ConvertToString(env, mainStackValue);
@@ -301,23 +307,23 @@ void WorkerWrapper::FireErrorOnParentWorkerObject(int workerId, const std::strin
         }
 
         napi_value fullStackValue;
-        napi_create_string_utf8(env, fullStack.c_str(), fullStack.size(), &fullStackValue);
-        napi_set_named_property(env, errEvent, "stack", fullStackValue);
+        NAPI_GUARD(napi_create_string_utf8(env, fullStack.c_str(), fullStack.size(), &fullStackValue)) {}
+        NAPI_GUARD(napi_set_named_property(env, errEvent, "stack", fullStackValue)) {}
 
         napi_value args[1] = {errEvent};
         napi_value result;
-        napi_status status = napi_call_function(env, worker, callback, 1, args, &result);
+        status = napi_call_function(env, worker, callback, 1, args, &result);
 
         if (status == napi_pending_exception) {
             napi_value exception;
-            napi_get_and_clear_last_exception(env, &exception);
+            NAPI_GUARD(napi_get_and_clear_last_exception(env, &exception)) {}
             throw NativeScriptException(env, exception, "Error calling onerror on Worker object");
         }
 
         // If the handler returns a truthy value, the exception is handled.
         if (!napi_util::is_null_or_undefined(env, result)) {
             bool handled = false;
-            napi_get_value_bool(env, result, &handled);
+            NAPI_GUARD(napi_get_value_bool(env, result, &handled)) {}
             if (handled) {
                 return;
             }
@@ -392,19 +398,20 @@ void WorkerWrapper::BackgroundLooper(std::shared_ptr<WorkerWrapper> self) {
 
                 runtime_->RunWorker(workerPath_);
 
+                napi_status status;
                 bool pending = false;
-                napi_is_exception_pending(napiEnv, &pending);
+                NAPI_GUARD(napi_is_exception_pending(napiEnv, &pending)) {}
                 if (pending) {
                     napi_value error;
-                    napi_get_and_clear_last_exception(napiEnv, &error);
+                    NAPI_GUARD(napi_get_and_clear_last_exception(napiEnv, &error)) {}
 
                     std::string emsg;
                     std::string estack;
                     if (napi_util::is_of_type(napiEnv, error, napi_object)) {
                         napi_value m;
                         napi_value s;
-                        napi_get_named_property(napiEnv, error, "message", &m);
-                        napi_get_named_property(napiEnv, error, "stack", &s);
+                        NAPI_GUARD(napi_get_named_property(napiEnv, error, "message", &m)) {}
+                        NAPI_GUARD(napi_get_named_property(napiEnv, error, "stack", &s)) {}
                         if (napi_util::is_of_type(napiEnv, m, napi_string)) {
                             emsg = ArgConverter::ConvertToString(napiEnv, m);
                         }
@@ -413,7 +420,7 @@ void WorkerWrapper::BackgroundLooper(std::shared_ptr<WorkerWrapper> self) {
                         }
                     } else {
                         napi_value m;
-                        napi_coerce_to_string(napiEnv, error, &m);
+                        NAPI_GUARD(napi_coerce_to_string(napiEnv, error, &m)) {}
                         emsg = ArgConverter::ConvertToString(napiEnv, m);
                     }
 
@@ -553,7 +560,8 @@ void WorkerWrapper::ClearWorkerOnParent(int workerId) {
 
     if (wrapper->poWorker_ != nullptr) {
         NapiScope scope(wrapper->parentEnv_);
-        napi_delete_reference(wrapper->parentEnv_, wrapper->poWorker_);
+        napi_status status;
+        NAPI_GUARD(napi_delete_reference(wrapper->parentEnv_, wrapper->poWorker_)) {}
         wrapper->poWorker_ = nullptr;
     }
 }

@@ -14,49 +14,71 @@ using namespace std;
 using namespace tns;
 
 void ArgConverter::Init(napi_env env) {
+    napi_status status;
     auto cache = GetTypeLongCache(env);
 
     napi_value longNumberCtorFunc;
     napi_value valueOfFunc;
     napi_value toStringFunc;
 
-    napi_define_class(env, "NativeScriptLongNumber", NAPI_AUTO_LENGTH, ArgConverter::NativeScriptLongFunctionCallback,nullptr, 0, nullptr, &longNumberCtorFunc);
+    NAPI_GUARD(napi_define_class(env, "NativeScriptLongNumber", NAPI_AUTO_LENGTH, ArgConverter::NativeScriptLongFunctionCallback,nullptr, 0, nullptr, &longNumberCtorFunc)) {
+        return;
+    }
 
     napi_value longNumberPrototype = napi_util::get_prototype(env, longNumberCtorFunc);
 
-    napi_create_function(env, "valueOf", strlen("valueOf"),
+    NAPI_GUARD(napi_create_function(env, "valueOf", strlen("valueOf"),
                          ArgConverter::NativeScriptLongValueOfFunctionCallback, nullptr,
-                         &valueOfFunc);
+                         &valueOfFunc)) {
+        return;
+    }
 
-    napi_create_function(env, "toString", strlen("toString"),
+    NAPI_GUARD(napi_create_function(env, "toString", strlen("toString"),
                          ArgConverter::NativeScriptLongToStringFunctionCallback, nullptr,
-                         &toStringFunc);
+                         &toStringFunc)) {
+        return;
+    }
 
 
-    napi_set_named_property(env, longNumberPrototype, "valueOf", valueOfFunc);
-    napi_set_named_property(env, longNumberPrototype, "toString", toStringFunc);
+    NAPI_GUARD(napi_set_named_property(env, longNumberPrototype, "valueOf", valueOfFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_set_named_property(env, longNumberPrototype, "toString", toStringFunc)) {
+        return;
+    }
 
     cache->LongNumberCtorFunc = napi_util::make_ref(env, longNumberCtorFunc, 1);
     napi_value nanValue;
-    napi_create_double(env, numeric_limits<double>::quiet_NaN(), &nanValue);
+    NAPI_GUARD(napi_create_double(env, numeric_limits<double>::quiet_NaN(), &nanValue)) {
+        return;
+    }
 
 
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {
+        return;
+    }
 
     napi_value numCtor;
-    napi_get_named_property(env, global, "Number", &numCtor);
+    NAPI_GUARD(napi_get_named_property(env, global, "Number", &numCtor)) {
+        return;
+    }
 
     napi_value nanObject;
-    napi_new_instance(env, numCtor, 1, &nanValue, &nanObject);
+    NAPI_GUARD(napi_new_instance(env, numCtor, 1, &nanValue, &nanObject)) {
+        return;
+    }
 
     cache->NanNumberObject = napi_util::make_ref(env, nanObject, 1);
 }
 
 napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, napi_callback_info info) {
     try {
+        napi_status status;
         napi_value result;
-        napi_create_double(env, numeric_limits<double>::quiet_NaN(), &result);
+        NAPI_GUARD(napi_create_double(env, numeric_limits<double>::quiet_NaN(), &result)) {
+            return nullptr;
+        }
         return result;
     } catch (NativeScriptException &e) {
         e.ReThrowToNapi(env);
@@ -74,11 +96,16 @@ napi_value ArgConverter::NativeScriptLongValueOfFunctionCallback(napi_env env, n
 
 napi_value ArgConverter::NativeScriptLongToStringFunctionCallback(napi_env env, napi_callback_info info) {
     try {
+        napi_status status;
         napi_value thisArg;
-        napi_get_cb_info(env, info, nullptr, nullptr, &thisArg, nullptr);
+        NAPI_GUARD(napi_get_cb_info(env, info, nullptr, nullptr, &thisArg, nullptr)) {
+            return nullptr;
+        }
 
         napi_value value;
-        napi_get_named_property(env, thisArg, "value", &value);
+        NAPI_GUARD(napi_get_named_property(env, thisArg, "value", &value)) {
+            return nullptr;
+        }
 
         return value;
     } catch (NativeScriptException &e) {
@@ -100,12 +127,18 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
         NAPI_CALLBACK_BEGIN(1);
         auto cache = GetTypeLongCache(env);
         napi_value javaLong;
-        napi_get_boolean(env, true, &javaLong);
-        napi_set_named_property(env, jsThis, "javaLong", javaLong);
+        NAPI_GUARD(napi_get_boolean(env, true, &javaLong)) {
+            return nullptr;
+        }
+        NAPI_GUARD(napi_set_named_property(env, jsThis, "javaLong", javaLong)) {
+            return nullptr;
+        }
 
         NumericCasts::MarkAsLong(env, jsThis, argv[0]);
 
-        napi_set_named_property(env, jsThis, "prototype", napi_util::get_ref_value(env, cache->NanNumberObject));
+        NAPI_GUARD(napi_set_named_property(env, jsThis, "prototype", napi_util::get_ref_value(env, cache->NanNumberObject))) {
+            return nullptr;
+        }
         return jsThis;
 
     } catch (NativeScriptException &e) {
@@ -123,6 +156,7 @@ napi_value ArgConverter::NativeScriptLongFunctionCallback(napi_env env, napi_cal
 }
 
 void ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size_t argc, napi_value* arr) {
+    napi_status status;
     JEnv jenv;
 
     auto runtime = Runtime::GetRuntime(env);
@@ -139,28 +173,28 @@ void ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size
         napi_value jsArg;
         switch (argTypeID) {
             case Type::Boolean:
-                napi_get_boolean(env, JType::BooleanValue(jenv, arg), &jsArg);
+                NAPI_GUARD(napi_get_boolean(env, JType::BooleanValue(jenv, arg), &jsArg)) {}
                 break;
             case Type::Char:
                 jsArg = jcharToJsString(env, JType::CharValue(jenv, arg));
                 break;
             case Type::Byte:
-                napi_create_int32(env, JType::ByteValue(jenv, arg), &jsArg);
+                NAPI_GUARD(napi_create_int32(env, JType::ByteValue(jenv, arg), &jsArg)) {}
                 break;
             case Type::Short:
-                napi_create_int32(env, JType::ShortValue(jenv, arg), &jsArg);
+                NAPI_GUARD(napi_create_int32(env, JType::ShortValue(jenv, arg), &jsArg)) {}
                 break;
             case Type::Int:
-                napi_create_int32(env, JType::IntValue(jenv, arg), &jsArg);
+                NAPI_GUARD(napi_create_int32(env, JType::IntValue(jenv, arg), &jsArg)) {}
                 break;
             case Type::Long:
-                napi_create_int64(env, JType::LongValue(jenv, arg), &jsArg);
+                NAPI_GUARD(napi_create_int64(env, JType::LongValue(jenv, arg), &jsArg)) {}
                 break;
             case Type::Float:
-                napi_create_double(env, JType::FloatValue(jenv, arg), &jsArg);
+                NAPI_GUARD(napi_create_double(env, JType::FloatValue(jenv, arg), &jsArg)) {}
                 break;
             case Type::Double:
-                napi_create_double(env, JType::DoubleValue(jenv, arg), &jsArg);
+                NAPI_GUARD(napi_create_double(env, JType::DoubleValue(jenv, arg), &jsArg)) {}
                 break;
             case Type::String:
                 jsArg = jstringToJsString(env, (jstring) arg);
@@ -177,7 +211,7 @@ void ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size
                 break;
             }
             case Type::Null:
-                napi_get_null(env, &jsArg);
+                NAPI_GUARD(napi_get_null(env, &jsArg)) {}
                 break;
         }
 
@@ -187,34 +221,48 @@ void ArgConverter::ConvertJavaArgsToJsArgs(napi_env env, jobjectArray args, size
 }
 
 napi_value ArgConverter::ConvertFromJavaLong(napi_env env, jlong value) {
+    napi_status status;
     napi_value convertedValue;
     long long longValue = value;
 
     if ((-JS_LONG_LIMIT < longValue) && (longValue < JS_LONG_LIMIT)) {
-        napi_create_double(env, longValue, &convertedValue);
+        NAPI_GUARD(napi_create_double(env, longValue, &convertedValue)) {
+            return nullptr;
+        }
     } else {
         auto cache = GetTypeLongCache(env);
         char strNumber[24];
         sprintf(strNumber, "%lld", longValue);
         napi_value strValue;
-        napi_create_string_utf8(env, strNumber, NAPI_AUTO_LENGTH, &strValue);
+        NAPI_GUARD(napi_create_string_utf8(env, strNumber, NAPI_AUTO_LENGTH, &strValue)) {
+            return nullptr;
+        }
         napi_value args[1] = {strValue};
 
-        napi_new_instance(env, napi_util::get_ref_value(env, cache->LongNumberCtorFunc), 1, args,
-                          &convertedValue);
+        NAPI_GUARD(napi_new_instance(env, napi_util::get_ref_value(env, cache->LongNumberCtorFunc), 1, args,
+                          &convertedValue)) {
+            return nullptr;
+        }
     }
 
     return convertedValue;
 }
 
 int64_t ArgConverter::ConvertToJavaLong(napi_env env, napi_value value) {
+    napi_status status;
     napi_value valueProp;
-    napi_get_named_property(env, value, "value", &valueProp);
+    NAPI_GUARD(napi_get_named_property(env, value, "value", &valueProp)) {
+        return 0;
+    }
 
     size_t str_len;
-    napi_get_value_string_utf8(env, valueProp, nullptr, 0, &str_len);
+    NAPI_GUARD(napi_get_value_string_utf8(env, valueProp, nullptr, 0, &str_len)) {
+        return 0;
+    }
     string num(str_len, '\0');
-    napi_get_value_string_utf8(env, valueProp, &num[0], str_len + 1, &str_len);
+    NAPI_GUARD(napi_get_value_string_utf8(env, valueProp, &num[0], str_len + 1, &str_len)) {
+        return 0;
+    }
 
     int64_t longValue = atoll(num.c_str());
 
@@ -238,10 +286,15 @@ u16string ArgConverter::ConvertToUtf16String(napi_env env, napi_value s) {
     if (s == nullptr) {
         return {};
     } else {
+        napi_status status;
         size_t str_len;
-        napi_get_value_string_utf8(env, s, nullptr, 0, &str_len);
+        NAPI_GUARD(napi_get_value_string_utf8(env, s, nullptr, 0, &str_len)) {
+            return {};
+        }
         string str(str_len, '\0');
-        napi_get_value_string_utf8(env, s, &str[0], str_len + 1, &str_len);
+        NAPI_GUARD(napi_get_value_string_utf8(env, s, &str[0], str_len + 1, &str_len)) {
+            return {};
+        }
         auto utf16str = Util::ConvertFromUtf8ToUtf16(str);
 
         return utf16str;
@@ -249,13 +302,14 @@ u16string ArgConverter::ConvertToUtf16String(napi_env env, napi_value s) {
 }
 
 void ArgConverter::onDisposeEnv(napi_env env) {
+    napi_status status;
     auto itFound = s_type_long_operations_cache.find(env);
     if (itFound != s_type_long_operations_cache.end()) {
         if (itFound->second->LongNumberCtorFunc) {
-            napi_delete_reference(env, itFound->second->LongNumberCtorFunc);
+            NAPI_GUARD(napi_delete_reference(env, itFound->second->LongNumberCtorFunc)) {}
         }
         if (itFound->second->NanNumberObject) {
-            napi_delete_reference(env, itFound->second->NanNumberObject);
+            NAPI_GUARD(napi_delete_reference(env, itFound->second->NanNumberObject)) {}
         }
         delete itFound->second;
         s_type_long_operations_cache.erase(itFound);

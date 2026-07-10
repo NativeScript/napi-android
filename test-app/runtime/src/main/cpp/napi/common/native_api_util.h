@@ -5,6 +5,10 @@
 #include <dlfcn.h>
 #include <sstream>
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
+
 #ifndef NAPI_PREAMBLE
 #define NAPI_PREAMBLE napi_status status;
 #endif
@@ -80,27 +84,29 @@
   NAPI_ERROR_INFO             \
   napi_throw_error(env, NULL, error_info->error_message);
 
-#ifndef DEBUG
+#ifdef __ANDROID__
+#define NAPI_LOG_ERROR(status_val, expr_str)                              \
+  __android_log_print(ANDROID_LOG_ERROR, "TNS.Native",                    \
+                      "Node-API returned error: %d\n    %s\n    ^\n    at %s:%d", \
+                      (int)(status_val), (expr_str), __FILE__, __LINE__)
+#else
+#define NAPI_LOG_ERROR(status_val, expr_str) ((void)0)
+#endif
 
+// NAPI_GUARD(expr) { ...on-error block... }
+// Assigns the result of `expr` to the in-scope `status`, logs a diagnostic
+// (status, expression, file:line) on failure so an invalid runtime state is
+// traceable, and runs the trailing block when the call did not return napi_ok.
+// napi_pending_exception is JS-level control flow (a callback threw), not an
+// invalid runtime state, so it is intentionally not logged — the caller's
+// exception handling deals with it.
 #define NAPI_GUARD(expr)                                              \
   status = expr;                                                      \
-  if (status != napi_ok)                                              \
+  if (status != napi_ok && status != napi_pending_exception)         \
   {                                                                   \
-    NAPI_ERROR_INFO                                                   \
-    std::stringstream msg;                                            \
-    msg << "Node-API returned error: " << status << "\n    " << #expr \
-        << "\n    ^\n    "                                            \
-        << "at " << __FILE__ << ":" << __LINE__ << "";                \
+    NAPI_LOG_ERROR(status, #expr);                                    \
   }                                                                   \
   if (status != napi_ok)
-
-#else
-
-#define NAPI_GUARD(expr) \
-  status = expr;         \
-  if (status != napi_ok)
-
-#endif
 
 #define NAPI_FUNCTION(name) \
   napi_value JS_##name(napi_env env, napi_callback_info cbinfo)

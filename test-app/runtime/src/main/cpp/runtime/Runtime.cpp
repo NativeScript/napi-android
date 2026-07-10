@@ -68,28 +68,31 @@ namespace {
     // microtask on every engine the napi runtime targets (V8, QuickJS, Hermes,
     // JSC). This preserves ordering with Promise microtasks and runs before timers.
     napi_value QueueMicrotaskCallback(napi_env env, napi_callback_info info) {
+        napi_status status;
         size_t argc = 1;
         napi_value argv[1];
-        napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr);
+        NAPI_GUARD(napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr)) {
+            return nullptr;
+        }
 
         napi_valuetype type = napi_undefined;
         if (argc >= 1) {
-            napi_typeof(env, argv[0], &type);
+            NAPI_GUARD(napi_typeof(env, argv[0], &type)) {}
         }
         if (argc < 1 || type != napi_function) {
-            napi_throw_type_error(env, nullptr,
-                                  "queueMicrotask: callback must be a function");
+            NAPI_GUARD(napi_throw_type_error(env, nullptr,
+                                  "queueMicrotask: callback must be a function")) {}
             return nullptr;
         }
 
         napi_value global, promiseCtor, resolveFn, resolved, thenFn;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "Promise", &promiseCtor);
-        napi_get_named_property(env, promiseCtor, "resolve", &resolveFn);
-        napi_call_function(env, promiseCtor, resolveFn, 0, nullptr, &resolved);
-        napi_get_named_property(env, resolved, "then", &thenFn);
+        NAPI_GUARD(napi_get_global(env, &global)) { return nullptr; }
+        NAPI_GUARD(napi_get_named_property(env, global, "Promise", &promiseCtor)) { return nullptr; }
+        NAPI_GUARD(napi_get_named_property(env, promiseCtor, "resolve", &resolveFn)) { return nullptr; }
+        NAPI_GUARD(napi_call_function(env, promiseCtor, resolveFn, 0, nullptr, &resolved)) { return nullptr; }
+        NAPI_GUARD(napi_get_named_property(env, resolved, "then", &thenFn)) { return nullptr; }
         napi_value thenArgs[1] = {argv[0]};
-        napi_call_function(env, resolved, thenFn, 1, thenArgs, nullptr);
+        NAPI_GUARD(napi_call_function(env, resolved, thenFn, 1, thenArgs, nullptr)) {}
 
         return nullptr;
     }
@@ -188,8 +191,9 @@ Runtime::Init(JNIEnv *_env, jobject obj, int runtimeId, jstring filesPath, jstri
 }
 
 napi_value Runtime::GlobalAccessorCallback(napi_env env, napi_callback_info  info) {
+    napi_status status;
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) { return nullptr; }
     return global;
 }
 
@@ -222,15 +226,16 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     v8::Isolate::Scope isolate_scope(env->isolate);
     v8::Context::Scope context_scope(env->context());
 #endif
-    napi_open_handle_scope(env, &global_scope);
+    napi_status status;
+    NAPI_GUARD(napi_open_handle_scope(env, &global_scope)) {}
 
     napi_handle_scope handleScope;
-    napi_open_handle_scope(env, &handleScope);
+    NAPI_GUARD(napi_open_handle_scope(env, &handleScope)) {}
 
     env_to_runtime_cache.Insert(env, this);
 
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {}
 
     // Newer JSC ships a native `WeakRef` global, so the old polyfill (which was
     // actually a strong reference and leaked) is no longer needed.
@@ -255,12 +260,12 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
     napi_util::napi_set_function(env, global, "__exit", CallbackHandlers::ExitMethodCallback);
 
     napi_value rt_version;
-    napi_create_string_utf8(env, NATIVE_SCRIPT_RUNTIME_VERSION, NAPI_AUTO_LENGTH, &rt_version);
-    napi_set_named_property(env, global, "__runtimeVersion", rt_version);
+    NAPI_GUARD(napi_create_string_utf8(env, NATIVE_SCRIPT_RUNTIME_VERSION, NAPI_AUTO_LENGTH, &rt_version)) {}
+    NAPI_GUARD(napi_set_named_property(env, global, "__runtimeVersion", rt_version)) {}
 
     napi_value engine;
     js_get_runtime_version(env, &engine);
-    napi_set_named_property(env, global, "__engine", engine);
+    NAPI_GUARD(napi_set_named_property(env, global, "__engine", engine)) {}
 
 
     napi_util::napi_set_function(env, global, "__time", CallbackHandlers::TimeCallback);
@@ -272,8 +277,9 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
                                  CallbackHandlers::RemoveFrameCallback);
     napi_util::napi_set_function(env, global, "__markingMode",
                                  [](napi_env _env, napi_callback_info) -> napi_value {
+                                     napi_status status;
                                      napi_value mode;
-                                     napi_create_int32(_env, 0, &mode);
+                                     NAPI_GUARD(napi_create_int32(_env, 0, &mode)) { return nullptr; }
                                      return mode;
                                  });
 
@@ -345,14 +351,14 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
      */
     {
         napi_value worker;
-        napi_define_class(env, "Worker", strlen("Worker"), CallbackHandlers::NewThreadCallback,
-                          nullptr, 0, nullptr, &worker);
+        NAPI_GUARD(napi_define_class(env, "Worker", strlen("Worker"), CallbackHandlers::NewThreadCallback,
+                          nullptr, 0, nullptr, &worker)) {}
         napi_value prototype = napi_util::get_prototype(env, worker);
         napi_util::napi_set_function(env, prototype, "postMessage",
                                      CallbackHandlers::WorkerObjectPostMessageCallback, nullptr);
         napi_util::napi_set_function(env, prototype, "terminate",
                                      CallbackHandlers::WorkerObjectTerminateCallback, nullptr);
-        napi_set_named_property(env, global, "Worker", worker);
+        NAPI_GUARD(napi_set_named_property(env, global, "Worker", worker)) {}
     }
 
     napi_util::define_property(env, global, "global", nullptr, GlobalAccessorCallback);
@@ -385,7 +391,7 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 
     s_mainThreadInitialized = true;
 
-    napi_close_handle_scope(env, handleScope);
+    NAPI_GUARD(napi_close_handle_scope(env, handleScope)) {}
 
     DEBUG_WRITE("%s", "NativeScript Runtime Loaded!");
 }
@@ -443,6 +449,7 @@ std::string Runtime::ReadFileText(const std::string &filePath) {
 }
 
 void Runtime::DestroyRuntime() {
+    napi_status status;
     is_destroying = true;
     if (m_looperTasks != nullptr) {
         m_looperTasks->Terminate();
@@ -456,7 +463,7 @@ void Runtime::DestroyRuntime() {
     Console::onDisposeEnv(env);
     CallbackHandlers::RemoveEnvEntries(env);
     this->m_objectManager->OnDisposeEnv();
-    napi_close_handle_scope(env, this->global_scope);
+    NAPI_GUARD(napi_close_handle_scope(env, this->global_scope)) {}
     Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
     id_to_runtime_cache.Remove(m_id);
     env_to_runtime_cache.Remove(env);
@@ -492,20 +499,21 @@ void Runtime::AdjustAmountOfExternalAllocatedMemory() {
 
 bool Runtime::TryCallGC() {
     if (this->is_destroying) return true;
+    napi_status status;
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) { return false; }
     if (!m_gcFunc) {
         napi_value gc;
-        napi_get_named_property(env, global, "gc", &gc);
+        NAPI_GUARD(napi_get_named_property(env, global, "gc", &gc)) { return false; }
         if (napi_util::is_null_or_undefined(env, gc)) return true;
-        napi_create_reference(env, gc, 1, &m_gcFunc);
+        NAPI_GUARD(napi_create_reference(env, gc, 1, &m_gcFunc)) { return false; }
     }
 
     bool success = __sync_bool_compare_and_swap(&m_runGC, true, false);
 
     if (success) {
         napi_value result;
-        napi_call_function(env, global, napi_util::get_ref_value(env, m_gcFunc), 0, nullptr, &result);
+        NAPI_GUARD(napi_call_function(env, global, napi_util::get_ref_value(env, m_gcFunc), 0, nullptr, &result)) {}
     }
 
     return success;
@@ -515,11 +523,12 @@ void Runtime::RunModule(JNIEnv *_jEnv, jobject obj, jstring scriptFile) {
     JEnv jEnv(_jEnv);
     string filePath = ArgConverter::jstringToString(scriptFile);
     m_module.Load(env, filePath);
+    napi_status status;
     bool pendingException;
-    napi_is_exception_pending(env, &pendingException);
+    NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) { return; }
     if (pendingException) {
         napi_value error = nullptr;
-        napi_get_and_clear_last_exception(env, &error);
+        NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {}
         throw NativeScriptException(env, error, string("Error running module at path: ") + filePath);
     }
 }
@@ -549,7 +558,7 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     auto src = ReadFileText(filename);
 
     napi_value soureCode;
-    napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode);
+    NAPI_GUARD(napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode)) { return nullptr; }
 
     napi_value result;
     DEBUG_WRITE("%s", filename.c_str());
@@ -560,7 +569,7 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     if (status != napi_ok || pendingException) {
         napi_value error = nullptr;
         if (pendingException) {
-            napi_get_and_clear_last_exception(env, &error);
+            NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {}
         }
         if (error) {
             throw NativeScriptException(env, error, "Error running script " + filename);
@@ -691,13 +700,14 @@ Runtime::PassExceptionToJsNative(JNIEnv *jEnv, jobject obj, jthrowable exception
                                  jstring fullStackTrace, jstring jsStackTrace,
                                  jboolean isDiscarded, jboolean isPendingError) {
     napi_env napiEnv = env;
+    napi_status status;
 
     std::string errMsg = ArgConverter::jstringToString(message);
 
     napi_value errObj;
     napi_value errMsgNapi;
-    napi_create_string_utf8(napiEnv, errMsg.c_str(), NAPI_AUTO_LENGTH, &errMsgNapi);
-    napi_create_error(napiEnv, nullptr, errMsgNapi, &errObj);
+    NAPI_GUARD(napi_create_string_utf8(napiEnv, errMsg.c_str(), NAPI_AUTO_LENGTH, &errMsgNapi)) {}
+    NAPI_GUARD(napi_create_error(napiEnv, nullptr, errMsgNapi, &errObj)) {}
 
     // Create a new native exception js object
     jint javaObjectID = m_objectManager->GetOrCreateObjectId((jobject) exception);
@@ -708,21 +718,21 @@ Runtime::PassExceptionToJsNative(JNIEnv *jEnv, jobject obj, jthrowable exception
         // Create proxy object that wraps the java err
         nativeExceptionObject = m_objectManager->CreateJSWrapper(javaObjectID, className);
         if (nativeExceptionObject == nullptr) {
-            napi_create_object(napiEnv, &nativeExceptionObject);
+            NAPI_GUARD(napi_create_object(napiEnv, &nativeExceptionObject)) {}
         }
     }
 
     // Create a JS error object
     napi_value fullStackTraceNapi;
-    napi_create_string_utf8(napiEnv, ArgConverter::jstringToString(fullStackTrace).c_str(),
-                            NAPI_AUTO_LENGTH, &fullStackTraceNapi);
-    napi_set_named_property(napiEnv, errObj, "nativeException", nativeExceptionObject);
-    napi_set_named_property(napiEnv, errObj, "stackTrace", fullStackTraceNapi);
+    NAPI_GUARD(napi_create_string_utf8(napiEnv, ArgConverter::jstringToString(fullStackTrace).c_str(),
+                            NAPI_AUTO_LENGTH, &fullStackTraceNapi)) {}
+    NAPI_GUARD(napi_set_named_property(napiEnv, errObj, "nativeException", nativeExceptionObject)) {}
+    NAPI_GUARD(napi_set_named_property(napiEnv, errObj, "stackTrace", fullStackTraceNapi)) {}
     if (jsStackTrace != nullptr) {
         napi_value jsStackTraceNapi;
-        napi_create_string_utf8(napiEnv, ArgConverter::jstringToString(jsStackTrace).c_str(),
-                                NAPI_AUTO_LENGTH, &jsStackTraceNapi);
-        napi_set_named_property(napiEnv, errObj, "stack", jsStackTraceNapi);
+        NAPI_GUARD(napi_create_string_utf8(napiEnv, ArgConverter::jstringToString(jsStackTrace).c_str(),
+                                NAPI_AUTO_LENGTH, &jsStackTraceNapi)) {}
+        NAPI_GUARD(napi_set_named_property(napiEnv, errObj, "stack", jsStackTraceNapi)) {}
     }
 
     // Pass err to JS

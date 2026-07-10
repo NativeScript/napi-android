@@ -1064,11 +1064,14 @@ void JsV8InspectorClient::registerModules() {
     assert(success);
 
     Runtime::GetRuntime(env)->RunModule("inspector_modules");
+    napi_status status;
     bool pendingException;
-    napi_is_exception_pending(env, &pendingException);
+    NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {
+        return;
+    }
     if (pendingException) {
         napi_value exception;
-        napi_get_and_clear_last_exception(env, &exception);
+        NAPI_GUARD(napi_get_and_clear_last_exception(env, &exception)) {}
         throw NativeScriptException("Error running inspector modules");
     }
 }

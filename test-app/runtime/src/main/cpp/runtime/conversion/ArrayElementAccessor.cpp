@@ -29,6 +29,7 @@ napi_value ArrayElementAccessor::GetArrayElement(napi_env env, napi_value array,
         arr = localArr;
     }
 
+    napi_status status;
     napi_value value;
     const jsize startIndex = index;
     const jsize length = 1;
@@ -39,13 +40,17 @@ napi_value ArrayElementAccessor::GetArrayElement(napi_env env, napi_value array,
         case 'Z': {
             jboolean v;
             jenv.GetBooleanArrayRegion((jbooleanArray) arr, startIndex, length, &v);
-            napi_get_boolean(env, v, &value);
+            NAPI_GUARD(napi_get_boolean(env, v, &value)) {
+                return nullptr;
+            }
             break;
         }
         case 'B': {
             jbyte v;
             jenv.GetByteArrayRegion((jbyteArray) arr, startIndex, length, &v);
-            napi_create_int32(env, v, &value);
+            NAPI_GUARD(napi_create_int32(env, v, &value)) {
+                return nullptr;
+            }
             break;
         }
         case 'C': {
@@ -54,38 +59,48 @@ napi_value ArrayElementAccessor::GetArrayElement(napi_env env, napi_value array,
             JniLocalRef s(jenv.NewString(&v, 1));
             jboolean isCopy = false;
             const char* singleChar = jenv.GetStringUTFChars(s, &isCopy);
-            napi_create_string_utf8(env, singleChar, 1, &value);
+            NAPI_GUARD(napi_create_string_utf8(env, singleChar, 1, &value)) {}
             jenv.ReleaseStringUTFChars(s, singleChar);
             break;
         }
         case 'S': {
             jshort v;
             jenv.GetShortArrayRegion((jshortArray) arr, startIndex, length, &v);
-            napi_create_int32(env, v, &value);
+            NAPI_GUARD(napi_create_int32(env, v, &value)) {
+                return nullptr;
+            }
             break;
         }
         case 'I': {
             jint v;
             jenv.GetIntArrayRegion((jintArray) arr, startIndex, length, &v);
-            napi_create_int32(env, v, &value);
+            NAPI_GUARD(napi_create_int32(env, v, &value)) {
+                return nullptr;
+            }
             break;
         }
         case 'J': {
             jlong v;
             jenv.GetLongArrayRegion((jlongArray) arr, startIndex, length, &v);
-            napi_create_int64(env, v, &value);
+            NAPI_GUARD(napi_create_int64(env, v, &value)) {
+                return nullptr;
+            }
             break;
         }
         case 'F': {
             jfloat v;
             jenv.GetFloatArrayRegion((jfloatArray) arr, startIndex, length, &v);
-            napi_create_double(env, v, &value);
+            NAPI_GUARD(napi_create_double(env, v, &value)) {
+                return nullptr;
+            }
             break;
         }
         case 'D': {
             jdouble v;
             jenv.GetDoubleArrayRegion((jdoubleArray) arr, startIndex, length, &v);
-            napi_create_double(env, v, &value);
+            NAPI_GUARD(napi_create_double(env, v, &value)) {
+                return nullptr;
+            }
             break;
         }
         default: {  // 'L' object or '[' nested array
@@ -108,6 +123,7 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
         objectManager = Runtime::GetRuntime(env)->GetObjectManager();
     }
 
+    napi_status status;
     JniLocalRef localArr;
     jobject arr;
     if (arrayObject != nullptr) {
@@ -123,23 +139,31 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
     switch (arraySignature[1]) {
         case 'Z': { //bool
             bool b;
-            napi_get_value_bool(env, value, &b);
+            NAPI_GUARD(napi_get_value_bool(env, value, &b)) {
+                return;
+            }
             jboolean v = static_cast<jboolean>(b);
             jenv.SetBooleanArrayRegion((jbooleanArray) arr, index, 1, &v);
             break;
         }
         case 'B': { //byte
             int32_t i;
-            napi_get_value_int32(env, value, &i);
+            NAPI_GUARD(napi_get_value_int32(env, value, &i)) {
+                return;
+            }
             jbyte v = static_cast<jbyte>(i);
             jenv.SetByteArrayRegion((jbyteArray) arr, index, 1, &v);
             break;
         }
         case 'C': { //char
             size_t str_len;
-            napi_get_value_string_utf8(env, value, nullptr, 0, &str_len);
+            NAPI_GUARD(napi_get_value_string_utf8(env, value, nullptr, 0, &str_len)) {
+                return;
+            }
             string str(str_len, '\0');
-            napi_get_value_string_utf8(env, value, &str[0], str_len + 1, &str_len);
+            NAPI_GUARD(napi_get_value_string_utf8(env, value, &str[0], str_len + 1, &str_len)) {
+                return;
+            }
             JniLocalRef s(jenv.NewString(reinterpret_cast<const jchar*>(str.c_str()), 1));
             jboolean isCopy = false;
             const char* singleChar = jenv.GetStringUTFChars(s, &isCopy);
@@ -150,42 +174,54 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
         }
         case 'S': { //short
             int32_t i;
-            napi_get_value_int32(env, value, &i);
+            NAPI_GUARD(napi_get_value_int32(env, value, &i)) {
+                return;
+            }
             jshort v = static_cast<jshort>(i);
             jenv.SetShortArrayRegion((jshortArray) arr, index, 1, &v);
             break;
         }
         case 'I': { //int
             int32_t i;
-            napi_get_value_int32(env, value, &i);
+            NAPI_GUARD(napi_get_value_int32(env, value, &i)) {
+                return;
+            }
             jint v = static_cast<jint>(i);
             jenv.SetIntArrayRegion((jintArray) arr, index, 1, &v);
             break;
         }
         case 'J': { //long
             int64_t l;
-            napi_get_value_int64(env, value, &l);
+            NAPI_GUARD(napi_get_value_int64(env, value, &l)) {
+                return;
+            }
             jlong v = static_cast<jlong>(l);
             jenv.SetLongArrayRegion((jlongArray) arr, index, 1, &v);
             break;
         }
         case 'F': { //float
             double d;
-            napi_get_value_double(env, value, &d);
+            NAPI_GUARD(napi_get_value_double(env, value, &d)) {
+                return;
+            }
             jfloat v = static_cast<jfloat>(d);
             jenv.SetFloatArrayRegion((jfloatArray) arr, index, 1, &v);
             break;
         }
         case 'D': { //double
             double d;
-            napi_get_value_double(env, value, &d);
+            NAPI_GUARD(napi_get_value_double(env, value, &d)) {
+                return;
+            }
             jdouble v = static_cast<jdouble>(d);
             jenv.SetDoubleArrayRegion((jdoubleArray) arr, index, 1, &v);
             break;
         }
         default: { //string or object
             napi_valuetype ref_type;
-            napi_typeof(env, value, &ref_type);
+            NAPI_GUARD(napi_typeof(env, value, &ref_type)) {
+                return;
+            }
 
             if (ref_type == napi_object || ref_type == napi_function || ref_type == napi_string) {
                 JsArgToArrayConverter argConverter(env, value, false, (int) Type::Null, objectManager);
@@ -205,32 +241,49 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
 }
 
 napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* objectManager, JEnv& jenv, const string& elementSignature, const void* value) {
+    napi_status status;
     napi_value jsValue;
 
     switch (elementSignature[0]) {
         case 'Z':
-            napi_get_boolean(env, *(jboolean*) value, &jsValue);
+            NAPI_GUARD(napi_get_boolean(env, *(jboolean*) value, &jsValue)) {
+                return nullptr;
+            }
             break;
         case 'B':
-            napi_create_int32(env, *(jbyte*) value, &jsValue);
+            NAPI_GUARD(napi_create_int32(env, *(jbyte*) value, &jsValue)) {
+                return nullptr;
+            }
             break;
         case 'C':
-            napi_create_string_utf8(env, (const char*) value, 1, &jsValue);
+            NAPI_GUARD(napi_create_string_utf8(env, (const char*) value, 1, &jsValue)) {
+                return nullptr;
+            }
             break;
         case 'S':
-            napi_create_int32(env, *(jshort*) value, &jsValue);
+            NAPI_GUARD(napi_create_int32(env, *(jshort*) value, &jsValue)) {
+                return nullptr;
+            }
             break;
         case 'I':
-            napi_create_int32(env, *(jint*) value, &jsValue);
+            NAPI_GUARD(napi_create_int32(env, *(jint*) value, &jsValue)) {
+                return nullptr;
+            }
             break;
         case 'J':
-            napi_create_int64(env, *(jlong*) value, &jsValue);
+            NAPI_GUARD(napi_create_int64(env, *(jlong*) value, &jsValue)) {
+                return nullptr;
+            }
             break;
         case 'F':
-            napi_create_double(env, *(jfloat*) value, &jsValue);
+            NAPI_GUARD(napi_create_double(env, *(jfloat*) value, &jsValue)) {
+                return nullptr;
+            }
             break;
         case 'D':
-            napi_create_double(env, *(jdouble*) value, &jsValue);
+            NAPI_GUARD(napi_create_double(env, *(jdouble*) value, &jsValue)) {
+                return nullptr;
+            }
             break;
         default: {
             if (nullptr != (*(jobject*) value)) {
@@ -254,7 +307,9 @@ napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* o
                     }
                 }
             } else {
-                napi_get_null(env, &jsValue);
+                NAPI_GUARD(napi_get_null(env, &jsValue)) {
+                    return nullptr;
+                }
             }
             break;
         }

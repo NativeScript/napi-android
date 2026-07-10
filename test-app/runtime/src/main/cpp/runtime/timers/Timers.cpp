@@ -62,10 +62,14 @@ void Timers::Init(napi_env env, napi_value global) {
     napi_util::napi_set_function(env, global, "__ns__clearTimeout", ClearTimer, this);
     napi_util::napi_set_function(env, global, "__ns__clearInterval", ClearTimer, this);
 
-    napi_add_finalizer(env, global, this, [](napi_env env, void *finalizeData, void *finalizeHint) {
-        auto thiz = reinterpret_cast<Timers *>(finalizeData);
-        delete thiz;
-    }, nullptr, nullptr);
+    napi_status status;
+    // Non-fatal to timer operation if this fails (only affects GC cleanup of
+    // `this`), so log for diagnostics but continue with handler setup.
+    NAPI_GUARD(napi_add_finalizer(env, global, this,
+                                  [](napi_env env, void *finalizeData, void *finalizeHint) {
+                                      auto thiz = reinterpret_cast<Timers *>(finalizeData);
+                                      delete thiz;
+                                  }, nullptr, nullptr)) {}
 
     JEnv jEnv;
     if (TIMER_HANDLER_CLASS == nullptr) {
@@ -177,14 +181,17 @@ void Timers::FireTimer() {
     napi_value cb = napi_util::get_ref_value(env_, task->callback_);
     napi_value recv = napi_util::get_ref_value(env_, task->thisArg);
     size_t argc = task->args_ == nullptr ? 0 : task->args_->size();
+    napi_status status;
+    // Log a failed dispatch (e.g. a JS exception) but continue: the cleanup
+    // below must still run so the task's references are released.
     if (argc > 0) {
         std::vector<napi_value> argv(argc);
         for (size_t i = 0; i < argc; i++) {
             argv[i] = napi_util::get_ref_value(env_, task->args_->at(i));
         }
-        napi_call_function(env_, recv, cb, argc, argv.data(), nullptr);
+        NAPI_GUARD(napi_call_function(env_, recv, cb, argc, argv.data(), nullptr)) {}
     } else {
-        napi_call_function(env_, recv, cb, 0, nullptr, nullptr);
+        NAPI_GUARD(napi_call_function(env_, recv, cb, 0, nullptr, nullptr)) {}
     }
 
     // task is not queued, so it's either a setTimeout or a cleared setInterval:
@@ -234,7 +241,10 @@ napi_value Timers::ClearTimer(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
     void *data = nullptr;
-    napi_get_cb_info(env, info, &argc, args, nullptr, &data);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, &data)) {
+        return nullptr;
+    }
 
     int id = -1;
     if (argc > 0) {
@@ -259,7 +269,9 @@ napi_value Timers::SetTimer(napi_env env, napi_callback_info info, bool repeatab
 
         if (!napi_util::is_of_type(env, argv[0], napi_function)) {
             napi_value result;
-            napi_get_undefined(env, &result);
+            NAPI_GUARD(napi_get_undefined(env, &result)) {
+                return nullptr;
+            }
             return result;
         }
 
@@ -287,7 +299,9 @@ napi_value Timers::SetTimer(napi_env env, napi_callback_info info, bool repeatab
         thiz->addTask(task);
     }
     napi_value result;
-    napi_create_int32(env, id, &result);
+    NAPI_GUARD(napi_create_int32(env, id, &result)) {
+        return nullptr;
+    }
     return result;
 }
 

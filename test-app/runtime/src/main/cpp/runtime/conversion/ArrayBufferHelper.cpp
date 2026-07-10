@@ -11,13 +11,18 @@ ArrayBufferHelper::ArrayBufferHelper()
 }
 
 void ArrayBufferHelper::CreateConvertFunctions(napi_env env, napi_value global, ObjectManager* objectManager) {
+    napi_status status;
     m_objectManager = objectManager;
     napi_value fromFunc;
-    napi_create_function(env, "from", NAPI_AUTO_LENGTH, CreateFromCallbackStatic, this, &fromFunc);
+    NAPI_GUARD(napi_create_function(env, "from", NAPI_AUTO_LENGTH, CreateFromCallbackStatic, this, &fromFunc)) {
+        return;
+    }
 
     napi_value arrBufferCtorFunc;
-    napi_get_named_property(env, global, "ArrayBuffer", &arrBufferCtorFunc);
-    napi_set_named_property(env, arrBufferCtorFunc, "from", fromFunc);
+    NAPI_GUARD(napi_get_named_property(env, global, "ArrayBuffer", &arrBufferCtorFunc)) {
+        return;
+    }
+    NAPI_GUARD(napi_set_named_property(env, arrBufferCtorFunc, "from", fromFunc)) {}
 }
 
 napi_value ArrayBufferHelper::CreateFromCallbackStatic(napi_env env, napi_callback_info info) {
@@ -41,6 +46,7 @@ napi_value ArrayBufferHelper::CreateFromCallbackStatic(napi_env env, napi_callba
 }
 
 napi_value ArrayBufferHelper::CreateFromCallbackImpl(napi_env env, size_t argc, napi_value* args) {
+    napi_status status;
     if (argc != 1) {
         throw NativeScriptException("Wrong number of arguments (1 expected)");
     }
@@ -90,7 +96,9 @@ napi_value ArrayBufferHelper::CreateFromCallbackImpl(napi_env env, size_t argc, 
         auto size = jEnv.GetDirectBufferCapacity(obj);
 
         void* externalData = data;
-        napi_create_external_arraybuffer(env, externalData, size, nullptr, nullptr, &arrayBuffer);
+        NAPI_GUARD(napi_create_external_arraybuffer(env, externalData, size, nullptr, nullptr, &arrayBuffer)) {
+            return nullptr;
+        }
     } else {
         if (m_remainingMethodID == nullptr) {
             m_remainingMethodID = jEnv.GetMethodID(m_ByteBufferClass, "remaining", "()I");
@@ -112,16 +120,16 @@ napi_value ArrayBufferHelper::CreateFromCallbackImpl(napi_env env, size_t argc, 
         jbyte* data = new jbyte[bufferRemainingSize];
         memcpy(data, byteArrayElements, bufferRemainingSize);
 
-        napi_create_external_arraybuffer(env, data, bufferRemainingSize, [](napi_env env, void* finalize_data, void* finalize_hint) {
+        NAPI_GUARD(napi_create_external_arraybuffer(env, data, bufferRemainingSize, [](napi_env env, void* finalize_data, void* finalize_hint) {
             delete[] static_cast<jbyte*>(finalize_data);
-        }, nullptr, &arrayBuffer);
+        }, nullptr, &arrayBuffer)) {}
 
         jEnv.ReleaseByteArrayElements(byteArray, byteArrayElements, 0);
     }
 
     napi_value nativeObjectKey;
-    napi_create_string_utf8(env, "nativeObject", NAPI_AUTO_LENGTH, &nativeObjectKey);
-    napi_set_property(env, arrayBuffer, nativeObjectKey, argObj);
+    NAPI_GUARD(napi_create_string_utf8(env, "nativeObject", NAPI_AUTO_LENGTH, &nativeObjectKey)) {}
+    NAPI_GUARD(napi_set_property(env, arrayBuffer, nativeObjectKey, argObj)) {}
 
     return arrayBuffer;
 }

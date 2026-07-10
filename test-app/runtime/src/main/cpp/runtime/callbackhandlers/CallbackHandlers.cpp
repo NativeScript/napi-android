@@ -81,6 +81,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
     auto retType = MethodReturnType::Unknown;
     MethodCache::CacheMethodInfo mi;
     bool isSuper = false;
+    napi_status status;
 
     if ((entry != nullptr) && entry->getIsResolved()) {
         auto &entrySignature = entry->getSig();
@@ -223,7 +224,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
             stringstream ss;
 
             napi_value new_target;
-            napi_get_new_target(env, info, &new_target);
+            NAPI_GUARD(napi_get_new_target(env, info, &new_target)) {}
             if (!napi_util::is_null_or_undefined(env, new_target)) {
                 ss << "No java object found on which to call \"" << methodName
                    << "\" method. It is possible your Javascript object is not linked with the corresponding Java class. Try passing context(this) to the constructor function.";
@@ -259,7 +260,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
                 result = jEnv.CallBooleanMethodA(callerJavaObject, mid, javaArgs);
             }
 
-            napi_get_boolean(env, result != 0, &returnValue);
+            NAPI_GUARD(napi_get_boolean(env, result != 0, &returnValue)) { return nullptr; }
             break;
         }
         case MethodReturnType::Byte: {
@@ -272,7 +273,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
                 result = jEnv.CallByteMethodA(callerJavaObject, mid, javaArgs);
             }
 
-            napi_create_int32(env, result, &returnValue);
+            NAPI_GUARD(napi_create_int32(env, result, &returnValue)) { return nullptr; }
             break;
         }
         case MethodReturnType::Char: {
@@ -302,7 +303,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
                 result = jEnv.CallShortMethodA(callerJavaObject, mid, javaArgs);
             }
 
-            napi_create_int32(env, result, &returnValue);
+            NAPI_GUARD(napi_create_int32(env, result, &returnValue)) { return nullptr; }
 
             break;
         }
@@ -315,7 +316,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
             } else {
                 result = jEnv.CallIntMethodA(callerJavaObject, mid, javaArgs);
             }
-            napi_create_int32(env, result, &returnValue);
+            NAPI_GUARD(napi_create_int32(env, result, &returnValue)) { return nullptr; }
             break;
 
         }
@@ -340,7 +341,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
             } else {
                 result = jEnv.CallFloatMethodA(callerJavaObject, mid, javaArgs);
             }
-            napi_create_double(env, (double) result, &returnValue);
+            NAPI_GUARD(napi_create_double(env, (double) result, &returnValue)) { return nullptr; }
             break;
         }
         case MethodReturnType::Double: {
@@ -352,7 +353,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
             } else {
                 result = jEnv.CallDoubleMethodA(callerJavaObject, mid, javaArgs);
             }
-            napi_create_double(env, (double) result, &returnValue);
+            NAPI_GUARD(napi_create_double(env, (double) result, &returnValue)) { return nullptr; }
             break;
         }
         case MethodReturnType::String: {
@@ -371,7 +372,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
                 returnValue = ArgConverter::jstringToJsString(env, static_cast<jstring>(result));
                 jEnv.DeleteLocalRef(result);
             } else {
-                napi_get_null(env, &returnValue);
+                NAPI_GUARD(napi_get_null(env, &returnValue)) { return nullptr; }
             }
 
             break;
@@ -405,7 +406,7 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
 
                 jEnv.DeleteLocalRef(result);
             } else {
-                napi_get_null(env, &returnValue);
+                NAPI_GUARD(napi_get_null(env, &returnValue)) { return nullptr; }
             }
 
             break;
@@ -612,18 +613,19 @@ CallbackHandlers::GetImplementedInterfaces(napi_env env, JEnv &jEnv,
 
     vector<jstring> interfacesToImplement;
 
+    napi_status status;
     napi_value prop;
-    napi_get_named_property(env, implementationObject, "interfaces", &prop);
+    NAPI_GUARD(napi_get_named_property(env, implementationObject, "interfaces", &prop)) {}
     bool isArray;
-    napi_is_array(env, prop, &isArray);
+    NAPI_GUARD(napi_is_array(env, prop, &isArray)) {}
 
     if (isArray) {
         uint32_t length;
-        napi_get_array_length(env, prop, &length);
+        NAPI_GUARD(napi_get_array_length(env, prop, &length)) {}
 
         for (int j = 0; j < length; j++) {
             napi_value element;
-            napi_get_element(env, prop, j, &element);
+            NAPI_GUARD(napi_get_element(env, prop, j, &element)) {}
 
             if (napi_util::is_object(env, element)) {
                 auto node = MetadataNode::GetTypeMetadataName(env, element);
@@ -659,17 +661,18 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
 
     vector<jstring> methodNames;
 
+    napi_status status;
     napi_value propNames;
 
-    napi_get_all_property_names(env, implementationObject, napi_key_own_only,
-                                napi_key_all_properties, napi_key_numbers_to_strings, &propNames);
+    NAPI_GUARD(napi_get_all_property_names(env, implementationObject, napi_key_own_only,
+                                napi_key_all_properties, napi_key_numbers_to_strings, &propNames)) {}
 
     uint32_t length;
-    napi_get_array_length(env, propNames, &length);
+    NAPI_GUARD(napi_get_array_length(env, propNames, &length)) {}
 
     for (int i = 0; i < length; i++) {
         napi_value element;
-        napi_get_element(env, propNames, i, &element);
+        NAPI_GUARD(napi_get_element(env, propNames, i, &element)) {}
         auto name = ArgConverter::ConvertToString(env, element);
 
         if (name == "super") {
@@ -678,7 +681,7 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
 
         napi_value method;
 
-        napi_get_property(env, implementationObject, element, &method);
+        NAPI_GUARD(napi_get_property(env, implementationObject, element, &method)) {}
 
         bool methodFound = napi_util::is_of_type(env, method, napi_function);
 
@@ -705,7 +708,8 @@ CallbackHandlers::GetMethodOverrides(napi_env env, JEnv &jEnv, napi_value implem
 napi_value CallbackHandlers::RunOnMainThreadCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) { return nullptr; }
 
     assert(argc == 1);
     assert(napi_util::is_of_type(env, args[0], napi_function));
@@ -744,13 +748,14 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data) 
 
     napi_value cb = napi_util::get_ref_value(env, callback_ref);
 
+    napi_status status;
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {}
 
     cache_.erase(it);
 
     napi_value result;
-    napi_status status = napi_call_function(env, global, cb, 0, nullptr, &result);
+    NAPI_GUARD(napi_call_function(env, global, cb, 0, nullptr, &result)) {}
 
     if (status != napi_ok) {
         napi_throw_error(env, nullptr, "Error calling JavaScript callback");
@@ -763,17 +768,18 @@ int CallbackHandlers::RunOnMainThreadFdCallback(int fd, int events, void *data) 
 napi_value CallbackHandlers::LogMethodCallback(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) { return nullptr; }
 
     try {
         if (argc > 0) {
             napi_valuetype valuetype;
-            napi_typeof(env, args[0], &valuetype);
+            NAPI_GUARD(napi_typeof(env, args[0], &valuetype)) { return nullptr; }
             if (valuetype == napi_string) {
                 size_t str_size;
-                napi_get_value_string_utf8(env, args[0], nullptr, 0, &str_size);
+                NAPI_GUARD(napi_get_value_string_utf8(env, args[0], nullptr, 0, &str_size)) { return nullptr; }
                 std::string message(str_size + 1, '\0');
-                napi_get_value_string_utf8(env, args[0], &message[0], str_size + 1, &str_size);
+                NAPI_GUARD(napi_get_value_string_utf8(env, args[0], &message[0], str_size + 1, &str_size)) { return nullptr; }
                 DEBUG_WRITE("%s", message.c_str());
             }
         }
@@ -805,7 +811,8 @@ napi_value CallbackHandlers::TimeCallback(napi_env env, napi_callback_info info)
             std::chrono::system_clock::now());
     double duration = nano.time_since_epoch().count();
     napi_value result;
-    napi_create_double(env, duration, &result);
+    napi_status status;
+    NAPI_GUARD(napi_create_double(env, duration, &result)) { return nullptr; }
     return result;
 }
 
@@ -831,7 +838,8 @@ CallbackHandlers::ReleaseNativeCounterpartCallback(napi_env env, napi_callback_i
 void CallbackHandlers::validateProvidedArgumentsLength(napi_env env, napi_callback_info info,
                                                        int expectedSize) {
     size_t argc = 0;
-    napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, nullptr, nullptr, nullptr)) {}
     if ((int) argc != expectedSize) {
         throw NativeScriptException("Unexpected arguments count!");
     }
@@ -927,7 +935,8 @@ napi_value CallbackHandlers::ExitMethodCallback(napi_env env, napi_callback_info
 
 void CallbackHandlers::CreateGlobalCastFunctions(napi_env env) {
     napi_value global;
-    napi_get_global(env, &global);
+    napi_status status;
+    NAPI_GUARD(napi_get_global(env, &global)) { return; }
     castFunctions.CreateGlobalCastFunctions(env, global);
 }
 
@@ -962,6 +971,7 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
                                           napi_value jsObject, jclass claz,const string &methodName,int javaObjectId,
                                           jobjectArray args) {
     JEnv jEnv(_jEnv);
+    napi_status status;
     napi_value result;
     napi_value method;
 
@@ -970,7 +980,7 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
     method = runtime->js_method_cache->getCachedMethod(javaObjectId, methodName);
     if (!method) {
 #endif
-        napi_get_named_property(env, jsObject, methodName.c_str(), &method);
+        NAPI_GUARD(napi_get_named_property(env, jsObject, methodName.c_str(), &method)) {}
 #ifndef __HERMES__
         if (napi_util::is_of_type(env, method, napi_function)) {
             runtime->js_method_cache->cacheMethod(javaObjectId, methodName, method);
@@ -986,7 +996,7 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
         DEBUG_WRITE("Calling JS Method %s", methodName.c_str());
 
         bool exceptionPending;
-        napi_is_exception_pending(env, &exceptionPending);
+        NAPI_GUARD(napi_is_exception_pending(env, &exceptionPending)) {}
 
         int argc = jEnv.GetArrayLength(args) / 3;
         if (argc > 0) {
@@ -1002,7 +1012,7 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
 #endif
             }
             ArgConverter::ConvertJavaArgsToJsArgs(env, args, argc, jsArgs);
-            napi_call_function(env, jsObject, method, argc, jsArgs, &result);
+            NAPI_GUARD(napi_call_function(env, jsObject, method, argc, jsArgs, &result)) {}
 
             if (argc > 8) {
 #ifdef USE_MIMALLOC
@@ -1012,14 +1022,14 @@ napi_value CallbackHandlers::CallJSMethod(napi_env env, JNIEnv *_jEnv,
 #endif
             }
         } else {
-            napi_call_function(env, jsObject, method, 0, nullptr, &result);
+            NAPI_GUARD(napi_call_function(env, jsObject, method, 0, nullptr, &result)) {}
         }
 
         if (!exceptionPending) {
-            napi_is_exception_pending(env, &exceptionPending);
+            NAPI_GUARD(napi_is_exception_pending(env, &exceptionPending)) {}
             if (exceptionPending) {
                 napi_value error;
-                napi_get_and_clear_last_exception(env, &error);
+                NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {}
                 throw NativeScriptException(env, error, "Error calling js method: " + methodName);
             }
         }
@@ -1084,18 +1094,19 @@ void CallbackHandlers::PostCallback(napi_env env, napi_callback_info info,
                                     CallbackHandlers::FrameCallbackCacheEntry *entry) {
     size_t argc = 2;
     napi_value args[2];
-    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) { return; }
 
     ALooper_prepare(0);
     auto instance = AChoreographer_getInstance_();
     napi_value delay = args[1];
     napi_valuetype delayType;
-    napi_typeof(env, delay, &delayType);
+    NAPI_GUARD(napi_typeof(env, delay, &delayType)) { return; }
 
     if (android_get_device_api_level() >= 29) {
         if (delayType == napi_number) {
             uint32_t delayValue;
-            napi_get_value_uint32(env, delay, &delayValue);
+            NAPI_GUARD(napi_get_value_uint32(env, delay, &delayValue)) { return; }
             AChoreographer_postFrameCallbackDelayed64_(instance, entry->frameCallback64_, entry,
                                                        delayValue);
         } else {
@@ -1104,7 +1115,7 @@ void CallbackHandlers::PostCallback(napi_env env, napi_callback_info info,
     } else {
         if (delayType == napi_number) {
             int64_t delayValue;
-            napi_get_value_int64(env, delay, &delayValue);
+            NAPI_GUARD(napi_get_value_int64(env, delay, &delayValue)) { return; }
             AChoreographer_postFrameCallbackDelayed_(instance, entry->frameCallback_, entry,
                                                      static_cast<long>(delayValue));
         } else {
@@ -1117,9 +1128,10 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
     if (android_get_device_api_level() >= 24) {
         InitChoreographer();
 
+        napi_status status;
         size_t argc = 2;
         napi_value args[2];
-        napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+        NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) { return nullptr; }
 
         if (argc < 1) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
@@ -1127,7 +1139,7 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
         }
 
         napi_valuetype argType;
-        napi_typeof(env, args[0], &argType);
+        NAPI_GUARD(napi_typeof(env, args[0], &argType)) { return nullptr; }
         if (argType != napi_function) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
             return nullptr;
@@ -1136,16 +1148,16 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
         napi_value func = args[0];
 
         napi_value idKey;
-        napi_create_string_utf8(env, "_postFrameCallbackId", NAPI_AUTO_LENGTH, &idKey);
+        NAPI_GUARD(napi_create_string_utf8(env, "_postFrameCallbackId", NAPI_AUTO_LENGTH, &idKey)) { return nullptr; }
 
         napi_value pId;
-        napi_get_property(env, func, idKey, &pId);
+        NAPI_GUARD(napi_get_property(env, func, idKey, &pId)) { return nullptr; }
 
         napi_valuetype pIdType;
-        napi_typeof(env, pId, &pIdType);
+        NAPI_GUARD(napi_typeof(env, pId, &pIdType)) { return nullptr; }
         if (pIdType == napi_number) {
             int32_t id;
-            napi_get_value_int32(env, pId, &id);
+            NAPI_GUARD(napi_get_value_int32(env, pId, &id)) { return nullptr; }
             auto cb = frameCallbackCache_.find(id);
             if (cb != frameCallbackCache_.end()) {
                 bool shouldReschedule = !cb->second.isScheduled();
@@ -1160,8 +1172,8 @@ napi_value CallbackHandlers::PostFrameCallback(napi_env env, napi_callback_info 
         uint64_t key = ++frameCallbackCount_;
 
         napi_value keyValue;
-        napi_create_int64(env, key, &keyValue);
-        napi_set_property(env, func, idKey, keyValue);
+        NAPI_GUARD(napi_create_int64(env, key, &keyValue)) { return nullptr; }
+        NAPI_GUARD(napi_set_property(env, func, idKey, keyValue)) {}
 
         auto [val, inserted] = frameCallbackCache_.try_emplace(key, env, func, key);
         assert(inserted && "Frame callback ID should not be duplicated");
@@ -1177,9 +1189,10 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
     if (android_get_device_api_level() >= 24) {
         InitChoreographer();
 
+        napi_status status;
         size_t argc = 1;
         napi_value args[1];
-        napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+        NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, nullptr)) { return nullptr; }
 
         if (argc < 1) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
@@ -1187,7 +1200,7 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
         }
 
         napi_valuetype argType;
-        napi_typeof(env, args[0], &argType);
+        NAPI_GUARD(napi_typeof(env, args[0], &argType)) { return nullptr; }
         if (argType != napi_function) {
             napi_throw_type_error(env, nullptr, "Frame callback argument is not a function");
             return nullptr;
@@ -1196,14 +1209,14 @@ napi_value CallbackHandlers::RemoveFrameCallback(napi_env env, napi_callback_inf
         napi_value func = args[0];
 
         napi_value idKey;
-        napi_create_string_utf8(env, "_postFrameCallbackId", NAPI_AUTO_LENGTH, &idKey);
+        NAPI_GUARD(napi_create_string_utf8(env, "_postFrameCallbackId", NAPI_AUTO_LENGTH, &idKey)) { return nullptr; }
 
         napi_value pId;
-        napi_get_property(env, func, idKey, &pId);
+        NAPI_GUARD(napi_get_property(env, func, idKey, &pId)) { return nullptr; }
 
         if (pId != nullptr && napi_util::is_of_type(env, pId, napi_number)) {
             int32_t id;
-            napi_get_value_int32(env, pId, &id);
+            NAPI_GUARD(napi_get_value_int32(env, pId, &id)) { return nullptr; }
             auto cb = frameCallbackCache_.find(id);
             if (cb != frameCallbackCache_.end()) {
                 cb->second.markRemoved();
@@ -1263,7 +1276,7 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         NAPI_CALLBACK_BEGIN_VARGS_FAST(8)
 
         napi_value newTarget;
-        napi_get_new_target(env, info, &newTarget);
+        NAPI_GUARD(napi_get_new_target(env, info, &newTarget)) { return nullptr; }
         if (napi_util::is_null_or_undefined(env, newTarget)) {
             throw NativeScriptException("Worker should be called as a constructor!");
         }
@@ -1274,7 +1287,7 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         }
 
         napi_valuetype value_type;
-        napi_typeof(env, argv[0], &value_type);
+        NAPI_GUARD(napi_typeof(env, argv[0], &value_type)) { return nullptr; }
 
         if (value_type != napi_string && value_type != napi_object) {
             throw NativeScriptException(
@@ -1284,7 +1297,7 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         napi_value workerFilePath;
         std::string baseurl_str;
         if (value_type == napi_object) {
-            napi_get_named_property(env, argv[0], "href", &workerFilePath);
+            NAPI_GUARD(napi_get_named_property(env, argv[0], "href", &workerFilePath)) { return nullptr; }
             if (napi_util::is_null_or_undefined(env, workerFilePath)) {
                 throw NativeScriptException(
                         "Worker should be called with one parameter (name of file to run) or a URL to the file");
@@ -1296,7 +1309,7 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
 
 
         napi_value global;
-        napi_get_global(env, &global);
+        NAPI_GUARD(napi_get_global(env, &global)) {}
 
         auto frames = tns::BuildStacktraceFrames(env, nullptr, 1);
         string currentExecutingScriptNameStr =
@@ -1330,8 +1343,8 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
 
         auto workerId = WorkerWrapper::NextWorkerId();
         napi_value workerIdValue;
-        napi_create_int32(env, workerId, &workerIdValue);
-        napi_set_named_property(env, jsThis, "workerId", workerIdValue);
+        NAPI_GUARD(napi_create_int32(env, workerId, &workerIdValue)) { return nullptr; }
+        NAPI_GUARD(napi_set_named_property(env, jsThis, "workerId", workerIdValue)) { return nullptr; }
 
         DEBUG_WRITE("Called Worker constructor id=%d", workerId);
 
@@ -1345,10 +1358,10 @@ napi_value CallbackHandlers::NewThreadCallback(napi_env env, napi_callback_info 
         napi_value stack;
         napi_value error;
         napi_value empty;
-        napi_create_string_utf8(env, "",0,  &empty);
-        napi_create_error(env, empty, empty, &error);
-        napi_get_named_property(env, error, "stack", &stack);
-        napi_set_named_property(env, jsThis, "__stack__", stack);
+        NAPI_GUARD(napi_create_string_utf8(env, "",0,  &empty)) {}
+        NAPI_GUARD(napi_create_error(env, empty, empty, &error)) {}
+        NAPI_GUARD(napi_get_named_property(env, error, "stack", &stack)) {}
+        NAPI_GUARD(napi_set_named_property(env, jsThis, "__stack__", stack)) {}
 
         return jsThis;
     } catch (NativeScriptException &e) {
@@ -1378,10 +1391,10 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
         }
 
         napi_value isTerminated;
-        napi_get_named_property(env, jsThis, "isTerminated", &isTerminated);
+        NAPI_GUARD(napi_get_named_property(env, jsThis, "isTerminated", &isTerminated)) {}
         if (!napi_util::is_null_or_undefined(env, isTerminated)) {
             bool terminated;
-            napi_get_value_bool(env, isTerminated, &terminated);
+            NAPI_GUARD(napi_get_value_bool(env, isTerminated, &terminated)) {}
             if (terminated) {
                 return nullptr;
             }
@@ -1391,7 +1404,7 @@ CallbackHandlers::WorkerObjectPostMessageCallback(napi_env env, napi_callback_in
 
         // get worker's ID that is associated with this Worker object
         napi_value jsId;
-        napi_get_named_property(env, jsThis, "workerId", &jsId);
+        NAPI_GUARD(napi_get_named_property(env, jsThis, "workerId", &jsId)) {}
         auto id = napi_util::get_int32(env, jsId);
 
         auto wrapper = WorkerWrapper::GetById(id);
@@ -1429,10 +1442,10 @@ CallbackHandlers::WorkerGlobalPostMessageCallback(napi_env env, napi_callback_in
         }
 
         bool pendingException;
-        napi_is_exception_pending(env, &pendingException);
+        NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {}
         if (pendingException) {
             napi_value err;
-            napi_get_and_clear_last_exception(env, &err);
+            NAPI_GUARD(napi_get_and_clear_last_exception(env, &err)) {}
             CallWorkerScopeOnErrorHandle(env, err);
         }
 
@@ -1464,33 +1477,34 @@ CallbackHandlers::WorkerGlobalPostMessageCallback(napi_env env, napi_callback_in
 napi_value CallbackHandlers::WorkerObjectTerminateCallback(napi_env env, napi_callback_info info) {
     size_t argc = 0;
     napi_value thiz;
-    napi_get_cb_info(env, info, &argc, nullptr, &thiz, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, nullptr, &thiz, nullptr)) { return nullptr; }
 
     DEBUG_WRITE("WORKER: WorkerObjectTerminateCallback called.");
 
     try {
         napi_value global;
-        napi_get_global(env, &global);
+        NAPI_GUARD(napi_get_global(env, &global)) {}
 
         napi_value jsId;
-        napi_get_named_property(env, thiz, "workerId", &jsId);
+        NAPI_GUARD(napi_get_named_property(env, thiz, "workerId", &jsId)) {}
 
         int32_t id;
-        napi_get_value_int32(env, jsId, &id);
+        NAPI_GUARD(napi_get_value_int32(env, jsId, &id)) {}
 
         napi_value isTerminated;
-        napi_get_named_property(env, thiz, "isTerminated", &isTerminated);
+        NAPI_GUARD(napi_get_named_property(env, thiz, "isTerminated", &isTerminated)) {}
         if (!napi_util::is_null_or_undefined(env, isTerminated)) {
             bool terminated;
-            napi_get_value_bool(env, isTerminated, &terminated);
+            NAPI_GUARD(napi_get_value_bool(env, isTerminated, &terminated)) {}
             if (terminated) {
                 return nullptr;
             }
         }
 
         napi_value trueValue;
-        napi_get_boolean(env, true, &trueValue);
-        napi_set_named_property(env, thiz, "isTerminated", trueValue);
+        NAPI_GUARD(napi_get_boolean(env, true, &trueValue)) {}
+        NAPI_GUARD(napi_set_named_property(env, thiz, "isTerminated", trueValue)) {}
 
         auto wrapper = WorkerWrapper::GetById(id);
         if (wrapper != nullptr) {
@@ -1514,40 +1528,41 @@ napi_value CallbackHandlers::WorkerObjectTerminateCallback(napi_env env, napi_ca
 napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callback_info info) {
     size_t argc = 0;
     napi_value thiz;
-    napi_get_cb_info(env, info, &argc, nullptr, &thiz, nullptr);
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, nullptr, &thiz, nullptr)) { return nullptr; }
 
     DEBUG_WRITE("WORKER: WorkerThreadCloseCallback called.");
 
     try {
         napi_value global;
-        napi_get_global(env, &global);
+        NAPI_GUARD(napi_get_global(env, &global)) {}
 
         napi_value isTerminated;
-        napi_get_named_property(env, global, "isTerminating", &isTerminated);
+        NAPI_GUARD(napi_get_named_property(env, global, "isTerminating", &isTerminated)) {}
         if (!napi_util::is_null_or_undefined(env, isTerminated)) {
             bool terminated;
-            napi_get_value_bool(env, isTerminated, &terminated);
+            NAPI_GUARD(napi_get_value_bool(env, isTerminated, &terminated)) {}
             if (terminated) {
                 return nullptr;
             }
         }
 
         napi_value trueValue;
-        napi_get_boolean(env, true, &trueValue);
-        napi_set_named_property(env, global, "isTerminating", trueValue);
+        NAPI_GUARD(napi_get_boolean(env, true, &trueValue)) {}
+        NAPI_GUARD(napi_set_named_property(env, global, "isTerminating", trueValue)) {}
 
         napi_value callback;
-        napi_get_named_property(env, global, "onclose", &callback);
+        NAPI_GUARD(napi_get_named_property(env, global, "onclose", &callback)) {}
         if (napi_util::is_of_type(env, callback, napi_function)) {
             napi_value result;
-            napi_call_function(env, global, callback, 0, nullptr, &result);
+            NAPI_GUARD(napi_call_function(env, global, callback, 0, nullptr, &result)) {}
         }
 
         bool pendingException;
-        napi_is_exception_pending(env, &pendingException);
+        NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {}
         if (pendingException) {
             napi_value err;
-            napi_get_and_clear_last_exception(env, &err);
+            NAPI_GUARD(napi_get_and_clear_last_exception(env, &err)) {}
             CallWorkerScopeOnErrorHandle(env, err);
         }
 
@@ -1572,45 +1587,46 @@ napi_value CallbackHandlers::WorkerGlobalCloseCallback(napi_env env, napi_callba
 
 void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value error) {
     try {
+        napi_status status;
         napi_value global;
-        napi_get_global(env, &global);
+        NAPI_GUARD(napi_get_global(env, &global)) {}
 
         napi_value callback;
-        napi_get_named_property(env, global, "onerror", &callback);
+        NAPI_GUARD(napi_get_named_property(env, global, "onerror", &callback)) {}
 
         napi_value message = nullptr;
         napi_value stack = nullptr;
         std::vector<JsStacktraceFrame> frames;
         if (napi_util::is_of_type(env, error, napi_object)) {
             frames = tns::BuildStacktraceFrames(env, error, 1);
-            napi_get_named_property(env, error, "message", &message);
-            napi_get_named_property(env, error, "stack", &stack);
+            NAPI_GUARD(napi_get_named_property(env, error, "message", &message)) {}
+            NAPI_GUARD(napi_get_named_property(env, error, "stack", &stack)) {}
         } else {
-            napi_coerce_to_string(env, error, &message);
-            napi_create_string_utf8(env, "", 0, &stack);
+            NAPI_GUARD(napi_coerce_to_string(env, error, &message)) {}
+            NAPI_GUARD(napi_create_string_utf8(env, "", 0, &stack)) {}
         }
 
         if (napi_util::is_of_type(env, callback, napi_function)) {
             napi_value args[1] = {error};
             napi_value result;
-            napi_call_function(env, global, callback, 1, args, &result);
+            NAPI_GUARD(napi_call_function(env, global, callback, 1, args, &result)) {}
 
             bool pendingException;
-            napi_is_exception_pending(env, &pendingException);
+            NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {}
             if (pendingException) {
                 napi_value perror = nullptr;
                 napi_value pmessage = nullptr;
                 napi_value pstack = nullptr;
-                napi_get_and_clear_last_exception(env, &perror);
+                NAPI_GUARD(napi_get_and_clear_last_exception(env, &perror)) {}
 
                 std::vector<JsStacktraceFrame> pframes;
                 if (napi_util::is_of_type(env, perror, napi_object)) {
                     pframes = tns::BuildStacktraceFrames(env, perror, 1);
-                    napi_get_named_property(env, perror, "message", &pmessage);
-                    napi_get_named_property(env, perror, "stack", &pstack);
+                    NAPI_GUARD(napi_get_named_property(env, perror, "message", &pmessage)) {}
+                    NAPI_GUARD(napi_get_named_property(env, perror, "stack", &pstack)) {}
                 } else {
-                    napi_coerce_to_string(env, perror, &pmessage);
-                    napi_create_string_utf8(env, "", 0, &pstack);
+                    NAPI_GUARD(napi_coerce_to_string(env, perror, &pmessage)) {}
+                    NAPI_GUARD(napi_create_string_utf8(env, "", 0, &pstack)) {}
                 }
 
                 auto line = 0;
@@ -1629,7 +1645,7 @@ void CallbackHandlers::CallWorkerScopeOnErrorHandle(napi_env env, napi_value err
                 }
             } else if (!napi_util::is_null_or_undefined(env, result)) {
                 bool handled;
-                napi_get_value_bool(env, result, &handled);
+                NAPI_GUARD(napi_get_value_bool(env, result, &handled)) {}
                 if (handled) {
                     return;
                 }

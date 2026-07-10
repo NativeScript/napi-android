@@ -52,22 +52,35 @@ JsArgToArrayConverter::JsArgToArrayConverter(napi_env env, size_t argc, napi_val
 
 bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) {
     bool success = false;
+    napi_status status;
     // Error text is built only on failure (avoids a per-call stringstream).
     std::string errMsg;
+
+    // Seed a default diagnostic: the NAPI_GUARD bails below `return false`
+    // without reaching the error-population tail, and the caller loop stops at
+    // the first failing argument, so GetError() always carries a non-empty,
+    // indexed message even on those early-exit paths.
+    m_error.index = index;
+    m_error.msg = "Cannot marshal JavaScript argument at index " +
+                  std::to_string(index) + " to Java type.";
 
     JEnv jEnv;
 
     Type returnType = JType::getClassType(m_return_type);
 
     napi_valuetype argType;
-    napi_typeof(env, arg, &argType);
+    NAPI_GUARD(napi_typeof(env, arg, &argType)) {
+        return false;
+    }
 
     if (argType == napi_undefined || argType == napi_null) {
         SetConvertedObject(jEnv, index, nullptr);
         success = true;
     } else if (argType == napi_number) {
         double d;
-        napi_get_value_double(env, arg, &d);
+        NAPI_GUARD(napi_get_value_double(env, arg, &d)) {
+            return false;
+        }
         int64_t i = (int64_t) d;
 
         bool isWholeNumber = d == i;
@@ -99,7 +112,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
         }
     } else if (argType == napi_boolean) {
         bool value;
-        napi_get_value_bool(env, arg, &value);
+        NAPI_GUARD(napi_get_value_bool(env, arg, &value)) {
+            return false;
+        }
         auto javaObject = JType::NewBoolean(jEnv, value);
         SetConvertedObject(jEnv, index, javaObject);
         success = true;
@@ -113,6 +128,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
         CastType castType = CastType::None;
 #ifdef USE_HOST_OBJECT
+        // A non-ok status here just means "not a host object" (some engines,
+        // e.g. PrimJS, return an error rather than data=NULL for plain objects);
+        // treat it as no host data and continue.
         void *data = nullptr;
         napi_get_host_object_data(env, jsObj, &data);
         if (data) {
@@ -200,7 +218,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                         longValue = atoll(strValue.c_str());
                     } else {
                         int64_t longArg;
-                        napi_get_value_int64(env, castValue, &longArg);
+                        NAPI_GUARD(napi_get_value_int64(env, castValue, &longArg)) {
+                            return false;
+                        }
                         longValue = (jlong) longArg;
                     }
                 }
@@ -214,7 +234,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 floatValue = 0;
                 if (castValue != nullptr) {
                     double floatArg;
-                    napi_get_value_double(env, castValue, &floatArg);
+                    NAPI_GUARD(napi_get_value_double(env, castValue, &floatArg)) {
+                        return false;
+                    }
                     floatValue = (jfloat) floatArg;
                 }
                 javaObject = JType::NewFloat(jEnv, floatValue);
@@ -227,7 +249,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 doubleValue = 0;
                 if (castValue != nullptr) {
                     double doubleArg;
-                    napi_get_value_double(env, castValue, &doubleArg);
+                    NAPI_GUARD(napi_get_value_double(env, castValue, &doubleArg)) {
+                        return false;
+                    }
                     doubleValue = (jdouble) doubleArg;
                 }
                 javaObject = JType::NewDouble(jEnv, doubleValue);
@@ -244,11 +268,17 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     bool isDataView = false;
                     bool isTypedArray = false;
 
-                    napi_is_arraybuffer(env, jsObj, &isArrayBuffer);
+                    NAPI_GUARD(napi_is_arraybuffer(env, jsObj, &isArrayBuffer)) {
+                        return false;
+                    }
                     if (!isArrayBuffer) {
-                        napi_is_typedarray(env, jsObj, &isTypedArray);
+                        NAPI_GUARD(napi_is_typedarray(env, jsObj, &isTypedArray)) {
+                            return false;
+                        }
                         if (!isTypedArray) {
-                            napi_is_dataview(env, jsObj, &isDataView);
+                            NAPI_GUARD(napi_is_dataview(env, jsObj, &isDataView)) {
+                                return false;
+                            }
                         }
                     }
 
@@ -263,10 +293,14 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                 if (!data) {
 #endif
                     napi_value privateValue;
-                    napi_get_named_property(env, jsObj, PROP_KEY_NULL_NODE_NAME, &privateValue);
+                    NAPI_GUARD(napi_get_named_property(env, jsObj, PROP_KEY_NULL_NODE_NAME, &privateValue)) {
+                        return false;
+                    }
                     if (!napi_util::is_null_or_undefined(env, privateValue)) {
                         void *data = nullptr;
-                        napi_get_value_external(env, privateValue, &data);
+                        NAPI_GUARD(napi_get_value_external(env, privateValue, &data)) {
+                            return false;
+                        }
                         auto node = reinterpret_cast<MetadataNode *>(data);
                         if (node == nullptr) {
                             errMsg = "Cannot get type of the null argument at index " +
@@ -308,14 +342,18 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                         bool isFloat = napi_util::is_float(env, numValue);
                         if (isFloat) {
                             double floatArg;
-                            napi_get_value_double(env, numValue, &floatArg);
+                            NAPI_GUARD(napi_get_value_double(env, numValue, &floatArg)) {
+                                return false;
+                            }
                             jfloat value = (jfloat) floatArg;
                             javaObject = JType::NewFloat(jEnv, value);
                             SetConvertedObject(jEnv, index, javaObject);
                             success = true;
                         } else {
                             int intArg;
-                            napi_get_value_int32(env, numValue, &intArg);
+                            NAPI_GUARD(napi_get_value_int32(env, numValue, &intArg)) {
+                                return false;
+                            }
                             jint value = (jint) intArg;
                             javaObject = JType::NewInt(jEnv, value);
                             SetConvertedObject(jEnv, index, javaObject);
@@ -339,7 +377,9 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
                     if (!success) {
                         napi_value objStr;
-                        napi_coerce_to_string(env, jsObj, &objStr);
+                        NAPI_GUARD(napi_coerce_to_string(env, jsObj, &objStr)) {
+                            return false;
+                        }
                         const char *objStrValue = napi_util::get_string_value(env, objStr);
                         stringstream s;
                         s << "Cannot marshal JavaScript argument " << objStrValue << " at index "
@@ -361,7 +401,10 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
     if (!success) {
         m_error.index = index;
-        m_error.msg = std::move(errMsg);
+        // Keep the seeded default when no specific message was built.
+        if (!errMsg.empty()) {
+            m_error.msg = std::move(errMsg);
+        }
     }
 
     return success;
