@@ -618,7 +618,7 @@ ObjectManager::GetJSInstanceInfoFromRuntimeObject(napi_value object) {
     }
 
     if (!napi_util::is_null_or_undefined(m_env, jsInfo)) {
-        void *data;
+        void *data = nullptr;
         napi_get_value_external(m_env, jsInfo, &data);
         auto info = reinterpret_cast<JSInstanceInfo *>(data);
         return info;
@@ -898,7 +898,7 @@ void ObjectManager::ReleaseNativeObject(napi_env env, napi_value object) {
     JSInstanceInfo *jsInstanceInfo;
 
 #ifdef USE_HOST_OBJECT
-    void* data;
+    void* data = nullptr;
     napi_get_host_object_data(env, object, &data);
     if (data) {
         jsInstanceInfo = reinterpret_cast<HostObjectProxy *>(data)->instanceInfo;

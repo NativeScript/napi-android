@@ -113,7 +113,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
 
         CastType castType = CastType::None;
 #ifdef USE_HOST_OBJECT
-        void *data;
+        void *data = nullptr;
         napi_get_host_object_data(env, jsObj, &data);
         if (data) {
             castType = CastType::None;
@@ -265,7 +265,7 @@ bool JsArgToArrayConverter::ConvertArg(napi_env env, napi_value arg, int index) 
                     napi_value privateValue;
                     napi_get_named_property(env, jsObj, PROP_KEY_NULL_NODE_NAME, &privateValue);
                     if (!napi_util::is_null_or_undefined(env, privateValue)) {
-                        void *data;
+                        void *data = nullptr;
                         napi_get_value_external(env, privateValue, &data);
                         auto node = reinterpret_cast<MetadataNode *>(data);
                         if (node == nullptr) {

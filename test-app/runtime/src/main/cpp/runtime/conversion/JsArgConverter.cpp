@@ -146,7 +146,7 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                 CastType castType = CastType::None;
 
 #ifdef USE_HOST_OBJECT
-                void *data;
+                void *data = nullptr;
                 napi_get_host_object_data(env, arg, &data);
                 if (data) {
                     castType = CastType::None;
@@ -157,6 +157,10 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                 castType = NumericCasts::GetCastType(m_env, arg);
 #endif
 
+                CastType castTypeCheck = NumericCasts::GetCastType(env, arg);
+                if (castTypeCheck != CastType::None) {
+                    castType = castTypeCheck;
+                }
                 napi_value castValue;
                 napi_valuetype valueType = napi_undefined;
                 if (castType != CastType::None) {
@@ -164,7 +168,6 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                     if (castValue != nullptr) {
                         napi_typeof(env, castValue, &valueType);
                     }
-
                 }
 
                 JniLocalRef obj;

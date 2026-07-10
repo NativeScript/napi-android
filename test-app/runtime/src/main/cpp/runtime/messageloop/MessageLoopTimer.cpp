@@ -36,7 +36,7 @@ void MessageLoopTimer::RegisterStartStopFunctions(napi_env env) {
 
 napi_value MessageLoopTimer::StartCallback(napi_env env, napi_callback_info info) {
 
-    void * data;
+    void * data = nullptr;
     napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
 
     auto self = static_cast<MessageLoopTimer *>(data);
@@ -69,7 +69,7 @@ napi_value MessageLoopTimer::StartCallback(napi_env env, napi_callback_info info
 }
 
 napi_value MessageLoopTimer::StopCallback(napi_env env, napi_callback_info info) {
-    void * data;
+    void * data = nullptr;
     napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
     auto self = static_cast<MessageLoopTimer *>(data);
 

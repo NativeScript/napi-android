@@ -49,7 +49,7 @@ namespace {
     URLPattern *GetInstance(napi_env env, napi_callback_info info) {
         size_t argc = 0;
         napi_value jsThis;
-        void *data;
+        void *data = nullptr;
         if (napi_get_cb_info(env, info, &argc, nullptr, &jsThis, &data) != napi_ok) {
             return nullptr;
         }

@@ -233,7 +233,7 @@ napi_value Timers::SetIntervalCallback(napi_env env, napi_callback_info info) {
 napi_value Timers::ClearTimer(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    void *data;
+    void *data = nullptr;
     napi_get_cb_info(env, info, &argc, args, nullptr, &data);
 
     int id = -1;

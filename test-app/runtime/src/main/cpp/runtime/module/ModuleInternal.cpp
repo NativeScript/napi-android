@@ -177,7 +177,7 @@ napi_value ModuleInternal::RequireCallbackImpl(napi_env env, napi_callback_info 
 }
 
 napi_value ModuleInternal::RequireNativeCallback(napi_env env, napi_callback_info info) {
-    void* data;
+    void* data = nullptr;
     napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
     auto cb = reinterpret_cast<napi_register_module_v *>(data);
     napi_value exports;

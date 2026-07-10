@@ -155,7 +155,7 @@ private:
 
             if (!napi_util::is_null_or_undefined(env, nullNode))
             {
-                void *data;
+                void *data = nullptr;
                 napi_get_value_external(env, nullNode, &data);
                 auto treeNode = reinterpret_cast<MetadataNode *>(data);
 

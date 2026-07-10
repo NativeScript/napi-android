@@ -9,7 +9,7 @@ namespace {
     URL *GetInstance(napi_env env, napi_callback_info info) {
         NAPI_PREAMBLE
         napi_value jsThis;
-        void *data;
+        void *data = nullptr;
         NAPI_GUARD(napi_get_cb_info(env, info, nullptr, nullptr, &jsThis, &data)) {
             return nullptr;
         }

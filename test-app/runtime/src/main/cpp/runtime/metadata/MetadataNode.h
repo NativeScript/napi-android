@@ -39,7 +39,7 @@ public:
         // interceptor-forwarded "#instance_metadata" property get.
         return tns::Runtime::GetRuntime(env)->GetObjectManager()->GetInstanceNode(object);
 #else
-        void *node;
+        void *node = nullptr;
         napi_value external;
         napi_get_named_property(env, object, "#instance_metadata", &external);
 
