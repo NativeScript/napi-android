@@ -13,6 +13,7 @@ JSR::JSR() {
             .withMicrotaskQueue(true)
             .withES6BlockScoping(true)
             .withEnableAsyncGenerators(true)
+            .withAsyncBreakCheckInEval(true)
             .build();
 
     threadSafeRuntime = facebook::hermes::makeThreadSafeHermesRuntime(config);
