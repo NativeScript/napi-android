@@ -265,7 +265,6 @@ typedef struct napi_env__ {
     JsAtoms atoms;
     ExternalInfo *gcBefore;
     ExternalInfo *gcAfter;
-    int js_enter_state;
     int64_t usedMemory;
 } napi_env__;
 
@@ -296,20 +295,13 @@ typedef struct ExternalBufferInfo {
 } ExternalBufferInfo;
 
 /**
- * -------------------------------------
- *           MICROTASK HANDLING
- * -------------------------------------
+ * MICROTASK HANDLING
+ *
+ * The microtask queue is drained by NapiScope (see quickjs/jsr.h) once the
+ * native call stack fully unwinds back out of JS — the same scope-depth model
+ * used by the Hermes and PrimJS engines. qjs_execute_pending_jobs below is the
+ * pump it calls; there is no longer any per-napi-call js_enter/js_exit here.
  */
-
-static inline void js_enter(napi_env env) {
-    env->js_enter_state++;
-}
-
-static inline void js_exit(napi_env env) {
-    if (--env->js_enter_state <= 0) {
-        qjs_execute_pending_jobs(env);
-    }
-}
 
 /**
  * --------------------------------------
@@ -3133,7 +3125,6 @@ napi_status napi_call_function(napi_env env, napi_value thisValue, napi_value fu
         jsThis = JS_GetGlobalObject(env->context);
     }
 
-    js_enter(env);
     JSValue *args = NULL;
     JSValue returnValue;
 
@@ -3158,8 +3149,6 @@ napi_status napi_call_function(napi_env env, napi_value thisValue, napi_value fu
         returnValue = JS_Call(env->context, jsFunction, jsThis, 0,
                               NULL);
     }
-
-    js_exit(env);
 
     if (useGlobal) JS_FreeValue(env->context, jsThis);
 
@@ -3339,7 +3328,6 @@ napi_new_instance(napi_env env, napi_value constructor, size_t argc, const napi_
     CHECK_ARG(constructor)
     CHECK_ARG(result)
 
-    js_enter(env);
     JSValue *args = NULL;
     JSValue returnValue;
 
@@ -3363,8 +3351,6 @@ napi_new_instance(napi_env env, napi_value constructor, size_t argc, const napi_
         returnValue = JS_CallConstructor(env->context, *((JSValue *) constructor), (int) argc,
                                          args);
     }
-
-    js_exit(env);
 
 
     if (JS_IsException(returnValue)) {
@@ -3412,10 +3398,11 @@ CallConstructor(JSContext *context, JSValueConst newTarget, int argc, JSValueCon
     JSValue returnValue = JS_UNDEFINED;
 
     if (result) {
-        returnValue = *((JSValue *) result);
-        JS_DupValue(env->context, returnValue);
-        JS_FreeValue(env->context, thisValue);
+        returnValue = JS_DupValue(env->context, *((JSValue *) result));
     }
+    // Always release the trampoline-created `this`; a null result (callback
+    // returned undefined or bailed) previously leaked it.
+    JS_FreeValue(env->context, thisValue);
 
     assert(LIST_FIRST(&env->handleScopeList) == &handleScope &&
            "napi_close_handle_scope() or napi_close_escapable_handle_scope() should follow FILO rule.");
@@ -3517,7 +3504,7 @@ napi_wrap(napi_env env, napi_value jsObject, void *nativeObject, napi_finalize f
 
     externalInfo->data = nativeObject;
     externalInfo->finalizeHint = finalize_hint;
-    externalInfo->finalizeCallback = NULL;
+    externalInfo->finalizeCallback = finalize_cb;
 
     JSValue external = JS_NewObjectClass(env->context, (int) env->runtime->externalClassId);
 
@@ -3751,10 +3738,8 @@ napi_status napi_resolve_deferred(napi_env env, napi_deferred deferred, napi_val
     if (resolution != NULL) {
         value = *((JSValue *) resolution);
     }
-    js_enter(env);
     JSValue jsResult = JS_Call(env->context, *((JSValue *) deferred->resolve), JS_UNDEFINED, 1,
                                &value);
-    js_exit(env);
     JS_FreeValue(env->context, jsResult);
 
     return napi_clear_last_error(env);
@@ -3768,10 +3753,8 @@ napi_status napi_reject_deferred(napi_env env, napi_deferred deferred, napi_valu
     if (rejection != NULL) {
         value = *((JSValue *) rejection);
     }
-    js_enter(env);
     JSValue jsResult = JS_Call(env->context, *((JSValue *) deferred->reject), JS_UNDEFINED, 1,
                                &value);
-    js_exit(env);
     JS_FreeValue(env->context, jsResult);
 
     return napi_clear_last_error(env);
@@ -4196,8 +4179,6 @@ napi_status qjs_create_napi_env(napi_env *env, napi_runtime runtime) {
 
     (*env)->context = context;
 
-    (*env)->js_enter_state = 0;
-
     JS_SetRuntimeOpaque(runtime->runtime, *env);
 
     // Create runtime atoms
@@ -4389,10 +4370,8 @@ napi_status qjs_execute_script(napi_env env,
 
     JSValue eval_result;
     const char *cScript = JS_ToCString(env->context, *((JSValue *) script));
-    js_enter(env);
     eval_result = JS_Eval(env->context, cScript, strlen(cScript), file, JS_EVAL_TYPE_GLOBAL);
     JS_FreeCString(env->context, cScript);
-    js_exit(env);
     if (JS_IsException(eval_result)) {
         const char *exceptionMessage = JS_ToCString(env->context, eval_result);
         napi_set_last_error(env, napi_cannot_run_js, exceptionMessage, 0, NULL);
