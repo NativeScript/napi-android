@@ -889,7 +889,7 @@ napi_status napi_get_reference_value(napi_env env, napi_ref ref, napi_value *res
     CHECK_ARG(result)
 
     if (!ref->referenceCount && JS_IsUndefined(ref->value)) {
-        CreateScopedResult(env, JS_UNDEFINED, result);
+        return CreateScopedResult(env, JS_UNDEFINED, result);
     }
 
     JSValue value;
@@ -1270,7 +1270,9 @@ napi_create_external(napi_env env, void *data, napi_finalize finalize_cb, void *
 
     JS_SetOpaque(object, externalInfo);
 
-    napi_status status = CreateScopedResult(env, object, result);
+    // On failure CreateScopedResult frees `object`, which runs the external
+    // finalizer and frees `externalInfo`; do not touch it afterwards.
+    CHECK_NAPI(CreateScopedResult(env, object, result));
 
     externalInfo->finalizeCallback = finalize_cb;
 
@@ -1784,7 +1786,7 @@ napi_status napi_get_typedarray_info(napi_env env,
         }
 
         if (arraybuffer) {
-            CreateScopedResult(env, jsArrayBuffer, arraybuffer);
+            CHECK_NAPI(CreateScopedResult(env, jsArrayBuffer, arraybuffer));
         } else {
             JS_FreeValue(env->context, jsArrayBuffer);
         }
@@ -1830,7 +1832,7 @@ napi_status napi_get_dataview_info(napi_env env,
         }
 
         if (arraybuffer) {
-            CreateScopedResult(env, jsArrayBuffer, arraybuffer);
+            CHECK_NAPI(CreateScopedResult(env, jsArrayBuffer, arraybuffer));
         } else {
             JS_FreeValue(env->context, jsArrayBuffer);
         }
@@ -2981,7 +2983,7 @@ napi_status napi_delete_element(napi_env env, napi_value object, uint32_t index,
     return napi_clear_last_error(env);
 }
 
-static inline void
+static inline napi_status
 napi_set_property_descriptor(napi_env env, napi_value object, napi_property_descriptor descriptor) {
     JSAtom key;
 
@@ -3016,7 +3018,12 @@ napi_set_property_descriptor(napi_env env, napi_value object, napi_property_desc
     } else if (descriptor.method) {
         flags |= JS_PROP_HAS_VALUE;
         napi_value function = NULL;
-        napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH, descriptor.method, descriptor.data, &function);
+        napi_status status = napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH,
+                                                  descriptor.method, descriptor.data, &function);
+        if (status != napi_ok) {
+            JS_FreeAtom(env->context, key);
+            return napi_set_last_error(env, status, NULL, 0, NULL);
+        }
         if (function) {
             value = *((JSValue *) function);
         }
@@ -3024,7 +3031,12 @@ napi_set_property_descriptor(napi_env env, napi_value object, napi_property_desc
         if (descriptor.getter) {
             napi_value getter = NULL;
             flags |= JS_PROP_HAS_GET;
-            napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH, descriptor.getter, descriptor.data, &getter);
+            napi_status status = napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH,
+                                                      descriptor.getter, descriptor.data, &getter);
+            if (status != napi_ok) {
+                JS_FreeAtom(env->context, key);
+                return napi_set_last_error(env, status, NULL, 0, NULL);
+            }
             if (getter) {
                 getterValue = *((JSValue *) getter);
             }
@@ -3033,7 +3045,12 @@ napi_set_property_descriptor(napi_env env, napi_value object, napi_property_desc
         if (descriptor.setter) {
             napi_value setter = NULL;
             flags |= JS_PROP_HAS_SET;
-            napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH, descriptor.setter, descriptor.data, &setter);
+            napi_status status = napi_create_function(env, descriptor.utf8name, NAPI_AUTO_LENGTH,
+                                                      descriptor.setter, descriptor.data, &setter);
+            if (status != napi_ok) {
+                JS_FreeAtom(env->context, key);
+                return napi_set_last_error(env, status, NULL, 0, NULL);
+            }
             if (setter) {
                 setterValue = *((JSValue *) setter);
             }
@@ -3042,6 +3059,8 @@ napi_set_property_descriptor(napi_env env, napi_value object, napi_property_desc
 
     JS_DefineProperty(env->context, jsObject, key, value, getterValue, setterValue, flags);
     JS_FreeAtom(env->context, key);
+
+    return napi_clear_last_error(env);
 }
 
 napi_status napi_define_properties(napi_env env, napi_value object, size_t property_count,
@@ -3057,7 +3076,7 @@ napi_status napi_define_properties(napi_env env, napi_value object, size_t prope
     }
 
     for (size_t i = 0; i < property_count; i++) {
-        napi_set_property_descriptor(env, object, properties[i]);
+        CHECK_NAPI(napi_set_property_descriptor(env, object, properties[i]));
     }
 
     return napi_clear_last_error(env);
@@ -3455,10 +3474,17 @@ napi_status napi_define_class(napi_env env,
     JS_SetConstructor(env->context, cls, prototype);
 
     for (size_t i = 0; i < property_count; i++) {
+        napi_status status;
         if (properties[i].attributes & napi_static) {
-            napi_set_property_descriptor(env, (napi_value) &cls, properties[i]);
+            status = napi_set_property_descriptor(env, (napi_value) &cls, properties[i]);
         } else {
-            napi_set_property_descriptor(env, (napi_value) &prototype, properties[i]);
+            status = napi_set_property_descriptor(env, (napi_value) &prototype, properties[i]);
+        }
+        if (status != napi_ok) {
+            JS_FreeValue(env->context, external);
+            JS_FreeValue(env->context, prototype);
+            JS_FreeValue(env->context, cls);
+            return napi_set_last_error(env, status, NULL, 0, NULL);
         }
     }
 
@@ -3507,7 +3533,7 @@ napi_wrap(napi_env env, napi_value jsObject, void *nativeObject, napi_finalize f
 
     if (result) {
         napi_ref ref;
-        napi_create_reference(env, jsObject, 0, &ref);
+        CHECK_NAPI(napi_create_reference(env, jsObject, 0, &ref));
         *result = ref;
     }
 
@@ -3636,7 +3662,7 @@ napi_add_finalizer(napi_env env, napi_value jsObject, void *nativeObject, napi_f
 
     if (result) {
         napi_ref ref;
-        napi_create_reference(env, jsObject, 0, &ref);
+        CHECK_NAPI(napi_create_reference(env, jsObject, 0, &ref));
         *result = ref;
     }
 
@@ -4376,7 +4402,7 @@ napi_status qjs_execute_script(napi_env env,
     }
 
     if (result) {
-        CreateScopedResult(env, eval_result, result);
+        CHECK_NAPI(CreateScopedResult(env, eval_result, result));
     } else {
         JS_FreeValue(env->context, eval_result);
     }
