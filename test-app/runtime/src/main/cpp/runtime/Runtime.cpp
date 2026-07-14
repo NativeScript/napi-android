@@ -555,14 +555,22 @@ void Runtime::DisposeWorkerRuntime(Runtime *runtime) {
 jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     int status;
     auto filename = ArgConverter::jstringToString(scriptFile);
-    auto src = ReadFileText(filename);
-
-    napi_value soureCode;
-    NAPI_GUARD(napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode)) { return nullptr; }
+    auto sourceUrl = ModuleInternal::EnsureFileProtocol(filename);
 
     napi_value result;
     DEBUG_WRITE("%s", filename.c_str());
-    status = js_execute_script(env, soureCode, ModuleInternal::EnsureFileProtocol(filename).c_str(), &result);
+
+    // Raw scripts (e.g. internal/ts_helpers.js) are run unwrapped, so the build
+    // compiles them to bytecode as-is. Run that bytecode directly when present.
+    status = js_run_bytecode_file(env, filename.c_str(), sourceUrl.c_str(), &result);
+    if (status == napi_cannot_run_js) {
+        auto src = ReadFileText(filename);
+
+        napi_value soureCode;
+        NAPI_GUARD(napi_create_string_utf8(env, src.c_str(), src.length(), &soureCode)) { return nullptr; }
+
+        status = js_execute_script(env, soureCode, sourceUrl.c_str(), &result);
+    }
 
     bool pendingException;
     napi_is_exception_pending(env, &pendingException);

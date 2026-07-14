@@ -1,5 +1,7 @@
 #include "jsr.h"
 #include "File.h"
+#include <cstdio>
+#include <cstring>
 
 std::unordered_map<napi_env, JSR *> JSR::env_to_jsr_cache;
 
@@ -155,6 +157,47 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
         env, static_cast<const uint8_t *>(data), static_cast<size_t>(length),
         [](const uint8_t *d, size_t, void *) { delete[] const_cast<uint8_t *>(d); },
         nullptr, file, &flags, result);
+}
+
+// Magic that prefixes every Hermes bytecode (HBC) file. Stored little-endian as
+// the first 8 bytes; see hermes BytecodeFileFormat.h (MAGIC).
+static constexpr uint64_t HERMES_BYTECODE_MAGIC = 0x1F1903C103BC1FC6ull;
+
+napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url,
+                                 napi_value *result) {
+    // Cheaply peek the header first so that when a module is plain source (e.g.
+    // bytecode generation was disabled for this build) we don't read the whole
+    // — potentially multi-MB — file just to reject it; the source path re-reads
+    // it as text.
+    uint8_t header[sizeof(HERMES_BYTECODE_MAGIC)];
+    FILE *fp = fopen(file, "rb");
+    if (!fp) {
+        return napi_cannot_run_js;
+    }
+    size_t bytesRead = fread(header, 1, sizeof(header), fp);
+    fclose(fp);
+    if (bytesRead < sizeof(header) ||
+        memcmp(header, &HERMES_BYTECODE_MAGIC, sizeof(header)) != 0) {
+        return napi_cannot_run_js;
+    }
+
+    int length = 0;
+    // tns::File::ReadBinary allocates with new uint8_t[length].
+    auto data = tns::File::ReadBinary(file, length);
+    if (!data) {
+        return napi_cannot_run_js;
+    }
+
+    hermes_bytecode_flags flags{};
+    flags.struct_size = sizeof(flags);
+    // App modules live for the whole runtime lifetime, so keep the bytecode
+    // resident and let Hermes reference it zero-copy for faster loads.
+    flags.persistent = true;
+    // Hermes takes ownership of the buffer and frees it via the finalizer.
+    return hermes_run_bytecode(
+        env, static_cast<const uint8_t *>(data), static_cast<size_t>(length),
+        [](const uint8_t *d, size_t, void *) { delete[] const_cast<uint8_t *>(d); },
+        nullptr, source_url, &flags, result);
 }
 
 napi_status js_get_runtime_version(napi_env env, napi_value *version) {

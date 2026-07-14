@@ -397,10 +397,19 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     napi_value moduleFunc;
 
     if (Util::EndsWith(modulePath, ".js")) {
-        napi_value script = LoadScript(env, modulePath, fullRequiredModulePath);
         DEBUG_WRITE("%s", modulePath.c_str());
 
-        status = js_execute_script(env, script, EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
+        // Fast path: if the build compiled this module to engine bytecode (release
+        // builds, when the engine supports it), run it directly. The bytecode is
+        // the compiled form of the *wrapped* module content, so running it yields
+        // the same wrapper function js_execute_script would return for the source.
+        status = js_run_bytecode_file(env, modulePath.c_str(),
+                                      EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
+        if (status == napi_cannot_run_js) {
+            // Not bytecode — compile and run the source as usual.
+            napi_value script = LoadScript(env, modulePath, fullRequiredModulePath);
+            status = js_execute_script(env, script, EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
+        }
         if (status != napi_ok) {
             bool pendingException;
             NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {}

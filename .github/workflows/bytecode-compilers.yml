@@ -1,0 +1,277 @@
+name: Build bytecode compilers
+
+# Builds the per-host bytecode compiler CLIs for every engine that supports
+# ahead-of-time bytecode, by cloning each engine's UPSTREAM repo (not the
+# android-runtime vendored sources) and building the CLI there.
+#
+# Output: one artifact per (engine, host), named `bytecode-compiler-<engine>-<host>`,
+# each containing `<engine>/<host>/<binary>` so the downloads merge straight into
+# tools/bytecode-compiler/bin/.
+#
+# NOTE ON COMPATIBILITY: the produced bytecode must be loadable by the engine
+# library the runtime ships. Hermes/PrimJS runtimes link prebuilt .so's and
+# QuickJS/QuickJS-NG compile from vendored source, so the refs below must be kept
+# in step with what the runtime actually bundles. Pin these to exact commits once
+# validated instead of moving branches.
+on:
+  workflow_dispatch:
+    inputs:
+      hermes_ref:
+        description: "facebook/hermes ref"
+        default: "10a40b5f1de81d007cba6afe567c4ba7a0b45f5d"
+      quickjs_ref:
+        # MUST match the quickjs submodule pin (BC_VERSION must agree with the
+        # runtime). See .gitmodules / scripts/vendor-engines-as-submodules.sh.
+        description: "bellard/quickjs ref (match the submodule pin)"
+        default: "04be246001599f5995fa2f2d8c91a0f198d3f34c"
+      quickjs_ng_ref:
+        # MUST match the quickjs_ng submodule pin (BC_VERSION must agree with the
+        # runtime, or JS_ReadObject rejects the blob). See .gitmodules /
+        # scripts/vendor-engines-as-submodules.sh.
+        description: "quickjs-ng/quickjs ref (match the submodule pin)"
+        default: "d950d55e950dd7994a96c669c31efa967b8b79f3"
+      primjs_ref:
+        description: "lynx-family/primjs ref"
+        default: "9c1fe150179b86f0ae5c6fbe670af7d76eca9df6"
+
+env:
+  HERMES_REPO: https://github.com/facebook/hermes
+  QUICKJS_REPO: https://github.com/bellard/quickjs
+  QUICKJS_NG_REPO: https://github.com/quickjs-ng/quickjs
+  PRIMJS_REPO: https://github.com/lynx-family/primjs
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Hermes — `hermesc` already emits a loadable HBC blob; no shim needed.
+  # ---------------------------------------------------------------------------
+  hermes:
+    name: hermes (${{ matrix.host }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { host: linux-x64,    runner: ubuntu-24.04 }
+          - { host: linux-arm64,  runner: ubuntu-24.04-arm }
+          - { host: darwin-x64,   runner: macos-13 }
+          - { host: darwin-arm64, runner: macos-14 }
+          - { host: win32-x64,    runner: windows-2022 }
+          - { host: win32-arm64,  runner: windows-11-arm }
+    steps:
+      - name: Install toolchain (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential python3
+      - name: Install toolchain (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja
+      - name: Install toolchain (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja -y
+
+      - name: Clone Hermes
+        shell: bash
+        run: git clone --depth 1 --branch "${{ github.event.inputs.hermes_ref || 'master' }}" "$HERMES_REPO" hermes
+
+      - name: Build hermesc (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cmake -S hermes -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHERMES_BUILD_APPLE_FRAMEWORK=OFF
+          cmake --build build --target hermesc
+
+      - name: Build hermesc (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          # Use the default (Visual Studio) generator; Ninja+MSVC also works if the
+          # VS dev environment is on PATH.
+          cmake -S hermes -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target hermesc --config Release
+
+      - name: Stage binary
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "out/hermes/${{ matrix.host }}"
+          bin="$(find build -type f \( -name hermesc -o -name hermesc.exe \) | head -n1)"
+          test -n "$bin"
+          cp "$bin" "out/hermes/${{ matrix.host }}/"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bytecode-compiler-hermes-${{ matrix.host }}
+          path: out/hermes/${{ matrix.host }}
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # QuickJS (bellard) — build the engine lib, then our blob-emitting shim.
+  # ---------------------------------------------------------------------------
+  quickjs:
+    name: quickjs (${{ matrix.host }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { host: linux-x64,    runner: ubuntu-24.04 }
+          - { host: linux-arm64,  runner: ubuntu-24.04-arm }
+          - { host: darwin-x64,   runner: macos-13 }
+          - { host: darwin-arm64, runner: macos-14 }
+          - { host: win32-x64,    runner: windows-2022 }
+          - { host: win32-arm64,  runner: windows-11-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential
+      - name: Install toolchain (Windows)
+        if: runner.os == 'Windows'
+        run: choco install llvm -y
+
+      - name: Clone QuickJS
+        shell: bash
+        run: git clone --depth 1 --branch "${{ github.event.inputs.quickjs_ref || 'master' }}" "$QUICKJS_REPO" quickjs
+
+      - name: Build shim
+        shell: bash
+        env:
+          SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/qjs-compile.c
+        run: |
+          set -euxo pipefail
+          cd quickjs
+          CC="cc"; [ "${{ runner.os }}" = "Windows" ] && CC="clang"
+          # Compile the lib sources directly (avoids qjs/qjsc main() collisions).
+          # If bellard changes the source set, adjust this list.
+          libsrc="quickjs.c cutils.c libregexp.c libunicode.c"
+          [ -f dtoa.c ] && libsrc="$libsrc dtoa.c"
+          out="../out/quickjs/${{ matrix.host }}"; mkdir -p "$out"
+          bin="$out/nsbc-quickjs"; [ "${{ runner.os }}" = "Windows" ] && bin="$bin.exe"
+          $CC -O2 -DNSBC_MAGIC='"NSBCQJS"' -I. -o "$bin" "$SHIM" $libsrc -lm
+          "$bin" || true  # usage line (exit 2) proves it links & runs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bytecode-compiler-quickjs-${{ matrix.host }}
+          path: out/quickjs/${{ matrix.host }}
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # QuickJS-NG — CMake build of libqjs, then our shim (same JS_* API).
+  # ---------------------------------------------------------------------------
+  quickjs-ng:
+    name: quickjs-ng (${{ matrix.host }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { host: linux-x64,    runner: ubuntu-24.04 }
+          - { host: linux-arm64,  runner: ubuntu-24.04-arm }
+          - { host: darwin-x64,   runner: macos-13 }
+          - { host: darwin-arm64, runner: macos-14 }
+          - { host: win32-x64,    runner: windows-2022 }
+          - { host: win32-arm64,  runner: windows-11-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential
+      - name: Install toolchain (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja
+      - name: Install toolchain (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja llvm -y
+
+      - name: Clone QuickJS-NG
+        shell: bash
+        run: git clone --depth 1 --branch "${{ github.event.inputs.quickjs_ng_ref || 'master' }}" "$QUICKJS_NG_REPO" quickjs-ng
+
+      - name: Build lib + shim
+        shell: bash
+        env:
+          SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/qjs-compile.c
+        run: |
+          set -euxo pipefail
+          cmake -S quickjs-ng -B quickjs-ng/build -DCMAKE_BUILD_TYPE=Release -DBUILD_QJS_LIBC=OFF
+          cmake --build quickjs-ng/build --config Release
+          lib="$(find quickjs-ng/build -type f \( -name 'libqjs.a' -o -name 'qjs.lib' \) | head -n1)"
+          test -n "$lib"
+          CC="cc"; [ "${{ runner.os }}" = "Windows" ] && CC="clang"
+          out="out/quickjs-ng/${{ matrix.host }}"; mkdir -p "$out"
+          bin="$out/nsbc-quickjs-ng"; [ "${{ runner.os }}" = "Windows" ] && bin="$bin.exe"
+          $CC -O2 -DNSBC_MAGIC='"NSBCNGS"' -I quickjs-ng -o "$bin" "$SHIM" "$lib" -lm
+          "$bin" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bytecode-compiler-quickjs-ng-${{ matrix.host }}
+          path: out/quickjs-ng/${{ matrix.host }}
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # PrimJS — build the engine, then our LEPUS_* shim.
+  # NOTE: PrimJS's build system is nonstandard; the steps below are best-effort
+  # and will very likely need adjustment against lynx-family/primjs@develop
+  # (its actual CMake targets / include + lib paths). Treat the first CI run as
+  # the source of truth and pin once green.
+  # ---------------------------------------------------------------------------
+  primjs:
+    name: primjs (${{ matrix.host }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { host: linux-x64,    runner: ubuntu-24.04 }
+          - { host: linux-arm64,  runner: ubuntu-24.04-arm }
+          - { host: darwin-x64,   runner: macos-13 }
+          - { host: darwin-arm64, runner: macos-14 }
+          - { host: win32-x64,    runner: windows-2022 }
+          - { host: win32-arm64,  runner: windows-11-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential python3
+      - name: Install toolchain (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja
+      - name: Install toolchain (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ninja llvm -y
+
+      - name: Clone PrimJS
+        shell: bash
+        run: |
+          git clone --depth 1 --branch "${{ github.event.inputs.primjs_ref || 'develop' }}" "$PRIMJS_REPO" primjs
+          # PrimJS vendors deps via a script in some layouts; run it if present.
+          if [ -f primjs/tools/hooks/generate_gni.py ]; then python3 primjs/tools/hooks/generate_gni.py || true; fi
+
+      - name: Build engine + shim
+        shell: bash
+        env:
+          SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/primjs-compile.c
+        run: |
+          set -euxo pipefail
+          # Best-effort CMake build of the PrimJS/quickjs static lib. Adjust the
+          # target and include/lib paths to match the repo once observed in CI.
+          cmake -S primjs -B primjs/build -DCMAKE_BUILD_TYPE=Release || {
+            echo "::warning::PrimJS cmake configure needs adjustment for this repo layout"; exit 1; }
+          cmake --build primjs/build --config Release
+          lib="$(find primjs/build -type f \( -name 'libquick*.a' -o -name 'libprimjs*.a' -o -name '*.lib' \) | head -n1)"
+          inc="$(dirname "$(find primjs -name quickjs.h | head -n1)")"
+          test -n "$lib" && test -n "$inc"
+          CC="cc"; [ "${{ runner.os }}" = "Windows" ] && CC="clang"
+          out="out/primjs/${{ matrix.host }}"; mkdir -p "$out"
+          bin="$out/nsbc-primjs"; [ "${{ runner.os }}" = "Windows" ] && bin="$bin.exe"
+          $CC -O2 -I"$inc" -o "$bin" "$SHIM" "$lib" -lm
+          "$bin" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bytecode-compiler-primjs-${{ matrix.host }}
+          path: out/primjs/${{ matrix.host }}
+          if-no-files-found: error

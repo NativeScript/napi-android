@@ -28,6 +28,26 @@ napi_status js_adjust_external_memory(napi_env env, int64_t changeInBytes, int64
 napi_status js_cache_script(napi_env env, const char *source, const char *file);
 napi_status js_run_cached_script(napi_env env, const char * file, napi_value script, void* cache, napi_value *result);
 
+/**
+ * Compile-time bytecode support.
+ *
+ * If `file` holds pre-compiled bytecode this engine can execute (generated at
+ * build time, e.g. via hermesc), this loads and runs it and sets *result to the
+ * completion value of the module — for a `require`d module that is the wrapper
+ * function `(function(module, exports, require, __filename, __dirname){...})`,
+ * mirroring exactly what js_execute_script returns for the equivalent source.
+ *
+ * Returns:
+ *   - napi_ok               : `file` was bytecode; it ran; *result is set.
+ *   - napi_cannot_run_js    : `file` is NOT bytecode for this engine (the caller
+ *                             should fall back to compiling the source). Engines
+ *                             without a compile-time bytecode story always
+ *                             return this without touching the filesystem.
+ *   - napi_pending_exception/other : `file` was bytecode but failed to load or
+ *                             threw while executing (surfaced as an error).
+ */
+napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url, napi_value *result);
+
 napi_status js_get_runtime_version(napi_env env, napi_value* version);
 
 #endif //TEST_APP_JSR_COMMON_H

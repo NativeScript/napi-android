@@ -119,6 +119,12 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
 }
 
 
+napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url,
+                                 napi_value *result) {
+    // JSC does not support bytecode; always fall back to source.
+    return napi_cannot_run_js;
+}
+
 napi_status js_get_runtime_version(napi_env env, napi_value* version) {
     napi_create_string_utf8(env, "JSC", NAPI_AUTO_LENGTH, version);
 

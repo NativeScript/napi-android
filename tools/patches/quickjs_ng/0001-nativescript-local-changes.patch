@@ -1,0 +1,135 @@
+diff --git a/quickjs.c b/quickjs.c
+index 9053c26..52fc3ac 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -9062,6 +9062,13 @@ static int JS_AutoInitProperty(JSContext *ctx, JSObject *p, JSAtom prop,
+     return 0;
+ }
+ 
++#ifdef USE_HOST_OBJECT
++/* NativeScript host-object exotic methods (defined in quickjs-api.c). Compared
++   by address below so the get_property handler can be treated as a non-masking
++   fallback for host objects only, leaving Proxy (js_proxy_get) authoritative. */
++extern JSClassExoticMethods NapiHostObjectExoticMethods;
++#endif
++
+ static JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+                                       JSAtom prop, JSValueConst this_obj,
+                                       bool throw_ref_error)
+@@ -9070,6 +9077,11 @@ static JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+     JSProperty *pr;
+     JSShapeProperty *prs;
+     uint32_t tag;
++#ifdef USE_HOST_OBJECT
++    /* A host object whose get_property we deferred: the prototype chain is
++       consulted first, and this is called only if nothing was found. */
++    JSObject *deferred_host = NULL;
++#endif
+ 
+     tag = JS_VALUE_GET_TAG(obj);
+     if (unlikely(tag != JS_TAG_OBJECT)) {
+@@ -9174,14 +9186,27 @@ static JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+                 const JSClassExoticMethods *em = ctx->rt->class_array[p->class_id].exotic;
+                 if (em) {
+                     if (em->get_property) {
+-                        JSValue obj1, retval;
+-                        /* XXX: should pass throw_ref_error */
+-                        /* Note: if 'p' is a prototype, it can be
+-                           freed in the called function */
+-                        obj1 = js_dup(JS_MKPTR(JS_TAG_OBJECT, p));
+-                        retval = em->get_property(ctx, obj1, prop, this_obj);
+-                        JS_FreeValue(ctx, obj1);
+-                        return retval;
++#ifdef USE_HOST_OBJECT
++                        /* NativeScript host objects use get_property as a
++                           NON-masking fallback: defer it so the prototype chain
++                           (native methods / field accessors) is consulted first,
++                           and call it only if nothing is found (see after loop).
++                           Proxy and other exotics stay authoritative. */
++                        if (em == &NapiHostObjectExoticMethods) {
++                            if (!deferred_host)
++                                deferred_host = p;
++                        } else
++#endif
++                        {
++                            JSValue obj1, retval;
++                            /* XXX: should pass throw_ref_error */
++                            /* Note: if 'p' is a prototype, it can be
++                               freed in the called function */
++                            obj1 = js_dup(JS_MKPTR(JS_TAG_OBJECT, p));
++                            retval = em->get_property(ctx, obj1, prop, this_obj);
++                            JS_FreeValue(ctx, obj1);
++                            return retval;
++                        }
+                     }
+                     if (em->get_own_property) {
+                         JSPropertyDescriptor desc;
+@@ -9211,6 +9236,17 @@ static JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+         if (!p)
+             break;
+     }
++#ifdef USE_HOST_OBJECT
++    /* Nothing found on the prototype chain: now consult the deferred host
++       object's get_property (expandos, numeric indices, dynamic members). */
++    if (deferred_host) {
++        JSValue obj1, retval;
++        obj1 = js_dup(JS_MKPTR(JS_TAG_OBJECT, deferred_host));
++        retval = NapiHostObjectExoticMethods.get_property(ctx, obj1, prop, this_obj);
++        JS_FreeValue(ctx, obj1);
++        return retval;
++    }
++#endif
+     if (unlikely(throw_ref_error)) {
+         return JS_ThrowReferenceErrorNotDefined(ctx, prop);
+     } else {
+@@ -63992,6 +64028,32 @@ uintptr_t js_std_cmd(int cmd, ...) {
+     return rv;
+ }
+ 
++/* CUSTOM */
++
++int JS_IsArrayBuffer2(JSContext *ctx, JSValueConst val)
++{
++    JSObject *p;
++    if (JS_VALUE_GET_TAG(val) == JS_TAG_OBJECT) {
++        p = JS_VALUE_GET_OBJ(val);
++        return p->class_id == JS_CLASS_ARRAY_BUFFER || p->class_id == JS_CLASS_SHARED_ARRAY_BUFFER;
++    } else {
++        return false;
++    }
++}
++
++JSValue JS_NewString16(JSContext *ctx, const uint16_t *buf, int len)
++{
++    return js_new_string16_len(ctx, buf, len);
++}
++
++JSValue JS_GetPropertyInt64_2(JSContext *ctx, JSValueConst obj, int64_t idx) {
++    return JS_GetPropertyInt64(ctx, obj, idx);
++}
++
++JSValue JS_WeakRef_Deref(JSContext *ctx, JSValueConst this_val) {
++    return js_weakref_deref(ctx, this_val, 0, NULL);
++}
++
+ #undef malloc
+ #undef free
+ #undef realloc
+diff --git a/quickjs.h b/quickjs.h
+index 6763f83..a8e0817 100644
+--- a/quickjs.h
++++ b/quickjs.h
+@@ -1428,6 +1428,13 @@ JS_EXTERN int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *exp
+ JS_EXTERN int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
+                                      const JSCFunctionListEntry *tab, int len);
+ 
++/* CUSTOM */
++
++int JS_IsArrayBuffer2(JSContext *ctx, JSValueConst val);
++JSValue JS_NewString16(JSContext *ctx, const uint16_t *buf, int len);
++JSValue JS_GetPropertyInt64_2(JSContext *ctx, JSValueConst obj, int64_t idx);
++JSValue JS_WeakRef_Deref(JSContext *ctx, JSValueConst this_val);
++
+ /* Version */
+ 
+ #define QJS_VERSION_MAJOR 0

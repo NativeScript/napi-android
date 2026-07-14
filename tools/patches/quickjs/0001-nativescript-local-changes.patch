@@ -1,0 +1,216 @@
+diff --git a/quickjs.c b/quickjs.c
+index e3716a4..0493a81 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -7223,7 +7223,7 @@ void JS_ComputeMemoryUsage(JSRuntime *rt, JSMemoryUsage *s)
+ 
+ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
+ {
+-    fprintf(fp, "QuickJS memory usage -- " CONFIG_VERSION " version, %d-bit, malloc limit: %"PRId64"\n\n",
++    fprintf(fp, "QuickJS memory usage -- version, %d-bit, malloc limit: %"PRId64"\n\n",
+             (int)sizeof(void *) * 8, s->malloc_limit);
+ #if 1
+     if (rt) {
+@@ -7632,7 +7632,9 @@ static BOOL is_backtrace_needed(JSContext *ctx, JSValueConst obj)
+ 
+ JSValue JS_NewError(JSContext *ctx)
+ {
+-    return JS_NewObjectClass(ctx, JS_CLASS_ERROR);
++    JSValue error = JS_NewObjectClass(ctx, JS_CLASS_ERROR);
++    build_backtrace(ctx, error, NULL, 0, 0, 0);
++    return  error;
+ }
+ 
+ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
+@@ -8207,6 +8209,13 @@ static int JS_AutoInitProperty(JSContext *ctx, JSObject *p, JSAtom prop,
+     return 0;
+ }
+ 
++#ifdef USE_HOST_OBJECT
++/* NativeScript host-object exotic methods (defined in quickjs-api.c). Compared
++   by address below so the get_property handler can be treated as a non-masking
++   fallback for host objects only, leaving Proxy (js_proxy_get) authoritative. */
++extern JSClassExoticMethods NapiHostObjectExoticMethods;
++#endif
++
+ JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+                                JSAtom prop, JSValueConst this_obj,
+                                BOOL throw_ref_error)
+@@ -8215,6 +8224,11 @@ JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+     JSProperty *pr;
+     JSShapeProperty *prs;
+     uint32_t tag;
++#ifdef USE_HOST_OBJECT
++    /* A host object whose get_property we deferred: the prototype chain is
++       consulted first, and this is called only if nothing was found. */
++    JSObject *deferred_host = NULL;
++#endif
+ 
+     tag = JS_VALUE_GET_TAG(obj);
+     if (unlikely(tag != JS_TAG_OBJECT)) {
+@@ -8319,14 +8333,27 @@ JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+                 const JSClassExoticMethods *em = ctx->rt->class_array[p->class_id].exotic;
+                 if (em) {
+                     if (em->get_property) {
+-                        JSValue obj1, retval;
+-                        /* XXX: should pass throw_ref_error */
+-                        /* Note: if 'p' is a prototype, it can be
+-                           freed in the called function */
+-                        obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
+-                        retval = em->get_property(ctx, obj1, prop, this_obj);
+-                        JS_FreeValue(ctx, obj1);
+-                        return retval;
++#ifdef USE_HOST_OBJECT
++                        /* NativeScript host objects use get_property as a
++                           NON-masking fallback: defer it so the prototype chain
++                           (native methods / field accessors) is consulted first,
++                           and call it only if nothing is found (see after loop).
++                           Proxy and other exotics stay authoritative. */
++                        if (em == &NapiHostObjectExoticMethods) {
++                            if (!deferred_host)
++                                deferred_host = p;
++                        } else
++#endif
++                        {
++                            JSValue obj1, retval;
++                            /* XXX: should pass throw_ref_error */
++                            /* Note: if 'p' is a prototype, it can be
++                               freed in the called function */
++                            obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, p));
++                            retval = em->get_property(ctx, obj1, prop, this_obj);
++                            JS_FreeValue(ctx, obj1);
++                            return retval;
++                        }
+                     }
+                     if (em->get_own_property) {
+                         JSPropertyDescriptor desc;
+@@ -8356,6 +8383,17 @@ JSValue JS_GetPropertyInternal(JSContext *ctx, JSValueConst obj,
+         if (!p)
+             break;
+     }
++#ifdef USE_HOST_OBJECT
++    /* Nothing found on the prototype chain: now consult the deferred host
++       object's get_property (expandos, numeric indices, dynamic members). */
++    if (deferred_host) {
++        JSValue obj1, retval;
++        obj1 = JS_DupValue(ctx, JS_MKPTR(JS_TAG_OBJECT, deferred_host));
++        retval = NapiHostObjectExoticMethods.get_property(ctx, obj1, prop, this_obj);
++        JS_FreeValue(ctx, obj1);
++        return retval;
++    }
++#endif
+     if (unlikely(throw_ref_error)) {
+         return JS_ThrowReferenceErrorNotDefined(ctx, prop);
+     } else {
+@@ -61422,3 +61460,84 @@ int JS_AddIntrinsicWeakRef(JSContext *ctx)
+     JS_FreeValue(ctx, obj);
+     return 0;
+ }
++
++/* CUSTOM */
++
++int JS_IsArrayBuffer2(JSContext *ctx, JSValueConst val)
++{
++    JSObject *p;
++    if (JS_VALUE_GET_TAG(val) == JS_TAG_OBJECT) {
++        p = JS_VALUE_GET_OBJ(val);
++        return p->class_id == JS_CLASS_ARRAY_BUFFER || p->class_id == JS_CLASS_SHARED_ARRAY_BUFFER;
++    } else {
++        return false;
++    }
++}
++
++JSValue JS_NewString16(JSContext *ctx, const uint16_t *buf, int len)
++{
++    return js_new_string16_len(ctx, buf, len);
++}
++
++JSValue JS_GetPropertyInt64_2(JSContext *ctx, JSValueConst obj, int64_t idx) {
++    return JS_GetPropertyInt64(ctx, obj, idx);
++}
++
++JSValue JS_WeakRef_Deref(JSContext *ctx, JSValueConst this_val) {
++    return js_weakref_deref(ctx, this_val, 0, NULL);
++}
++
++int JS_GetLength(JSContext *ctx, JSValueConst obj, int64_t *pres) {
++    return js_get_length64(ctx, pres, obj);
++}
++
++
++static bool is_typed_array(JSClassID class_id)
++{
++    return class_id >= JS_CLASS_UINT8C_ARRAY && class_id <= JS_CLASS_FLOAT64_ARRAY;
++}
++
++int JS_GetTypedArrayType(JSValueConst obj)
++{
++    JSClassID class_id = JS_GetClassID(obj);
++    if (is_typed_array(class_id))
++        return class_id - JS_CLASS_UINT8C_ARRAY;
++    else
++        return -1;
++}
++
++JS_BOOL JS_IsDataView(JSValueConst val)
++{
++    return JS_CLASS_DATAVIEW == JS_GetClassID(val);
++}
++
++int JS_ToBigUint64(JSContext *ctx, uint64_t *pres, JSValueConst val)
++{
++    return JS_ToBigInt64Free(ctx, (int64_t *)pres, JS_DupValue(ctx, val));
++}
++
++JS_BOOL JS_IsStrictEqual(JSContext *ctx, JSValueConst op1, JSValueConst op2)
++{
++    return js_strict_eq2(ctx, JS_DupValue(ctx, op1), JS_DupValue(ctx,op2), JS_EQ_STRICT);
++}
++
++int JS_SealObject(JSContext *ctx, JSValueConst obj)
++{
++    JSValue value = js_object_seal(ctx, JS_UNDEFINED, 1, &obj, 0);
++    int result = JS_IsException(value) ? -1 : true;
++    JS_FreeValue(ctx, value);
++    return result;
++}
++
++int JS_FreezeObject(JSContext *ctx, JSValueConst obj)
++{
++    JSValue value = js_object_seal(ctx, JS_UNDEFINED, 1, &obj, 1);
++    int result = JS_IsException(value) ? -1 : true;
++    JS_FreeValue(ctx, value);
++    return result;
++}
++
++size_t JS_GetGCThreshold(JSRuntime *rt) {
++    return rt->malloc_gc_threshold;
++}
++
+diff --git a/quickjs.h b/quickjs.h
+index 476d735..ded9e30 100644
+--- a/quickjs.h
++++ b/quickjs.h
+@@ -1170,6 +1170,22 @@ void JS_PrintValueRT(JSRuntime *rt, JSPrintValueWrite *write_func, void *write_o
+ void JS_PrintValue(JSContext *ctx, JSPrintValueWrite *write_func, void *write_opaque,
+                    JSValueConst val, const JSPrintValueOptions *options);
+ 
++/* CUSTOM */
++
++int JS_IsArrayBuffer2(JSContext *ctx, JSValueConst val);
++JSValue JS_NewString16(JSContext *ctx, const uint16_t *buf, int len);
++JSValue JS_GetPropertyInt64_2(JSContext *ctx, JSValueConst obj, int64_t idx);
++JSValue JS_WeakRef_Deref(JSContext *ctx, JSValueConst this_val);
++int JS_GetLength(JSContext *ctx, JSValueConst obj, int64_t *pres);
++int JS_GetTypedArrayType(JSValueConst obj);
++JS_BOOL JS_IsDataView(JSValueConst val);
++int JS_ToBigUint64(JSContext *ctx, uint64_t *pres, JSValueConst val);
++JS_BOOL JS_IsStrictEqual(JSContext *ctx, JSValueConst op1, JSValueConst op2);
++int JS_SealObject(JSContext *ctx, JSValueConst obj);
++int JS_FreezeObject(JSContext *ctx, JSValueConst obj);
++size_t JS_GetGCThreshold(JSRuntime *rt);
++
++
+ #undef js_unlikely
+ #undef js_force_inline
+ 

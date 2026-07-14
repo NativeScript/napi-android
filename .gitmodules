@@ -1,0 +1,8 @@
+[submodule "test-app/runtime/src/main/cpp/napi/quickjs/source"]
+	path = test-app/runtime/src/main/cpp/napi/quickjs/source
+	url = https://github.com/bellard/quickjs
+	ignore = dirty
+[submodule "test-app/runtime/src/main/cpp/napi/quickjs/source_ng"]
+	path = test-app/runtime/src/main/cpp/napi/quickjs/source_ng
+	url = https://github.com/quickjs-ng/quickjs
+	ignore = dirty

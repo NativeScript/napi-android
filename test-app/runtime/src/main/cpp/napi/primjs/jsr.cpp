@@ -121,6 +121,12 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
 }
 
 
+napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url,
+                                 napi_value *result) {
+    // No compile-time bytecode format wired up for this engine yet; fall back to source.
+    return napi_cannot_run_js;
+}
+
 napi_status js_get_runtime_version(napi_env env, napi_value *version) {
     napi_create_string_utf8(env, "PrimJS", NAPI_AUTO_LENGTH, version);
     return napi_ok;
