@@ -21,7 +21,6 @@
 		}
 	}
 */
-const benchmarkRunner = require("./benchmark.js");
 var MyActivity = (function (_super) {
   __extends(MyActivity, _super);
   function MyActivity() {
@@ -68,14 +67,32 @@ var MyActivity = (function (_super) {
         },
       })
     );
+    var benchmarkWorker = null;
     button2.setOnClickListener(
           new android.view.View.OnClickListener("AppClickListener", {
             onClick: function () {
-              const result = benchmarkRunner.runBenchmark();
-              setTimeout(() => {
-              globalThis.gc();
-              });
-              textView.setText(result);
+              // Run the benchmark on a worker thread so the UI thread stays
+              // responsive and Android does not raise an ANR.
+              if (benchmarkWorker) {
+                return;
+              }
+              button2.setText("Running Benchmark...");
+              textView.setText("Running benchmark, please wait...");
+
+              benchmarkWorker = new Worker("./benchmark-worker.js");
+              benchmarkWorker.onmessage = function (msg) {
+                textView.setText(msg.data);
+                button2.setText("Run Benchmark");
+                benchmarkWorker.terminate();
+                benchmarkWorker = null;
+              };
+              benchmarkWorker.onerror = function (err) {
+                textView.setText("Benchmark error: " + (err && err.message ? err.message : err));
+                button2.setText("Run Benchmark");
+                benchmarkWorker.terminate();
+                benchmarkWorker = null;
+              };
+              benchmarkWorker.postMessage("start");
             },
           })
     );

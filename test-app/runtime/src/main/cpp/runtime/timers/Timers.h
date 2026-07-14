@@ -1,11 +1,9 @@
 #ifndef TEST_APP_TIMERS_H
 #define TEST_APP_TIMERS_H
 
-#include <android/looper.h>
+#include <jni.h>
 #include "js_native_api.h"
 #include "ObjectManager.h"
-#include "condition_variable"
-#include "thread"
 #include "robin_hood.h"
 
 namespace tns {
@@ -36,8 +34,24 @@ namespace tns {
             return startTime_ + frequency_ * (div.quot + 1);
         }
 
+        // Releases the JS references held by this task. Requires a live napi_env,
+        // so it is called from the runtime thread (FireTimer / removeTask).
         inline void Unschedule() {
+            if (env_ != nullptr) {
+                if (callback_ != nullptr) {
+                    napi_delete_reference(env_, callback_);
+                }
+                if (thisArg != nullptr) {
+                    napi_delete_reference(env_, thisArg);
+                }
+                if (args_ != nullptr) {
+                    for (auto ref: *args_) {
+                        napi_delete_reference(env_, ref);
+                    }
+                }
+            }
             callback_ = nullptr;
+            thisArg = nullptr;
             args_.reset();
             env_ = nullptr;
             queued_ = false;
@@ -53,7 +67,6 @@ namespace tns {
          * this helper parameter is used in the following way:
          * task scheduled means queued_ = true
          * this is set to false right before the callback is executed
-         * if this is false then it's not on the background thread queue
          */
         bool queued_ = false;
         double frequency_ = 0;
@@ -71,26 +84,26 @@ namespace tns {
     public:
         /**
          * Initializes the global functions setTimeout, setInterval, clearTimeout and clearInterval
-         * also creates helper threads and binds the timers to the executing thread
+         * and binds a Java TimerHandler to the executing thread's Looper.
          * @param env target environment
-         * @param globalObjectTemplate global template
+         * @param global global object
          */
         void Init(napi_env env, napi_value global);
 
         static void InitStatic(napi_env env, napi_value global);
 
         /**
-         * Disposes the timers. This will clear all references and stop all thread.
-         * MUST be called in the same thread Init was called
-         * This methods blocks until the threads are stopped.
-         * This method doesn't need to be called most of the time as it's called on object destruction
-         * Reusing this class is not advised
+         * Fires the earliest-due timer. Invoked from Java (TimerHandler.handleMessage)
+         * on the runtime thread, once per posted "due token".
+         */
+        void FireTimer();
+
+        /**
+         * Disposes the timers, releasing all references and the Java handler.
+         * MUST be called on the thread Init was called on. Idempotent.
          */
         void Destroy();
 
-        /**
-         * Calls Destruct
-         */
         ~Timers();
 
     private:
@@ -102,34 +115,33 @@ namespace tns {
 
         static napi_value ClearTimer(napi_env env, napi_callback_info info);
 
-        void threadLoop();
-
-        static int PumpTimerLoopCallback(int fd, int events, void *data);
-
         void addTask(const std::shared_ptr<TimerTask>& task);
 
         void removeTask(const std::shared_ptr<TimerTask> &task);
 
         void removeTask(const int &taskId);
 
+        // Enqueues one "due token" on the Java MessageQueue for this task. Due-now
+        // timers post at (long)now so they tie (FIFO) with a same-ms postDelayed(0);
+        // future timers post at ceil(dueTime) so they never fire early.
+        void postTimer(const std::shared_ptr<TimerTask> &task, double now);
+
         napi_env env_ = nullptr;
-        ALooper *looper_;
         int currentTimerId = 0;
         int nesting = 0;
         // stores the map of timer tasks
         robin_hood::unordered_map<int, std::shared_ptr<TimerTask>> timerMap_;
-        std::vector<std::shared_ptr<TimerReference>> sortedTimers_;
-        // sets are faster than vector iteration
-        // so we use this to avoid redundant isolate locks and we don't care about the
-        // background thread lost cycles
-        std::set<int> deletedTimers_;
-        int fd_[2];
-        std::atomic_bool isBufferFull = ATOMIC_VAR_INIT(false);
-        std::condition_variable taskReady;
-        std::condition_variable bufferFull;
-        std::mutex mutex;
-        std::thread watcher_;
-        bool stopped = false;
+        // sorted by exact (sub-millisecond) dueTime; touched only on the runtime thread
+        std::vector<TimerReference> sortedTimers_;
+        // global ref to the com.tns.TimerHandler bound to this thread's Looper
+        jobject handler_ = nullptr;
+        bool stopped_ = false;
+
+        // Cached (process-wide) TimerHandler JNI ids.
+        static jclass TIMER_HANDLER_CLASS;
+        static jmethodID TIMER_HANDLER_CTOR;
+        static jmethodID TIMER_HANDLER_POST;
+        static jmethodID TIMER_HANDLER_RELEASE;
     };
 
 }

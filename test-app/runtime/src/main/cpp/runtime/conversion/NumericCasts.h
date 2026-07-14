@@ -24,17 +24,16 @@ namespace tns {
             CastType ret = CastType::None;
 
 #ifdef USE_HOST_OBJECT
-            void *data;
-            napi_get_host_object_data(env, object, &data);
-            if (data != nullptr) return ret;
+            bool is_host_object = false;
+            napi_is_host_object(env, object, &is_host_object);
+            if (is_host_object) return ret;
 #endif
 
             napi_value hidden;
-
-            bool hasProperty;
-            napi_has_named_property(env, object, s_castMarker, &hasProperty);
-
-            if (hasProperty) {
+            napi_get_named_property(env, object, s_castMarker, &hidden);
+            napi_valuetype type;
+            napi_typeof(env, hidden, &type);
+            if (type == napi_number) {
                 napi_get_named_property(env, object, s_castMarker, &hidden);
                 int32_t castType;
                 napi_get_value_int32(env, hidden, &castType);

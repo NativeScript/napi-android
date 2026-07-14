@@ -7,6 +7,7 @@
 #include "robin_hood.h"
 #include "MetadataReader.h"
 #include "Runtime.h"
+#include "ObjectManager.h"
 
 #include "FieldCallbackData.h"
 using namespace tns;
@@ -32,7 +33,13 @@ public:
     static napi_value GetImplementationObject(napi_env env, napi_value object);
 
     inline static MetadataNode* GetInstanceMetadata(napi_env env, napi_value object) {
-        void *node;
+#ifdef USE_HOST_OBJECT
+        // Host build: metadata lives on the per-instance JSInstanceInfo (reached
+        // via host data on the proxy, or the wrap on a raw instance) — no
+        // interceptor-forwarded "#instance_metadata" property get.
+        return tns::Runtime::GetRuntime(env)->GetObjectManager()->GetInstanceNode(object);
+#else
+        void *node = nullptr;
         napi_value external;
         napi_get_named_property(env, object, "#instance_metadata", &external);
 
@@ -42,6 +49,7 @@ public:
         if (node == nullptr)
             return nullptr;
         return reinterpret_cast<MetadataNode *>(node);
+#endif
     }
 
     inline static MetadataNode* GetNodeFromHandle(napi_env env, napi_value value) {
@@ -52,7 +60,8 @@ public:
     static string GetTypeMetadataName(napi_env env, napi_value value);
 
     static napi_value CreateExtendedJSWrapper(napi_env env, ObjectManager *objectManager,
-                                       const std::string &proxyClassName, int javaObjectID);
+                                       const std::string &proxyClassName, int javaObjectID,
+                                       MetadataNode **outNode = nullptr);
 
     std::string GetName();
 
@@ -142,6 +151,12 @@ private:
 
     static napi_value NullObjectAccessorGetterCallback(napi_env env, napi_callback_info info);
 
+    // Returns true if `jsThis` is a real backed instance rather than the class
+    // prototype (i.e. someone did Class.prototype.<member>). With host objects
+    // enabled, every real instance is a host-object proxy and the prototype is
+    // not; otherwise we identity-compare against the cached prototype.
+    static bool IsInstanceReceiver(napi_env env, napi_value jsThis, napi_ref prototypeRef);
+
     static napi_value FieldAccessorGetterCallback(napi_env env, napi_callback_info info);
 
     static napi_value FieldAccessorSetterCallback(napi_env env, napi_callback_info info);
@@ -153,6 +168,16 @@ private:
     static napi_value ArrayGetAllValuesCallback(napi_env env, napi_callback_info info);
 
     static napi_value ArrayLengthCallback(napi_env env, napi_callback_info info);
+
+    // Native equivalents of the helpers that used to live in getNativeArrayProp.
+    static napi_value ArrayMapCallback(napi_env env, napi_callback_info info);
+
+    static napi_value ArrayForEachCallback(napi_env env, napi_callback_info info);
+
+    static napi_value ArrayToStringCallback(napi_env env, napi_callback_info info);
+
+    static napi_value
+    ArraySymbolIteratorCallback(napi_env env, napi_callback_info info);
 
     static napi_value PropertyAccessorGetterCallback(napi_env env, napi_callback_info info);
 
@@ -231,6 +256,13 @@ private:
         MetadataNode *node;
         MethodCallbackData *parent;
         bool isSuper;
+        // Lazily-cached, per-class invariants resolved on first dispatch
+        // (-1 = not yet computed, 0 = false, 1 = true).
+        int8_t cachedIsFromInterface = -1;
+        int8_t cachedIsValueOf = -1;
+        // Cached per-env ObjectManager (this data is created per env, so the
+        // pointer's lifetime matches it — no staleness across envs).
+        tns::ObjectManager *objectManager = nullptr;
     };
 
     struct PackageGetterMethodData {
@@ -274,6 +306,17 @@ private:
         std::string propertyName;
         std::string getterMethodName;
         std::string setterMethodName;
+        // Cached prototype the accessor lives on; used to detect
+        // Class.prototype.<property> access when host objects are disabled.
+        napi_ref prototype = nullptr;
+        // Direct-dispatch support: the resolved getter/setter method entries plus
+        // cached invariants let the accessor call CallJavaMethod directly, with no
+        // JS method lookup or nested MethodCallback. nullptr => no getter/setter.
+        MetadataEntry *getterEntry = nullptr;
+        MetadataEntry *setterEntry = nullptr;
+        MetadataNode *node = nullptr;
+        int8_t cachedIsFromInterface = -1;
+        tns::ObjectManager *objectManager = nullptr;
     };
 
     struct ExtendedClassCallbackData {

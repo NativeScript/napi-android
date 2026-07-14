@@ -2,18 +2,25 @@
 #include "ArgConverter.h"
 #include "Runtime.h"
 #include "NativeScriptException.h"
-#include <android/looper.h>
-#include <unistd.h>
-#include <thread>
+#include "JEnv.h"
+#include <cmath>
+#include <sstream>
 #include "Util.h"
 #include "NativeScriptAssert.h"
 
 /**
- * Overall rules when modifying this file:
- * `sortedTimers_` must always be sorted by dueTime
- * `sortedTimers_`. `deletedTimers_` and `stopped` modifications MUST be done while locked with the mutex
- * `threadLoop` must not access anything that is not `sortedTimers_` or `stopped` or any atomic var
- * ALL changes and scheduling of a TimerTask MUST be done when locked in an isolate to ensure consistency
+ * Timers ride the runtime thread's Java MessageQueue via a per-runtime
+ * com.tns.TimerHandler bound to the isolate's Looper:
+ *  - each scheduled timer enqueues one anonymous "due token" message via
+ *    sendMessageAtTime, so timers share a single queue with Handler.post/
+ *    postDelayed and fire in exact MessageQueue order;
+ *  - a native list (sortedTimers_) sorted by exact (sub-millisecond) due time
+ *    picks the earliest-due timer per token, preserving the relative ordering of
+ *    JS timers despite the millisecond-quantized Java queue.
+ *
+ * Everything below runs on the runtime thread (Init, the setTimeout/clear
+ * callbacks, and FireTimer via TimerHandler.handleMessage), so no locking is
+ * needed — sortedTimers_/timerMap_ are only touched there.
  */
 
 // Takes a value and transform into a positive number
@@ -42,6 +49,11 @@ static double now_ms() {
 
 using namespace tns;
 
+jclass Timers::TIMER_HANDLER_CLASS = nullptr;
+jmethodID Timers::TIMER_HANDLER_CTOR = nullptr;
+jmethodID Timers::TIMER_HANDLER_POST = nullptr;
+jmethodID Timers::TIMER_HANDLER_RELEASE = nullptr;
+
 void Timers::Init(napi_env env, napi_value global) {
     env_ = env;
     // TODO: remove the __ns__ prefix once this is validated
@@ -50,24 +62,37 @@ void Timers::Init(napi_env env, napi_value global) {
     napi_util::napi_set_function(env, global, "__ns__clearTimeout", ClearTimer, this);
     napi_util::napi_set_function(env, global, "__ns__clearInterval", ClearTimer, this);
 
-    napi_value object;
-    napi_add_finalizer(env, global, this, [](napi_env env, void *finalizeData, void *finalizeHint) {
-        auto thiz = reinterpret_cast<Timers *>(finalizeData);
-        delete thiz;
-    }, nullptr, nullptr);
+    napi_status status;
+    // Non-fatal to timer operation if this fails (only affects GC cleanup of
+    // `this`), so log for diagnostics but continue with handler setup.
+    NAPI_GUARD(napi_add_finalizer(env, global, this,
+                                  [](napi_env env, void *finalizeData, void *finalizeHint) {
+                                      auto thiz = reinterpret_cast<Timers *>(finalizeData);
+                                      delete thiz;
+                                  }, nullptr, nullptr)) {}
 
-    auto res = pipe(fd_);
-    assert(res != -1);
-    res = fcntl(fd_[1], F_SETFL, O_NONBLOCK);
-    assert(res != -1);
-    // TODO: check success of fd
-    looper_ = ALooper_prepare(0);
-    ALooper_acquire(looper_);
-    ALooper_addFd(looper_, fd_[0], ALOOPER_POLL_CALLBACK, ALOOPER_EVENT_INPUT,
-                  PumpTimerLoopCallback, this);
-    ALooper_wake(looper_);
-    watcher_ = std::thread(&Timers::threadLoop, this);
-    stopped = false;
+    JEnv jEnv;
+    if (TIMER_HANDLER_CLASS == nullptr) {
+        TIMER_HANDLER_CLASS = jEnv.FindClass("com/tns/TimerHandler");
+        assert(TIMER_HANDLER_CLASS != nullptr);
+        TIMER_HANDLER_CTOR = jEnv.GetMethodID(TIMER_HANDLER_CLASS, "<init>", "(J)V");
+        TIMER_HANDLER_POST = jEnv.GetMethodID(TIMER_HANDLER_CLASS, "post", "(J)V");
+        TIMER_HANDLER_RELEASE = jEnv.GetMethodID(TIMER_HANDLER_CLASS, "release", "()V");
+    }
+
+    // Bind a TimerHandler to the current (runtime) thread's Looper.
+    jobject localHandler = jEnv.NewObject(TIMER_HANDLER_CLASS, TIMER_HANDLER_CTOR,
+                                          reinterpret_cast<jlong>(this));
+    handler_ = jEnv.NewGlobalRef(localHandler);
+    stopped_ = false;
+}
+
+void Timers::postTimer(const std::shared_ptr<TimerTask> &task, double now) {
+    // Due-now timers post at (long)now so they tie (FIFO) with a same-ms
+    // postDelayed(0); future timers post at ceil(dueTime) so they never fire early.
+    jlong when = task->dueTime_ <= now ? (jlong) now : (jlong) std::ceil(task->dueTime_);
+    JEnv jEnv;
+    jEnv.CallVoidMethod(handler_, TIMER_HANDLER_POST, when);
 }
 
 void Timers::addTask(const std::shared_ptr<TimerTask>& task) {
@@ -83,34 +108,15 @@ void Timers::addTask(const std::shared_ptr<TimerTask>& task) {
         task->startTime_ = now;
     }
     timerMap_.emplace(task->id_, task);
-    auto newTime = task->NextTime(now);
-    task->dueTime_ = newTime;
-    bool needsScheduling = true;
-    if (!isBufferFull.load() && task->dueTime_ <= now) {
-        auto result = write(fd_[1], &task->id_, sizeof(int));
-        if (result != -1 || errno != EAGAIN) {
-            needsScheduling = false;
-        } else {
-            isBufferFull = true;
-        }
-    }
-    if (needsScheduling) {
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            auto it = sortedTimers_.begin();
-            auto dueTime = task->dueTime_;
-            it = std::upper_bound(sortedTimers_.begin(), sortedTimers_.end(), dueTime,
-                                  [](const double &value,
-                                     const std::shared_ptr<TimerReference> &ref) {
-                                      return ref->dueTime > value;
-                                  });
-            auto ref = std::make_shared<TimerReference>();
-            ref->dueTime = task->dueTime_;
-            ref->id = task->id_;
-            sortedTimers_.insert(it, ref);
-        }
-        taskReady.notify_one();
-    }
+    task->dueTime_ = task->NextTime(now);
+
+    auto it = std::upper_bound(sortedTimers_.begin(), sortedTimers_.end(), task->dueTime_,
+                               [](const double &value, const TimerReference &ref) {
+                                   return ref.dueTime > value;
+                               });
+    sortedTimers_.insert(it, TimerReference{task->id_, task->dueTime_});
+
+    postTimer(task, now);
 }
 
 void Timers::removeTask(const std::shared_ptr<TimerTask> &task) {
@@ -119,75 +125,104 @@ void Timers::removeTask(const std::shared_ptr<TimerTask> &task) {
 
 void Timers::removeTask(const int &taskId) {
     auto it = timerMap_.find(taskId);
-    if (it != timerMap_.end()) {
-        auto wasScheduled = it->second->queued_;
-        it->second->Unschedule();
-        timerMap_.erase(it);
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            if (wasScheduled) {
-                // was scheduled, notify the thread so it doesn't trigger again
-                this->deletedTimers_.insert(taskId);
-            } else {
-                // was not scheduled, remove it to reduce memory footprint
-                this->deletedTimers_.erase(taskId);
+    if (it == timerMap_.end()) {
+        return;
+    }
+    auto task = it->second;
+    if (task->queued_) {
+        // Remove the pending due-token reference (matched by id at its dueTime).
+        auto lo = std::lower_bound(sortedTimers_.begin(), sortedTimers_.end(), task->dueTime_,
+                                   [](const TimerReference &ref, const double &value) {
+                                       return ref.dueTime < value;
+                                   });
+        for (auto ref = lo; ref != sortedTimers_.end() && ref->dueTime == task->dueTime_; ++ref) {
+            if (ref->id == taskId) {
+                sortedTimers_.erase(ref);
+                break;
             }
         }
+        // A token already enqueued in the Java queue is left to no-op in FireTimer.
     }
+    task->Unschedule();
+    timerMap_.erase(it);
 }
 
-void Timers::threadLoop() {
-    std::unique_lock<std::mutex> lk(mutex);
-    while (!stopped) {
-        if (!sortedTimers_.empty()) {
-            auto timer = sortedTimers_.at(0);
-            if (deletedTimers_.find(timer->id) != deletedTimers_.end()) {
-                sortedTimers_.erase(sortedTimers_.begin());
-                deletedTimers_.erase(timer->id);
-                continue;
-            }
-            auto now = now_ms();
-            // timer has reached its time, fire it and keep going
-            if (timer->dueTime <= now) {
-                sortedTimers_.erase(sortedTimers_.begin());
-                auto result = write(fd_[1], &timer->id, sizeof(int));
-                if (result == -1 && errno == EAGAIN) {
-                    isBufferFull = true;
-                    while (!stopped && deletedTimers_.find(timer->id) != deletedTimers_.end() &&
-                           write(fd_[1], &timer->id, sizeof(int)) == -1 && errno == EAGAIN) {
-                        bufferFull.wait(lk);
-                    }
-                } else if (isBufferFull.load() &&
-                           (sortedTimers_.empty() || sortedTimers_.at(0)->dueTime > now)) {
-                    // we had a successful write and the next timer is not due
-                    // mark the buffer as free to re-enable the setTimeout with 0 optimization
-                    isBufferFull = false;
-                }
-            } else {
-                taskReady.wait_for(lk, std::chrono::milliseconds((int) (timer->dueTime - now)));
-            }
-        } else {
-            taskReady.wait(lk);
-        }
+void Timers::FireTimer() {
+    if (stopped_ || env_ == nullptr) {
+        return;
     }
+
+    NapiScope scope(env_);
+
+    if (sortedTimers_.empty()) {
+        return; // leftover token
+    }
+    auto ref = sortedTimers_.front();
+    if (ref.dueTime > now_ms()) {
+        return; // front not due yet → leftover token
+    }
+    sortedTimers_.erase(sortedTimers_.begin());
+
+    auto it = timerMap_.find(ref.id);
+    if (it == timerMap_.end()) {
+        return;
+    }
+    auto task = it->second;
+    task->queued_ = false;
+    nesting = task->nestingLevel_;
+
+    if (task->repeats_) {
+        // Follow chromium's non-drifting interval scheduling: anchor the next
+        // fire to the ideal dueTime rather than "now".
+        task->startTime_ = task->dueTime_;
+        addTask(task);
+    }
+
+    napi_value cb = napi_util::get_ref_value(env_, task->callback_);
+    napi_value recv = napi_util::get_ref_value(env_, task->thisArg);
+    size_t argc = task->args_ == nullptr ? 0 : task->args_->size();
+    napi_status status;
+    // Log a failed dispatch (e.g. a JS exception) but continue: the cleanup
+    // below must still run so the task's references are released.
+    if (argc > 0) {
+        std::vector<napi_value> argv(argc);
+        for (size_t i = 0; i < argc; i++) {
+            argv[i] = napi_util::get_ref_value(env_, task->args_->at(i));
+        }
+        NAPI_GUARD(napi_call_function(env_, recv, cb, argc, argv.data(), nullptr)) {}
+    } else {
+        NAPI_GUARD(napi_call_function(env_, recv, cb, 0, nullptr, nullptr)) {}
+    }
+
+    // task is not queued, so it's either a setTimeout or a cleared setInterval:
+    // remove it (which releases its JS references via Unschedule).
+    if (!task->queued_) {
+        removeTask(task);
+    }
+
+    nesting = 0;
 }
 
 void Timers::Destroy() {
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        if (stopped) {
-            return;
-        }
-        stopped = true;
+    if (stopped_) {
+        return;
     }
-    bufferFull.notify_one();
-    taskReady.notify_all();
-    watcher_.join();
-    auto mainLooper = Runtime::GetMainLooper();
-    ALooper_removeFd(mainLooper, fd_[0]);
-    close(fd_[0]);
+    stopped_ = true;
+
+    if (handler_ != nullptr) {
+        JEnv jEnv;
+        jEnv.CallVoidMethod(handler_, TIMER_HANDLER_RELEASE);
+        jEnv.DeleteGlobalRef(handler_);
+        handler_ = nullptr;
+    }
+
+    // Release any references still held by pending tasks.
+    for (auto &entry: timerMap_) {
+        entry.second->Unschedule();
+    }
     timerMap_.clear();
-    ALooper_release(looper_);
+    sortedTimers_.clear();
+    env_ = nullptr;
 }
 
 Timers::~Timers() {
@@ -205,8 +240,11 @@ napi_value Timers::SetIntervalCallback(napi_env env, napi_callback_info info) {
 napi_value Timers::ClearTimer(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1];
-    void *data;
-    napi_get_cb_info(env, info, &argc, args, nullptr, &data);
+    void *data = nullptr;
+    napi_status status;
+    NAPI_GUARD(napi_get_cb_info(env, info, &argc, args, nullptr, &data)) {
+        return nullptr;
+    }
 
     int id = -1;
     if (argc > 0) {
@@ -222,7 +260,7 @@ napi_value Timers::ClearTimer(napi_env env, napi_callback_info info) {
 }
 
 napi_value Timers::SetTimer(napi_env env, napi_callback_info info, bool repeatable) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(8)
 
     auto thiz = reinterpret_cast<Timers *>(data);
 
@@ -231,7 +269,9 @@ napi_value Timers::SetTimer(napi_env env, napi_callback_info info, bool repeatab
 
         if (!napi_util::is_of_type(env, argv[0], napi_function)) {
             napi_value result;
-            napi_get_undefined(env, &result);
+            NAPI_GUARD(napi_get_undefined(env, &result)) {
+                return nullptr;
+            }
             return result;
         }
 
@@ -259,76 +299,31 @@ napi_value Timers::SetTimer(napi_env env, napi_callback_info info, bool repeatab
         thiz->addTask(task);
     }
     napi_value result;
-    napi_create_int32(env, id, &result);
+    NAPI_GUARD(napi_create_int32(env, id, &result)) {
+        return nullptr;
+    }
     return result;
-}
-
-/**
- * ALooper callback.
- * Responsible for checking if the callback is still scheduled and entering the isolate to trigger it
- */
-int Timers::PumpTimerLoopCallback(int fd, int events, void *data) {
-    int timerId;
-    read(fd, &timerId, sizeof(int));
-
-    auto thiz = static_cast<Timers *>(data);
-    auto env = thiz->env_;
-    if (thiz->stopped || env == nullptr) {
-        return 0;
-    }
-
-    auto it = thiz->timerMap_.find(timerId);
-    if (it != thiz->timerMap_.end()) {
-        NapiScope scope(env);
-        auto task = it->second;
-        // task is no longer in queue to be executed
-        task->queued_ = false;
-        thiz->nesting = task->nestingLevel_;
-        if (task->repeats_) {
-            // the reason we're doing this in kind of a convoluted way is to follow more closely the chromium implementation than the node implementation
-            // imagine an interval of 1000ms
-            // node's setInterval drifts slightly (1000, 2001, 3001, 4002, some busy work 5050, 6050)
-            // chromium will be consistent: (1000, 2001, 3000, 4000, some busy work 5050, 6000)
-            task->startTime_ = task->dueTime_;
-            thiz->addTask(task);
-        }
-
-
-        napi_value cb = napi_util::get_ref_value(env, task->callback_);
-        size_t argc = task->args_ == nullptr ? 0 : task->args_->size();
-        if (argc > 0) {
-            std::vector<napi_value> argv(argc);
-            for (size_t i = 0; i < argc; i++) {
-                argv[i] = napi_util::get_ref_value(env, task->args_->at(i));
-            }
-            napi_call_function(env, napi_util::get_ref_value(env, task->thisArg), cb, argc,
-                               argv.data(), nullptr);
-        } else {
-            napi_call_function(env, napi_util::get_ref_value(env, task->thisArg), cb, 0, nullptr,
-                               nullptr);
-        }
-
-        // task is not queued, so it's either a setTimeout or a cleared setInterval
-        // ensure we remove it
-        if (!task->queued_) {
-            thiz->removeTask(task);
-            if (argc > 0) {
-                for (size_t i = 0; i < argc; i++) {
-                    napi_delete_reference(env, task->args_->at(i));
-                }
-            }
-            napi_delete_reference(env, task->thisArg);
-        }
-
-
-        thiz->nesting = 0;
-    }
-    thiz->bufferFull.notify_one();
-    return 1;
 }
 
 void Timers::InitStatic(napi_env env, napi_value global) {
     auto timers = new Timers();
     timers->Init(env, global);
+}
 
+// Reverse native for com.tns.TimerHandler.nativeFireTimer (bound by symbol name).
+extern "C" JNIEXPORT void JNICALL
+Java_com_tns_TimerHandler_nativeFireTimer(JNIEnv* env, jclass clazz, jlong timersPtr) {
+    try {
+        reinterpret_cast<tns::Timers *>(timersPtr)->FireTimer();
+    } catch (NativeScriptException& e) {
+        e.ReThrowToJava(nullptr);
+    } catch (std::exception& e) {
+        std::stringstream ss;
+        ss << "Error: c++ exception: " << e.what() << std::endl;
+        NativeScriptException nsEx(ss.str());
+        nsEx.ReThrowToJava(nullptr);
+    } catch (...) {
+        NativeScriptException nsEx(std::string("Error: c++ exception!"));
+        nsEx.ReThrowToJava(nullptr);
+    }
 }

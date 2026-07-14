@@ -22,14 +22,6 @@
 namespace tns {
     class CallbackHandlers {
     public:
-        /*
-         * Stores persistent handles of all 'Worker' objects initialized on the main thread
-         * Note: No isolates different than that of the main thread should access this map
-         */
-        static robin_hood::unordered_map<int, napi_ref> id2WorkerMap;
-
-        static int nextWorkerId;
-
         static void Init(napi_env env);
 
         static napi_value
@@ -41,7 +33,8 @@ namespace tns {
                                      napi_value implementationObject,
                                      bool isInterface,
                                      napi_value *jsThisProxy,
-                                     const std::string &baseClassName = std::string());
+                                     const std::string &baseClassName = std::string(),
+                                     MetadataNode *node = nullptr);
 
         static jclass ResolveClass(napi_env env, const std::string &baseClassName,
                                    const std::string &fullClassName,
@@ -52,28 +45,34 @@ namespace tns {
 
         static napi_value
         GetArrayElement(napi_env env, napi_value array, uint32_t index,
-                        const std::string &arraySignature);
+                        const std::string &arraySignature,
+                        ObjectManager *objectManager = nullptr, jobject arrayObject = nullptr);
 
         static void
         SetArrayElement(napi_env env, napi_value array, uint32_t index,
-                        const std::string &arraySignature, napi_value value);
+                        const std::string &arraySignature, napi_value value,
+                        ObjectManager *objectManager = nullptr, jobject arrayObject = nullptr);
 
         static int GetArrayLength(napi_env env, napi_value arr);
 
         static napi_value
         CallJavaMethod(napi_env env, napi_value caller, const std::string &className,
                        const std::string &methodName, MetadataEntry *entry, bool isFromInterface,
-                       bool isStatic, napi_callback_info info,  size_t argc, napi_value* argv);
+                       bool isStatic, napi_callback_info info,  size_t argc, napi_value* argv,
+                       ObjectManager *objectManager = nullptr);
 
         static napi_value
         CallJSMethod(napi_env env, JNIEnv *jEnv, napi_value jsObject,jclass claz,
                      const std::string &methodName,int javaObjectId, jobjectArray args);
         static napi_value
         GetJavaField(napi_env env, napi_value caller,
-                     FieldCallbackData *fieldData);
+                     FieldCallbackData *fieldData, ObjectManager *objectManager = nullptr,
+                     JniLocalRef targetJavaObject = JniLocalRef());
 
         static void SetJavaField(napi_env env, napi_value target,
-                                 napi_value value, FieldCallbackData *fieldData);
+                                 napi_value value, FieldCallbackData *fieldData,
+                                 ObjectManager *objectManager = nullptr,
+                                 JniLocalRef targetJavaObject = JniLocalRef());
 
         static napi_value RunOnMainThreadCallback(napi_env env, napi_callback_info info);
 
@@ -131,27 +130,14 @@ namespace tns {
         static napi_value WorkerObjectPostMessageCallback(napi_env env, napi_callback_info info);
 
         /*
-         * main -> worker messaging
-         * Fired when worker object has "postMessage" and the worker has implemented "onMessage" handler
-         * In case "onMessage" handler isn't implemented no exception is thrown
-         */
-        static void WorkerGlobalOnMessageCallback(napi_env env, jstring message);
-
-        /*
          * worker -> main thread messaging
          * Fired when a Worker script's "postMessage" is called
          */
         static napi_value WorkerGlobalPostMessageCallback(napi_env env, napi_callback_info info);
 
         /*
-         * worker -> main messaging
-         * Fired when worker has sent a message to main and the worker object has implemented "onMessage" handler
-         * In case "onMessage" handler isn't implemented no exception is thrown
-         */
-        static void WorkerObjectOnMessageCallback(napi_env env, jint workerId, jstring message);
-
-        /*
-         * Fired when a Worker instance's terminate is called (immediately stops execution of the thread)
+         * Fired when a Worker instance's terminate is called (cooperatively
+         * stops the worker thread's looper)
          */
         static napi_value WorkerObjectTerminateCallback(napi_env env, napi_callback_info info);
 
@@ -161,32 +147,12 @@ namespace tns {
         static napi_value WorkerGlobalCloseCallback(napi_env env, napi_callback_info info);
 
         /*
-         * Clears the persistent Worker object handle associated with a workerId
-         * Occurs when calling a worker object's `terminate` or a worker thread's global scope `close`
-         */
-        static void ClearWorkerPersistent(napi_env env, int workerId);
-
-        /*
-         * Terminates the currently executing Isolate. No scripts can be executed after this call
-         */
-        static void TerminateWorkerThread(napi_env env);
-
-        /*
          * Is called when an unhandled exception is thrown inside the worker
          * Will execute 'onerror' if one is provided inside the Worker Scope
-         * Will make the exception "bubble up" through to main, to be handled by the Worker Object
+         * Will make the exception "bubble up" through to the parent, to be handled by the Worker Object
          * if 'onerror' isn't implemented or returns false
          */
         static void CallWorkerScopeOnErrorHandle(napi_env env, napi_value tc);
-
-        /*
-         * Is called when an unhandled exception bubbles up from the worker scope to the main thread Worker Object
-         * Will execute `onerror` if one is implemented for the Worker Object instance
-         * Will throw a NativeScript Exception if 'onerror' isn't implemented or returns false
-         */
-        static void CallWorkerObjectOnErrorHandle(napi_env env, jint workerId, jstring message,
-                                                  jstring stackTrace, jstring filename, jint lineno,
-                                                  jstring threadName);
 
         static napi_value PostFrameCallback(napi_env env, napi_callback_info info);
 
@@ -253,13 +219,6 @@ namespace tns {
         static jmethodID ENABLE_VERBOSE_LOGGING_METHOD_ID;
 
         static jmethodID DISABLE_VERBOSE_LOGGING_METHOD_ID;
-
-        static jmethodID INIT_WORKER_METHOD_ID;
-
-        static jmethodID SEND_MESSAGE_TO_WORKER_METHOD_ID;
-        static jmethodID SEND_MESSAGE_TO_MAIN_METHOD_ID;
-        static jmethodID TERMINATE_WORKER_METHOD_ID;
-        static jmethodID WORKER_SCOPE_CLOSE_METHOD_ID;
 
         static NumericCasts castFunctions;
 

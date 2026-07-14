@@ -14,6 +14,7 @@
 #include <string>
 #include "Constants.h"
 
+class MetadataNode;
 
 namespace tns {
     class ObjectManager {
@@ -24,7 +25,8 @@ namespace tns {
 
         void Init(napi_env env);
 
-        JniLocalRef GetJavaObjectByJsObject(napi_value object, int *objectId = nullptr);
+        JniLocalRef GetJavaObjectByJsObject(napi_value object, int *objectId = nullptr,
+                                            bool *isSuper = nullptr);
 
 
         JniLocalRef GetJavaObjectByJsObjectFast(napi_value object);
@@ -49,15 +51,21 @@ namespace tns {
 
         napi_value GetOrCreateProxyWeak(jint javaObjectID, napi_value instance);
 
-        void Link(napi_value object, uint32_t javaObjectID, jclass clazz);
+        void Link(napi_value object, uint32_t javaObjectID, jclass clazz,
+                  MetadataNode *node = nullptr);
+
+        // Returns the class metadata stored on the per-instance JSInstanceInfo
+        // (host proxy's, or the raw instance's wrap). Used by
+        // MetadataNode::GetInstanceMetadata under USE_HOST_OBJECT.
+        MetadataNode *GetInstanceNode(napi_value object);
 
         bool CloneLink(napi_value src, napi_value dest);
 
         bool IsRuntimeJsObject(napi_value object);
 
-        std::string GetClassName(jobject javaObject);
+        static std::string GetClassName(jobject javaObject);
 
-        std::string GetClassName(jclass clazz);
+        static std::string GetClassName(jclass clazz);
 
         int GenerateNewObjectID();
 
@@ -81,8 +89,6 @@ namespace tns {
 
         inline static void ReleaseObjectNow(napi_env env, int javaObjectId);
 
-        bool GetIsSuper(int objectId, napi_value value);
-
         bool IsHostObject(napi_value object);
 
     private:
@@ -96,7 +102,59 @@ namespace tns {
 
             uint32_t JavaObjectID;
             jclass ObjectClazz;
+            // Cached super-call flag (-1 = unresolved, 0 = false, 1 = true).
+            int8_t isSuper = -1;
+            // Per-instance class metadata. Under USE_HOST_OBJECT this replaces the
+            // "#instance_metadata" property; reachable via GetInstanceNode.
+            MetadataNode *node = nullptr;
         };
+
+#ifdef USE_HOST_OBJECT
+        // Backing context for a host-object proxy. The new napi_create_host_object
+        // takes no target/getter/setter, so everything needed to proxy to the
+        // underlying instance is carried here in the `data` pointer.
+        struct HostObjectProxy {
+            ObjectManager *objectManager;
+            JSInstanceInfo *instanceInfo;  // java object id holder
+            bool isPrimary;                // owns instanceInfo + marks weak on GC
+            napi_env env;
+            napi_ref target;               // strong ref to the wrapped instance
+            bool isArray;
+            std::string arraySignature;    // jni array signature (arrays only)
+            int8_t isSuper = -1;           // cached super-call flag (-1=unresolved)
+        };
+
+        napi_value CreateHostObjectProxy(napi_value instance,
+                                         JSInstanceInfo *instanceInfo,
+                                         bool isPrimary);
+
+        // napi_host_object_methods callbacks (transparent proxy to `target`).
+        static napi_value HostObjectGet(napi_env env, napi_value host,
+                                        napi_value property, void *data);
+        static void HostObjectSet(napi_env env, napi_value host,
+                                  napi_value property, napi_value value,
+                                  void *data);
+        static int HostObjectHas(napi_env env, napi_value host,
+                                  napi_value property, void *data);
+        static int HostObjectDelete(napi_env env, napi_value host,
+                                     napi_value property, void *data);
+        static napi_value HostObjectOwnKeys(napi_env env, napi_value host,
+                                            void *data);
+        // Fast numeric index access: native get/setValueAtIndex (arrays only).
+        static napi_value HostObjectIndexedGet(napi_env env, napi_value host,
+                                               uint32_t index, void *data);
+        static void HostObjectIndexedSet(napi_env env, napi_value host,
+                                         uint32_t index, napi_value value,
+                                         void *data);
+        static napi_value HostObjectSuperGetter(napi_env env,
+                                                napi_callback_info info);
+        static void HostObjectProxyFinalizer(napi_env env, void *data,
+                                             void *hint);
+        // Actual cleanup, run on the safe post-GC pass (via node_api_post_finalizer
+        // on V8) so reference-deleting Node-API calls are legal.
+        static void HostObjectProxyPostFinalizer(napi_env env, void *data,
+                                                 void *hint);
+#endif
 
 
         JSInstanceInfo *GetJSInstanceInfo(napi_value object);
@@ -119,13 +177,14 @@ namespace tns {
 
         static void DeleteWeakGlobalRefCallback(const jweak &object, void *state);
 
+        static bool ValidateWeakGlobalRefCallback(const int &javaObjectID, const jweak &object, void *state);
+
         jobject m_javaRuntimeObject;
 
         napi_env m_env;
 
         robin_hood::unordered_map<int, napi_ref> m_idToProxy;
         robin_hood::unordered_map<int, napi_ref> m_idToObject;
-        robin_hood::unordered_map<int, bool> m_idToSuper;
         robin_hood::unordered_set<int> m_weakObjectIds;
         robin_hood::unordered_set<int> m_markedAsWeakIds;
 
@@ -137,9 +196,9 @@ namespace tns {
 
         DirectBuffer m_outBuff;
 
-        jclass JAVA_LANG_CLASS;
+        static jclass JAVA_LANG_CLASS;
 
-        jmethodID GET_NAME_METHOD_ID;
+        static jmethodID GET_NAME_METHOD_ID;
 
         jmethodID GET_JAVAOBJECT_BY_ID_METHOD_ID;
 

@@ -52,7 +52,7 @@ MetadataReader MetadataBuilder::BuildMetadata(const std::string &filesPath) {
             // startup because the receiver is triggered.  So even though we are exiting, the receiver will have
             // done its job
 
-            exit(0);
+            _Exit(0);
         }
         else {
             throw NativeScriptException(ss.str());

@@ -15,7 +15,6 @@ function resolveCurrentVersion() {
     "android-jsc": "../packages/android-jsc/package.json",
     "android-quickjs": "../packages/android-quickjs/package.json",
     "android-quickjs-ng": "../packages/android-quickjs-ng/package.json",
-    "android-shermes": "../packages/android-shermes/package.json",
     "android-primjs": "../packages/android-primjs/package.json",
   };
 

@@ -4,11 +4,27 @@
 JSR::JSR() = default;
 tns::SimpleMap<napi_env, JSR *> JSR::env_to_jsr_cache;
 
-napi_status js_create_runtime(napi_runtime *runtime) {
-    return qjs_create_runtime(runtime);
+// Engine-agnostic runtime handle for the jsr layer. QuickJS keeps its own
+// napi_runtime (the real engine runtime defined in quickjs-api.c); this wrapper
+// just points at it so the jsr API can speak jsr_ns_runtime while
+// quickjs-api.c / quicks-runtime.h stay unchanged.
+struct jsr_ns_runtime__ {
+    napi_runtime rt;
+};
+
+napi_status js_create_runtime(jsr_ns_runtime *runtime) {
+    if (!runtime) return napi_invalid_arg;
+    auto *wrapper = new jsr_ns_runtime__();
+    napi_status status = qjs_create_runtime(&wrapper->rt);
+    if (status != napi_ok) {
+        delete wrapper;
+        return status;
+    }
+    *runtime = wrapper;
+    return napi_ok;
 }
-napi_status js_create_napi_env(napi_env *env, napi_runtime runtime) {
-    napi_status status = qjs_create_napi_env(env, runtime);
+napi_status js_create_napi_env(napi_env *env, jsr_ns_runtime runtime) {
+    napi_status status = qjs_create_napi_env(env, runtime->rt);
     JSR::env_to_jsr_cache.Insert((*env), new JSR());
     return status;
 }
@@ -37,8 +53,10 @@ napi_status js_free_napi_env(napi_env env) {
     return qjs_free_napi_env(env);
 }
 
-napi_status js_free_runtime(napi_runtime runtime) {
-    return qjs_free_runtime(runtime);
+napi_status js_free_runtime(jsr_ns_runtime runtime) {
+    napi_status status = qjs_free_runtime(runtime->rt);
+    delete runtime;
+    return status;
 }
 
 napi_status js_execute_script(napi_env env,
@@ -67,6 +85,12 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
     return napi_ok;
 }
 
+
+napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url,
+                                 napi_value *result) {
+    // No compile-time bytecode format wired up for this engine yet; fall back to source.
+    return napi_cannot_run_js;
+}
 
 napi_status js_get_runtime_version(napi_env env, napi_value *version) {
     napi_create_string_utf8(env, "QuickJS", NAPI_AUTO_LENGTH, version);

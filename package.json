@@ -1,7 +1,7 @@
 {
   "name": "@nativescript/android",
   "description": "NativeScript for Android using Node-API",
-  "version": "8.8.5",
+  "version": "9.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/NativeScript/android.git"
@@ -28,7 +28,7 @@
     "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
     "version": "npm run changelog && git add CHANGELOG.md",
     "build": "node ./scripts/build.js",
-    "setup": "cd test-app/build-tools/jsparser && npm install && cd ../../../"
+    "setup": "node ./scripts/setup.js"
   },
   "devDependencies": {
     "conventional-changelog-cli": "^2.1.1",

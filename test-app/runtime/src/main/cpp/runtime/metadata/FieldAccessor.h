@@ -9,9 +9,17 @@
 namespace tns {
 class FieldAccessor {
     public:
-        napi_value GetJavaField(napi_env env, napi_value target, FieldCallbackData* fieldData);
+        // `objectManager` and `targetJavaObject` may be supplied pre-resolved by
+        // the caller (the accessor callback) so this avoids a locked env->runtime
+        // lookup and a second host-object probe. Both fall back to resolving
+        // internally when omitted.
+        napi_value GetJavaField(napi_env env, napi_value target, FieldCallbackData* fieldData,
+                                ObjectManager* objectManager = nullptr,
+                                JniLocalRef targetJavaObject = JniLocalRef());
 
-        void SetJavaField(napi_env env, napi_value target, napi_value value, FieldCallbackData* fieldData);
+        void SetJavaField(napi_env env, napi_value target, napi_value value, FieldCallbackData* fieldData,
+                          ObjectManager* objectManager = nullptr,
+                          JniLocalRef targetJavaObject = JniLocalRef());
 };
 }
 

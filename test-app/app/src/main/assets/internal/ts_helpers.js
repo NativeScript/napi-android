@@ -12,10 +12,10 @@
         d;
 
       if (
-        typeof global.Reflect === "object" &&
-        typeof global.Reflect.decorate === "function"
+        typeof globalThis.Reflect === "object" &&
+        typeof globalThis.Reflect.decorate === "function"
       ) {
-        r = global.Reflect.decorate(decorators, target, key, desc);
+        r = globalThis.Reflect.decorate(decorators, target, key, desc);
       } else {
         for (var i = decorators.length - 1; i >= 0; i--) {
           if ((d = decorators[i])) {
@@ -56,6 +56,7 @@
   var __extends = function (Child, Parent) {
     var extendNativeClass =
       !!Parent.extend && Parent.extend.toString().indexOf("[native code]") > -1;
+
     if (!extendNativeClass) {
       __extends_ts(Child, Parent);
       return;
@@ -189,82 +190,25 @@
       }
     };
   }
+     Object.defineProperty(globalThis, "__native", { value: __native });
+     Object.defineProperty(globalThis, "__extends", { value: __extends });
+     Object.defineProperty(globalThis, "__decorate", { value: __decorate });
 
-  Object.defineProperty(global, "__native", { value: __native });
-  Object.defineProperty(global, "__extends", { value: __extends });
-  Object.defineProperty(global, "__decorate", { value: __decorate });
 
-  if (!global.__ns__worker) {
-    global.JavaProxy = JavaProxy;
+
+  if (!globalThis.__ns__worker) {
+    globalThis.JavaProxy = JavaProxy;
   }
-  global.Interfaces = Interfaces;
+  globalThis.Interfaces = Interfaces;
 
-  if (global.WeakRef && !global.WeakRef.prototype.get) {
-    global.WeakRef.prototype.get = global.WeakRef.prototype.deref;
+  if (globalThis.WeakRef && !globalThis.WeakRef.prototype.get) {
+    globalThis.WeakRef.prototype.get = globalThis.WeakRef.prototype.deref;
   }
 
-  global.setNativeArrayProp = (target, prop, value, receiver) => {
-    if (typeof prop !== "symbol" && !isNaN(prop)) {
-      receiver.setValueAtIndex(parseInt(prop), value);
-      return true;
-    }
-    target[prop] = value;
-    return true;
-  };
-
-  global.getNativeArrayProp = (target, prop, receiver) => {
-    if (typeof prop !== "symbol" && !isNaN(prop)) {
-      return receiver.getValueAtIndex(parseInt(prop));
-    }
-
-    if (prop === Symbol.iterator) {
-      var index = 0;
-      const l = target.length;
-      return function () {
-        return {
-          next: function () {
-            if (index < l) {
-              return {
-                value: receiver.getValueAtIndex(index++),
-                done: false,
-              };
-            } else {
-              return { done: true };
-            }
-          },
-        };
-      };
-    }
-    if (prop === "map") {
-      return function (callback) {
-        const values = receiver.getAllValues();
-        const result = [];
-        const l = target.length;
-        for (var i = 0; i < l; i++) {
-          result.push(callback(values[i], i, target));
-        }
-        return result;
-      };
-    }
-
-    if (prop === "toString") {
-      return function () {
-        const result = receiver.getAllValues();
-        return result.join(",");
-      };
-    }
-
-    if (prop === "forEach") {
-      return function (callback) {
-        const values = receiver.getAllValues();
-        const l = values.length;
-        for (var i = 0; i < l; i++) {
-          callback(values[i], i, target);
-        }
-      };
-    }
-    return target[prop];
-  };
+  // Native array access: numeric indexing and the map/forEach/toString/
+  // Symbol.iterator helpers are now implemented natively (see MetadataNode's
+  // array prototype + the host object's indexed accessors), so the old JS
+  // getNativeArrayProp/setNativeArrayProp helpers are gone.
 
   function findInPrototypeChain(obj, prop) {
     while (obj) {
@@ -292,8 +236,11 @@
       get: function (target, prop) {
         if (prop === EXTERNAL_PROP) return this[EXTERNAL_PROP];
         if (prop === REFERENCE_PROP_JSC) return this[REFERENCE_PROP_JSC];
-        if (target.__is__javaArray) {
-          return global.getNativeArrayProp(target, prop, target);
+        // Numeric indices go straight to the native element accessor; the
+        // map/forEach/toString/Symbol.iterator helpers live on the array
+        // prototype now, so everything else just forwards to the target.
+        if (target.__is__javaArray && typeof prop !== "symbol" && !isNaN(prop)) {
+          return target.getValueAtIndex(parseInt(prop));
         }
         return target[prop];
       },
@@ -476,6 +423,15 @@
       } else {
         handledPromise(promise);
       }
+    };
+  } else if (globalThis.__engine === "JSC") {
+    // JSC's unhandled-rejection callback only fires for rejections that go
+    // unhandled (there is no "handled later" retraction event), and it is
+    // invoked with (promise, reason).
+    globalThis.onUnhandledPromiseRejectionTracker = (promise, reason) => {
+      hasBeenNotifiedProperty.set(promise, false);
+      const error = makeRejectionError(reason);
+      unhandledPromise(promise, error);
     };
   } else if (globalThis.__engine === "Hermes") {
     HermesInternal.enablePromiseRejectionTracker({

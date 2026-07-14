@@ -7,8 +7,17 @@ const { spawn } = require('child_process');
 const path = require('path');
 const readline = require('readline');
 
-const VALID_ENGINES = ['V8-10',"V8-11","V8-13", 'QUICKJS', "QUICKJS_NG", 'HERMES', 'JSC', 'SHERMES', 'PRIMJS'];
-const HOST_OBJECTS_SUPPORTED = new Set(['V8-10','V8-11',"V8-13", 'QUICKJS',"QUICKJS_NG", 'PRIMJS']);
+const VALID_ENGINES = ['V8-10',"V8-11","V8-13", 'QUICKJS', "QUICKJS_NG", 'HERMES', 'JSC', 'PRIMJS'];
+const HOST_OBJECTS_SUPPORTED = new Set(['V8-10','V8-11',"V8-13", 'QUICKJS',"QUICKJS_NG",'HERMES', 'PRIMJS', "JSC"]);
+
+// Host objects are enabled by default whenever the selected engine supports
+// them. They can be force-disabled with --disable-host-objects (or by
+// answering "no" to the interactive prompt).
+function hostObjectsEnabled(opts) {
+  if (!HOST_OBJECTS_SUPPORTED.has(opts.engine)) return false;
+  if (opts['disable-host-objects']) return false;
+  return true;
+}
 
 function parseArgs(argv) {
   const opts = {};
@@ -51,20 +60,6 @@ async function interactiveFill(opts) {
         opts.engine = VALID_ENGINES.includes(pick) ? pick : 'V8-10';
       }
 
-      // Only prompt for host objects if the chosen engine supports it
-      if (HOST_OBJECTS_SUPPORTED.has(opts.engine)) {
-        if (typeof opts['use-host-objects'] === 'undefined') {
-          const ans = await prompt('Use host objects? [y/N]', rl, 'N');
-          if (/^y(es)?$/i.test(ans)) opts['use-host-objects'] = true;
-        }
-      } else {
-        // ensure the flag is not set for unsupported engines
-        if (opts['use-host-objects']) {
-          console.log(`Warning: host objects not supported for engine ${opts.engine}; ignoring --use-host-objects`);
-          delete opts['use-host-objects'];
-        }
-      }
-
       return opts;
     }
 
@@ -72,29 +67,9 @@ async function interactiveFill(opts) {
     if (!opts.engine) {
       console.log('Select JS engine:');
       VALID_ENGINES.forEach((e, i) => console.log(`  ${i + 1}) ${e}`));
-      const ans = await prompt('Choose number or name', rl, 'V8');
+      const ans = await prompt('Choose number or name', rl, 'V8-10');
       const pick = /^\d+$/.test(ans) ? VALID_ENGINES[Number(ans) - 1] : ans;
-      opts.engine = VALID_ENGINES.includes(pick) ? pick : 'V8';
-    }
-
-    const booleanPrompts = [
-      { key: 'use-host-objects', prop: 'useHostObjects', desc: 'Use host objects (useHostObjects)' },
-    ];
-
-    for (const p of booleanPrompts) {
-      // skip host-objects prompt if the selected engine does not support it
-      if (p.key === 'use-host-objects' && !HOST_OBJECTS_SUPPORTED.has(opts.engine)) {
-        if (opts['use-host-objects']) {
-          console.log(`Warning: host objects not supported for engine ${opts.engine}; ignoring --use-host-objects`);
-          delete opts['use-host-objects'];
-        }
-        continue;
-      }
-
-      if (typeof opts[p.key] === 'undefined') {
-        const ans = await prompt(`${p.desc}? [y/N]`, rl, 'N');
-        if (/^y(es)?$/i.test(ans)) opts[p.key] = true;
-      }
+      opts.engine = VALID_ENGINES.includes(pick) ? pick : 'V8-10';
     }
 
   } finally {
@@ -107,9 +82,9 @@ async function interactiveFill(opts) {
 function buildGradleArgs(opts) {
   const props = [];
   if (opts.engine) props.push(`-Pengine=${opts.engine}`);
-  if (opts['use-host-objects']) props.push('-PuseHostObjects');
+  if (hostObjectsEnabled(opts)) props.push('-PuseHostObjects');
   if (opts['as-napi-module']) props.push('-PasNapiModule');
-
+  
   return props;
 }
 

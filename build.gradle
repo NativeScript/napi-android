@@ -39,6 +39,16 @@ def DIST_PATH = "$rootDir/dist_${jsEngine.toLowerCase()}"
 def TEST_APP_PATH = "$rootDir/test-app"
 def BUILD_TOOLS_PATH = "$TEST_APP_PATH/build-tools"
 def DIST_FRAMEWORK_PATH = "$DIST_PATH/framework"
+def BYTECODE_TOOLS_PATH = "$rootDir/tools/bytecode-compiler"
+
+// Maps an ns_engine value to its bytecode-compiler bin/<dir>. Engines with no
+// bytecode compiler (V8*, JSC) are absent, so no binaries are shipped for them.
+def bytecodeEngineDir = [
+        "HERMES"    : "hermes",
+        "QUICKJS"   : "quickjs",
+        "QUICKJS_NG": "quickjs-ng",
+        "PRIMJS"    : "primjs",
+].get(jsEngine)
 
 task checkEnvironmentVariables {
     if ("$System.env.JAVA_HOME" == "" || "$System.env.JAVA_HOME" == "null") {
@@ -298,6 +308,20 @@ task copyFilesToProjectTemeplate {
             from "$BUILD_TOOLS_PATH/android-metadata-generator/build/libs/android-metadata-generator.jar"
             into "$DIST_FRAMEWORK_PATH/build-tools"
         }
+        // Ship the engine-generic bytecode compiler (driver + adapters). The
+        // per-host compiler binaries under bin/ are shipped only for the engine
+        // this framework is built for, so a V8 template doesn't carry hermesc.
+        copy {
+            from "$BYTECODE_TOOLS_PATH"
+            into "$DIST_FRAMEWORK_PATH/build-tools/bytecode-compiler"
+            exclude "bin/**"
+        }
+        if (bytecodeEngineDir != null) {
+            copy {
+                from "$BYTECODE_TOOLS_PATH/bin/${bytecodeEngineDir}"
+                into "$DIST_FRAMEWORK_PATH/build-tools/bytecode-compiler/bin/${bytecodeEngineDir}"
+            }
+        }
         copy {
             from "$TEST_APP_PATH/runtime/build/outputs/aar/runtime-regular-release.aar"
             into "$DIST_FRAMEWORK_PATH/app/libs/runtime-libs"
@@ -328,10 +352,6 @@ task copyFilesToProjectTemeplate {
         copy {
             from "$TEST_APP_PATH/gradle.properties"
             into "$DIST_FRAMEWORK_PATH"
-        }
-
-        ant.propertyfile(file: "$TEST_APP_PATH/gradle.properties") {
-            entry(key: "ns_engine", value: "V8")
         }
 
         copy {

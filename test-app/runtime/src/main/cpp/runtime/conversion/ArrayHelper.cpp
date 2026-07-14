@@ -11,6 +11,7 @@ ArrayHelper::ArrayHelper() {
 }
 
 void ArrayHelper::Init(napi_env env) {
+    napi_status status;
     JEnv jenv;
 
     RUNTIME_CLASS = jenv.FindClass("com/tns/Runtime");
@@ -20,10 +21,14 @@ void ArrayHelper::Init(napi_env env) {
     assert(CREATE_ARRAY_HELPER != nullptr);
 
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {
+        return;
+    }
 
     napi_value arrayConstructor;
-    napi_get_named_property(env, global, "Array", &arrayConstructor);
+    NAPI_GUARD(napi_get_named_property(env, global, "Array", &arrayConstructor)) {
+        return;
+    }
 
     napi_util::napi_set_function(env, arrayConstructor, "create", CreateJavaArrayCallback, nullptr);
 
@@ -48,7 +53,7 @@ napi_value ArrayHelper::CreateJavaArrayCallback(napi_env env, napi_callback_info
 }
 
 napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(8)
 
     if (argc != 2) {
         Throw(env, "Expect two parameters.");
@@ -64,10 +69,14 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
     auto objectManager = runtime->GetObjectManager();
 
     napi_valuetype typeType;
-    napi_typeof(env, type, &typeType);
+    NAPI_GUARD(napi_typeof(env, type, &typeType)) {
+        return nullptr;
+    }
 
     napi_valuetype lengthType;
-    napi_typeof(env, length, &lengthType);
+    NAPI_GUARD(napi_typeof(env, length, &lengthType)) {
+        return nullptr;
+    }
 
     if (typeType == napi_string) {
         if (lengthType != napi_number) {
@@ -83,7 +92,9 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
         }
 
         int32_t len;
-        napi_get_value_int32(env, length, &len);
+        NAPI_GUARD(napi_get_value_int32(env, length, &len)) {
+            return nullptr;
+        }
         if (len < 0) {
             Throw(env, "Expect non-negative integer value as a second argument.");
             return nullptr;
@@ -105,17 +116,23 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
         }
 
         int32_t len;
-        napi_get_value_int32(env, length, &len);
+        NAPI_GUARD(napi_get_value_int32(env, length, &len)) {
+            return nullptr;
+        }
         if (len < 0) {
             Throw(env, "Expect non-negative integer value as a second argument.");
             return nullptr;
         }
 
         napi_value classVal;
-        napi_get_named_property(env, type, "class", &classVal);
+        NAPI_GUARD(napi_get_named_property(env, type, "class", &classVal)) {
+            return nullptr;
+        }
 
         napi_valuetype classValType;
-        napi_typeof(env, classVal, &classValType);
+        NAPI_GUARD(napi_typeof(env, classVal, &classValType)) {
+            return nullptr;
+        }
 
         if (classValType == napi_undefined) {
             Throw(env, "Expect known class as a second argument.");
@@ -136,13 +153,18 @@ napi_value ArrayHelper::CreateJavaArray(napi_env env, napi_callback_info info) {
 }
 
 void ArrayHelper::Throw(napi_env env, const std::string& errorMessage) {
+    napi_status status;
     napi_value errMsg;
-    napi_create_string_utf8(env, errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg);
+    NAPI_GUARD(napi_create_string_utf8(env, errorMessage.c_str(), NAPI_AUTO_LENGTH, &errMsg)) {
+        return;
+    }
 
     napi_value err;
-    napi_create_error(env, nullptr, errMsg, &err);
+    NAPI_GUARD(napi_create_error(env, nullptr, errMsg, &err)) {
+        return;
+    }
 
-    napi_throw(env, err);
+    NAPI_GUARD(napi_throw(env, err)) {}
 }
 
 jobject ArrayHelper::CreateArrayByClassName(const string& typeName, int length) {

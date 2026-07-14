@@ -5,12 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#ifndef HERMES_CDP_HEAPPROFILERDOMAINAGENT_H
-#define HERMES_CDP_HEAPPROFILERDOMAINAGENT_H
+#pragma once
 
+#include <hermes/cdp/DomainAgent.h>
 #include <hermes/hermes.h>
-
-#include "DomainAgent.h"
 
 namespace facebook {
 namespace hermes {
@@ -71,5 +69,3 @@ class HeapProfilerDomainAgent : public DomainAgent {
 } // namespace cdp
 } // namespace hermes
 } // namespace facebook
-
-#endif // HERMES_CDP_HEAPPROFILERDOMAINAGENT_H

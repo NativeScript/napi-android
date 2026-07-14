@@ -73,5 +73,10 @@ require("./tests/testPostFrameCallback");
 require("./tests/console/logTests.js");
 require('./tests/testURLImpl.js');
 require('./tests/testURLSearchParamsImpl.js');
+require('./tests/testURLPattern.js');
+require('./tests/testQueueMicrotask.js');
+require('./tests/testConcurrentAccess.js');
+require('./tests/testClassForNameDiscovery.js');
+require('./tests/testNativeTimers.js');
 
 

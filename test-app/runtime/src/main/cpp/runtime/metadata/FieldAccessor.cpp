@@ -8,15 +8,16 @@ using namespace std;
 using namespace tns;
 
 napi_value
-FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *fieldData) {
+FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *fieldData,
+                            ObjectManager *objectManager, JniLocalRef targetJavaObject) {
     JEnv jEnv;
 
-    auto runtime = Runtime::GetRuntime(env);
-    auto objectManager = runtime->GetObjectManager();
+    if (objectManager == nullptr) {
+        objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+    }
 
+    napi_status status;
     napi_value fieldResult;
-
-    JniLocalRef targetJavaObject;
 
     auto &fieldMetadata = fieldData->metadata;
 
@@ -44,8 +45,11 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
     }
 
     if (!isStatic) {
-        // Using fast, target is always the original *this*
-        targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        // The caller usually pre-resolves this (single probe); only fall back to
+        // resolving here when it wasn't supplied.
+        if (targetJavaObject.IsNull()) {
+            targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        }
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;
@@ -80,7 +84,9 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                 } else {
                     result = jEnv.GetByteField(targetJavaObject, fieldId);
                 }
-                napi_create_int32(env, result, &fieldResult);
+                NAPI_GUARD(napi_create_int32(env, result, &fieldResult)) {
+                    return nullptr;
+                }
                 break;
             }
             case 'C': { // char
@@ -105,7 +111,9 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                 } else {
                     result = jEnv.GetShortField(targetJavaObject, fieldId);
                 }
-                napi_create_int32(env, result, &fieldResult);
+                NAPI_GUARD(napi_create_int32(env, result, &fieldResult)) {
+                    return nullptr;
+                }
                 break;
             }
             case 'I': { // int
@@ -116,7 +124,9 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                     result = jEnv.GetIntField(targetJavaObject, fieldId);
                 }
 
-                napi_create_int32(env, result, &fieldResult);
+                NAPI_GUARD(napi_create_int32(env, result, &fieldResult)) {
+                    return nullptr;
+                }
                 break;
             }
             case 'J': { // long
@@ -137,7 +147,9 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                 } else {
                     result = jEnv.GetFloatField(targetJavaObject, fieldId);
                 }
-                napi_create_double(env, (double) result, &fieldResult);
+                NAPI_GUARD(napi_create_double(env, (double) result, &fieldResult)) {
+                    return nullptr;
+                }
                 break;
             }
             case 'D': { // double
@@ -147,7 +159,9 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
                 } else {
                     result = jEnv.GetDoubleField(targetJavaObject, fieldId);
                 }
-                napi_create_double(env, (double) result, &fieldResult);
+                NAPI_GUARD(napi_create_double(env, (double) result, &fieldResult)) {
+                    return nullptr;
+                }
                 break;
             }
             default: {
@@ -184,20 +198,22 @@ FieldAccessor::GetJavaField(napi_env env, napi_value target, FieldCallbackData *
             }
             jEnv.DeleteLocalRef(result);
         } else {
-            napi_get_null(env, &fieldResult);
+            NAPI_GUARD(napi_get_null(env, &fieldResult)) {
+                return nullptr;
+            }
         }
     }
     return fieldResult;
 }
 
 void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value value,
-                                 FieldCallbackData *fieldData) {
+                                 FieldCallbackData *fieldData, ObjectManager *objectManager,
+                                 JniLocalRef targetJavaObject) {
     JEnv jEnv;
 
-    auto runtime = Runtime::GetRuntime(env);
-    auto objectManager = runtime->GetObjectManager();
-
-    JniLocalRef targetJavaObject;
+    if (objectManager == nullptr) {
+        objectManager = Runtime::GetRuntime(env)->GetObjectManager();
+    }
 
     auto &fieldMetadata = fieldData->metadata;
 
@@ -230,8 +246,11 @@ void FieldAccessor::SetJavaField(napi_env env, napi_value target, napi_value val
     }
 
     if (!isStatic) {
-        // Using fast, target is always the original *this*
-        targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        // The caller usually pre-resolves this (single probe); only fall back to
+        // resolving here when it wasn't supplied.
+        if (targetJavaObject.IsNull()) {
+            targetJavaObject = objectManager->GetJavaObjectByJsObjectFast(target);
+        }
 
         if (targetJavaObject.IsNull()) {
             stringstream ss;

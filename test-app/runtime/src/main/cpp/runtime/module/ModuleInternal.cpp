@@ -27,14 +27,15 @@ ModuleInternal::ModuleInternal()
 }
 
 void ModuleInternal::DeInit() {
+    napi_status status;
     if (m_env != nullptr) {
-        napi_delete_reference(m_env, this->m_requireFunction);
-        napi_delete_reference(m_env, this->m_requireFactoryFunction);
+        NAPI_GUARD(napi_delete_reference(m_env, this->m_requireFunction)) {}
+        NAPI_GUARD(napi_delete_reference(m_env, this->m_requireFactoryFunction)) {}
     }
 
     for (const auto& pair: this->m_requireCache) {
         if (m_env != nullptr) {
-            napi_delete_reference(m_env, pair.second);
+            NAPI_GUARD(napi_delete_reference(m_env, pair.second)) {}
         }
     }
     this->m_requireCache.clear();
@@ -71,10 +72,14 @@ void ModuleInternal::Init(napi_env env, const std::string& baseDir) {
 )";
 
     napi_value source;
-    napi_create_string_utf8(env, requireFactoryScript, NAPI_AUTO_LENGTH, &source);
+    NAPI_GUARD(napi_create_string_utf8(env, requireFactoryScript, NAPI_AUTO_LENGTH, &source)) {
+        return;
+    }
 
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {
+        return;
+    }
 
     napi_value result;
     status = js_execute_script(env, source, "<require_factory>", &result);
@@ -98,19 +103,24 @@ napi_value ModuleInternal::GetRequireFunction(napi_env env, const std::string& d
     if (itFound != m_requireCache.end()) {
         requireFunc = napi_util::get_ref_value(env, itFound->second);
     } else {
+        napi_status status;
         napi_value requireFuncFactory = napi_util::get_ref_value(env, m_requireFactoryFunction);
 
         napi_value requireInternalFunc = napi_util::get_ref_value(env, m_requireFunction);
 
         napi_value args[2];
         args[0] = requireInternalFunc;
-        napi_create_string_utf8(env, dirName.c_str(), NAPI_AUTO_LENGTH, &args[1]);
-        
+        NAPI_GUARD(napi_create_string_utf8(env, dirName.c_str(), NAPI_AUTO_LENGTH, &args[1])) {
+            return nullptr;
+        }
+
         napi_value thiz;
-        napi_create_object(env, &thiz);
+        NAPI_GUARD(napi_create_object(env, &thiz)) {
+            return nullptr;
+        }
 
         napi_value result;
-        napi_status status = napi_call_function(env, thiz, requireFuncFactory, 2, args, &result);
+        status = napi_call_function(env, thiz, requireFuncFactory, 2, args, &result);
         assert(status == napi_ok && result != nullptr);
 
         bool isFunction = napi_util::is_of_type(env, result, napi_function);
@@ -146,7 +156,7 @@ napi_value ModuleInternal::RequireCallback(napi_env env, napi_callback_info info
 }
 
 napi_value ModuleInternal::RequireCallbackImpl(napi_env env, napi_callback_info info) {
-    NAPI_CALLBACK_BEGIN_VARGS()
+    NAPI_CALLBACK_BEGIN_VARGS_FAST(4)
 
     if (argc != 2) {
         throw NativeScriptException(string("require should be called with two parameters"));
@@ -170,44 +180,65 @@ napi_value ModuleInternal::RequireCallbackImpl(napi_env env, napi_callback_info 
         return moduleObj;
     } else {
         napi_value exports;
-        napi_get_named_property(env, moduleObj, "exports", &exports);
+        // Throw rather than return nullptr so a failed require surfaces as a JS
+        // exception instead of silently evaluating to undefined.
+        NAPI_GUARD(napi_get_named_property(env, moduleObj, "exports", &exports)) {
+            throw NativeScriptException("Failed to read exports for module: " + moduleName);
+        }
         assert(!napi_util::is_null_or_undefined(env, exports));
         return exports;
     }
 }
 
 napi_value ModuleInternal::RequireNativeCallback(napi_env env, napi_callback_info info) {
-    void* data;
-    napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data);
+    napi_status status;
+    void* data = nullptr;
+    NAPI_GUARD(napi_get_cb_info(env, info, nullptr, nullptr, nullptr, &data)) {
+        return nullptr;
+    }
     auto cb = reinterpret_cast<napi_register_module_v *>(data);
     napi_value exports;
-    napi_create_object(env, &exports);
+    NAPI_GUARD(napi_create_object(env, &exports)) {
+        return nullptr;
+    }
     return cb(env, exports);
 }
 
 napi_status ModuleInternal::Load(napi_env env, const std::string& path) {
+    napi_status status;
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {
+        return status;
+    }
 
     napi_value require;
-    napi_get_named_property(env, global, "require", &require);
+    NAPI_GUARD(napi_get_named_property(env, global, "require", &require)) {
+        return status;
+    }
 
     napi_value args[1];
-    napi_create_string_utf8(env, path.c_str(), path.size(), &args[0]);
+    NAPI_GUARD(napi_create_string_utf8(env, path.c_str(), path.size(), &args[0])) {
+        return status;
+    }
 
     napi_value result;
-    napi_status status = napi_call_function(env, global, require, 1, args, &result);
+    status = napi_call_function(env, global, require, 1, args, &result);
     return status;
 }
 
 void ModuleInternal::LoadWorker(napi_env env, const string& path) {
+    napi_status status;
     Load(env, path);
     bool hasPendingException;
-    napi_is_exception_pending(env, &hasPendingException);
+    NAPI_GUARD(napi_is_exception_pending(env, &hasPendingException)) {
+        return;
+    }
 
     if (hasPendingException) {
         napi_value error;
-        napi_get_and_clear_last_exception(env, &error);
+        NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {
+            return;
+        }
         CallbackHandlers::CallWorkerScopeOnErrorHandle(env, error);
     }
 }
@@ -221,14 +252,25 @@ void ModuleInternal::CheckFileExists(napi_env env, const std::string& path, cons
 
 napi_value ModuleInternal::LoadInternalModule(napi_env env, const std::string& moduleName) {
     if (moduleName == "url") {
+        napi_status status;
         napi_value moduleObj;
-        napi_create_object(env, &moduleObj);
+        NAPI_GUARD(napi_create_object(env, &moduleObj)) {
+            return nullptr;
+        }
         napi_value url;
         napi_value exports;
-        napi_create_object(env, &exports);
-        napi_get_named_property(env, napi_util::global(env), "URL", &url);
-        napi_set_named_property(env, exports, "URL", url);
-        napi_set_named_property(env, moduleObj, "exports", exports);
+        NAPI_GUARD(napi_create_object(env, &exports)) {
+            return nullptr;
+        }
+        NAPI_GUARD(napi_get_named_property(env, napi_util::global(env), "URL", &url)) {
+            return nullptr;
+        }
+        NAPI_GUARD(napi_set_named_property(env, exports, "URL", url)) {
+            return nullptr;
+        }
+        NAPI_GUARD(napi_set_named_property(env, moduleObj, "exports", exports)) {
+            return nullptr;
+        }
         napi_util::napi_set_function(env, exports, "pathToFileURL", [](napi_env env, napi_callback_info info) -> napi_value {
             return ArgConverter::convertToJsString(env, "file://");
         });
@@ -316,22 +358,38 @@ std::string ModuleInternal::EnsureFileProtocol(const std::string& path) {
 }
 
 napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePath, const std::string& moduleCacheKey) {
+    napi_status status;
     napi_value result;
 
+    // A failure setting up the module scaffold must propagate as an exception:
+    // require() returning nullptr would surface to JS as `undefined` with no
+    // error, unlike every other failure path in this function which throws.
     napi_value context;
-    napi_get_global(env, &context);
+    NAPI_GUARD(napi_get_global(env, &context)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     napi_value moduleObj;
-    napi_create_object(env, &moduleObj);
+    NAPI_GUARD(napi_create_object(env, &moduleObj)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     napi_value exportsObj;
-    napi_create_object(env, &exportsObj);
+    NAPI_GUARD(napi_create_object(env, &exportsObj)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
-    napi_set_named_property(env, moduleObj, "exports", exportsObj);
+    NAPI_GUARD(napi_set_named_property(env, moduleObj, "exports", exportsObj)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     napi_value fullRequiredModulePath;
-    napi_create_string_utf8(env, modulePath.c_str(), modulePath.size(), &fullRequiredModulePath);
-    napi_set_named_property(env, moduleObj, "filename", fullRequiredModulePath);
+    NAPI_GUARD(napi_create_string_utf8(env, modulePath.c_str(), modulePath.size(), &fullRequiredModulePath)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
+    NAPI_GUARD(napi_set_named_property(env, moduleObj, "filename", fullRequiredModulePath)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     napi_ref poModuleObj = napi_util::make_ref(env, moduleObj);
     TempModule tempModule(this, modulePath, moduleCacheKey, poModuleObj);
@@ -339,16 +397,25 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     napi_value moduleFunc;
 
     if (Util::EndsWith(modulePath, ".js")) {
-        napi_value script = LoadScript(env, modulePath, fullRequiredModulePath);
         DEBUG_WRITE("%s", modulePath.c_str());
 
-        napi_status status = js_execute_script(env, script, EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
+        // Fast path: if the build compiled this module to engine bytecode (release
+        // builds, when the engine supports it), run it directly. The bytecode is
+        // the compiled form of the *wrapped* module content, so running it yields
+        // the same wrapper function js_execute_script would return for the source.
+        status = js_run_bytecode_file(env, modulePath.c_str(),
+                                      EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
+        if (status == napi_cannot_run_js) {
+            // Not bytecode — compile and run the source as usual.
+            napi_value script = LoadScript(env, modulePath, fullRequiredModulePath);
+            status = js_execute_script(env, script, EnsureFileProtocol(modulePath).c_str(), &moduleFunc);
+        }
         if (status != napi_ok) {
             bool pendingException;
-            napi_is_exception_pending(env, &pendingException);
+            NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {}
             napi_value error = nullptr;
             if (pendingException) {
-                napi_get_and_clear_last_exception(env, &error);
+                NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {}
             }
             if (error) {
                 throw NativeScriptException(env, error, "Error running script " + modulePath);
@@ -372,9 +439,13 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
 
         auto cb = reinterpret_cast<napi_register_module_v *>(func);
         napi_value exports;
-        napi_create_object(env, &exports);
+        NAPI_GUARD(napi_create_object(env, &exports)) {
+            throw NativeScriptException("Failed to load module: " + modulePath);
+        }
         napi_value result = cb(env, exports);
-        napi_set_named_property(env, moduleObj, "exports", result);
+        NAPI_GUARD(napi_set_named_property(env, moduleObj, "exports", result)) {
+            throw NativeScriptException("Failed to load module: " + modulePath);
+        }
         tempModule.SaveToCache();
         return moduleObj;
     } else {
@@ -383,36 +454,50 @@ napi_value ModuleInternal::LoadModule(napi_env env, const std::string& modulePat
     }
 
     napi_value fileName;
-    napi_create_string_utf8(env, modulePath.c_str(), modulePath.size(), &fileName);
+    NAPI_GUARD(napi_create_string_utf8(env, modulePath.c_str(), modulePath.size(), &fileName)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     char pathcopy[1024];
     strcpy(pathcopy, modulePath.c_str());
     std::string strDirName(dirname(pathcopy));
 
     napi_value dirName;
-    napi_create_string_utf8(env, strDirName.c_str(), strDirName.size(), &dirName);
+    NAPI_GUARD(napi_create_string_utf8(env, strDirName.c_str(), strDirName.size(), &dirName)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     napi_value require = GetRequireFunction(env, strDirName);
 
     napi_value requireArgs[5] = { moduleObj, exportsObj, require, fileName, dirName };
 
-    napi_set_named_property(env, moduleObj, "require", require);
+    NAPI_GUARD(napi_set_named_property(env, moduleObj, "require", require)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
     napi_util::define_property(env, moduleObj, "id", fileName);
 
     napi_value thiz;
-    napi_create_object(env, &thiz);
+    NAPI_GUARD(napi_create_object(env, &thiz)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     napi_value globalExtends;
-    napi_get_named_property(env, context, "__extends", &globalExtends);
-    napi_set_named_property(env, thiz, "__extends", globalExtends);
+    NAPI_GUARD(napi_get_named_property(env, context, "__extends", &globalExtends)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
+    NAPI_GUARD(napi_set_named_property(env, thiz, "__extends", globalExtends)) {
+        throw NativeScriptException("Failed to load module: " + modulePath);
+    }
 
     napi_value callResult;
-    napi_status status = napi_call_function(env, thiz, moduleFunc, 5, requireArgs, &callResult);
-    bool pendingException;
-    napi_is_exception_pending(env, &pendingException);
-     if (status != napi_ok || pendingException) {
+    // Keep the module-call status in its own variable: NAPI_GUARD below reassigns
+    // the shared `status`, which would otherwise mask a failed module invocation.
+    napi_status callStatus = napi_call_function(env, thiz, moduleFunc, 5, requireArgs, &callResult);
+    bool pendingException = false;
+    NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {}
+     if (callStatus != napi_ok || pendingException) {
          napi_value exception;
-         napi_get_and_clear_last_exception(env, &exception);
+         NAPI_GUARD(napi_get_and_clear_last_exception(env, &exception)) {}
          if (exception) {
              throw NativeScriptException(env, exception, "Error calling module function: ");
          } else {
@@ -432,15 +517,16 @@ napi_value ModuleInternal::LoadScript(napi_env env, const std::string& path, nap
 }
 
 napi_value ModuleInternal::LoadData(napi_env env, const std::string& path) {
+    napi_status status;
     std::string jsonData = Runtime::GetRuntime(m_env)->ReadFileText(path);
     napi_value json = JsonParseString(env, jsonData);
 
     if (!napi_util::is_of_type(env, json, napi_object)) {
         bool pendingException;
-        napi_is_exception_pending(env, &pendingException);
+        NAPI_GUARD(napi_is_exception_pending(env, &pendingException)) {}
         if (pendingException) {
             napi_value error;
-            napi_get_and_clear_last_exception(env, &error);
+            NAPI_GUARD(napi_get_and_clear_last_exception(env, &error)) {}
             throw NativeScriptException(env, error, "JSON is not valid, file=" + path);
         } else {
             throw NativeScriptException("JSON is not valid, file=" + path);
@@ -462,8 +548,11 @@ napi_value ModuleInternal::WrapModuleContent(napi_env env, const std::string& pa
     result += content;
     result += MODULE_EPILOGUE;
 
+    napi_status status;
     napi_value wrappedContent;
-    napi_create_string_utf8(env, result.c_str(), result.size(), &wrappedContent);
+    NAPI_GUARD(napi_create_string_utf8(env, result.c_str(), result.size(), &wrappedContent)) {
+        return nullptr;
+    }
 
     return wrappedContent;
 }

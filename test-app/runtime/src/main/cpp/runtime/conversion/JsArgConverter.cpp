@@ -11,8 +11,10 @@ using namespace std;
 using namespace tns;
 
 JsArgConverter::JsArgConverter(napi_env env, napi_value caller, napi_value *args, size_t argc,
-                               const std::string &methodSignature, MetadataEntry *entry)
-        : m_env(env), m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
+                               const std::string &methodSignature, MetadataEntry *entry, JNIEnv *jniEnv,
+                               ObjectManager *objectManager)
+        : m_env(env), m_jniEnv(jniEnv), m_objectManager(objectManager), m_isValid(true),
+          m_methodSignature(methodSignature), m_error(Error()) {
     int napiProvidedArgumentsLength = argc;
     m_argsLen = 1 + napiProvidedArgumentsLength;
 
@@ -46,8 +48,9 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value caller, napi_value *args
 
 JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
                                bool hasImplementationObject, const std::string &methodSignature,
-                               MetadataEntry *entry)
-        : m_env(env), m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
+                               MetadataEntry *entry, JNIEnv *jniEnv, ObjectManager *objectManager)
+        : m_env(env), m_jniEnv(jniEnv), m_objectManager(objectManager), m_isValid(true),
+          m_methodSignature(methodSignature), m_error(Error()) {
     m_argsLen = !hasImplementationObject ? argc : argc - 1;
 
     if (m_argsLen > 0) {
@@ -110,22 +113,36 @@ tns::BufferCastType JsArgConverter::GetCastType(napi_typedarray_type type) {
 }
 
 bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
+    napi_status status;
     bool success = false;
 
     char buff[1024];
+    buff[0] = '\0';
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
+
+    // Seed a default diagnostic up front: the NAPI_GUARD bails below `return
+    // false` without reaching the error-population tail, and the caller loop
+    // stops at the first failing argument, so this guarantees GetError() carries
+    // a non-empty, indexed message even on those early-exit paths.
+    m_error.index = index;
+    m_error.msg = "Cannot convert argument at index " + std::to_string(index) +
+                  " to " + typeSignature;
 
     if (arg == nullptr) {
         SetConvertedObject(index, nullptr);
         success = false;
     } else {
         napi_valuetype argType;
-        napi_typeof(m_env, arg, &argType);
+        NAPI_GUARD(napi_typeof(m_env, arg, &argType)) {
+            return false;
+        }
 
         if (argType == napi_object || argType == napi_function) {
             bool isArray;
-            napi_is_array(m_env, arg, &isArray);
+            NAPI_GUARD(napi_is_array(m_env, arg, &isArray)) {
+                return false;
+            }
 
             if (isArray) {
                 success = typeSignature[0] == '[';
@@ -143,7 +160,10 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                 CastType castType = CastType::None;
 
 #ifdef USE_HOST_OBJECT
-                void *data;
+                // A non-ok status here just means "not a host object" (some
+                // engines, e.g. PrimJS, return an error rather than data=NULL for
+                // plain objects); treat it as no host data and continue.
+                void *data = nullptr;
                 napi_get_host_object_data(env, arg, &data);
                 if (data) {
                     castType = CastType::None;
@@ -154,22 +174,28 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                 castType = NumericCasts::GetCastType(m_env, arg);
 #endif
 
+                CastType castTypeCheck = NumericCasts::GetCastType(env, arg);
+                if (castTypeCheck != CastType::None) {
+                    castType = castTypeCheck;
+                }
                 napi_value castValue;
                 napi_valuetype valueType = napi_undefined;
                 if (castType != CastType::None) {
                     castValue = NumericCasts::GetCastValue(m_env, arg);
                     if (castValue != nullptr) {
-                        napi_typeof(env, castValue, &valueType);
+                        NAPI_GUARD(napi_typeof(env, castValue, &valueType)) {
+                            return false;
+                        }
                     }
-
                 }
 
                 JniLocalRef obj;
 
-                auto runtime = Runtime::GetRuntime(m_env);
-                auto objectManager = runtime->GetObjectManager();
+                auto objectManager = m_objectManager != nullptr
+                                     ? m_objectManager
+                                     : Runtime::GetRuntime(m_env)->GetObjectManager();
 
-                JEnv jEnv;
+                JEnv jEnv = GetJEnv();
 
                 switch (castType) {
                     case CastType::Char:
@@ -202,7 +228,9 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             success = ConvertFromCastFunctionObject(value, index);
                         } else if (valueType == napi_number) {
                             int shortArg;
-                            napi_get_value_int32(m_env, castValue, &shortArg);
+                            NAPI_GUARD(napi_get_value_int32(m_env, castValue, &shortArg)) {
+                                return false;
+                            }
                             jshort value = (jshort) shortArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }
@@ -216,7 +244,9 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             success = ConvertFromCastFunctionObject(value, index);
                         } else if (valueType == napi_number) {
                             int64_t longArg;
-                            napi_get_value_int64(m_env, castValue, &longArg);
+                            NAPI_GUARD(napi_get_value_int64(m_env, castValue, &longArg)) {
+                                return false;
+                            }
                             jlong value = (jlong) longArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }
@@ -225,7 +255,9 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                     case CastType::Float:
                         if (valueType == napi_number) {
                             double floatArg;
-                            napi_get_value_double(m_env, castValue, &floatArg);
+                            NAPI_GUARD(napi_get_value_double(m_env, castValue, &floatArg)) {
+                                return false;
+                            }
                             jfloat value = (jfloat) floatArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }
@@ -234,7 +266,9 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                     case CastType::Double:
                         if (valueType == napi_number) {
                             double doubleArg;
-                            napi_get_value_double(m_env, castValue, &doubleArg);
+                            NAPI_GUARD(napi_get_value_double(m_env, castValue, &doubleArg)) {
+                                return false;
+                            }
                             jdouble value = (jdouble) doubleArg;
                             success = ConvertFromCastFunctionObject(value, index);
                         }
@@ -248,11 +282,17 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                             bool isDataView = false;
                             bool isTypedArray = false;
 
-                            napi_is_arraybuffer(env, arg, &isArrayBuffer);
+                            NAPI_GUARD(napi_is_arraybuffer(env, arg, &isArrayBuffer)) {
+                                return false;
+                            }
                             if (!isArrayBuffer) {
-                                napi_is_typedarray(env, arg, &isTypedArray);
+                                NAPI_GUARD(napi_is_typedarray(env, arg, &isTypedArray)) {
+                                    return false;
+                                }
                                 if (!isTypedArray) {
-                                    napi_is_dataview(env, arg, &isDataView);
+                                    NAPI_GUARD(napi_is_dataview(env, arg, &isDataView)) {
+                                        return false;
+                                    }
                                 }
                             }
 
@@ -266,7 +306,9 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
                         if (!data) {
 #endif
                             napi_value nullNode;
-                            napi_get_named_property(env, arg, PROP_KEY_NULL_NODE_NAME, &nullNode);
+                            NAPI_GUARD(napi_get_named_property(env, arg, PROP_KEY_NULL_NODE_NAME, &nullNode)) {
+                                return false;
+                            }
                             if (!napi_util::is_null_or_undefined(env, nullNode)) {
                                 SetConvertedObject(index, nullptr);
                                 success = true;
@@ -337,7 +379,11 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
 
     if (!success) {
         m_error.index = index;
-        m_error.msg = string(buff);
+        // Keep the seeded default when no specific message was formatted (buff
+        // untouched), avoiding a garbage/empty message.
+        if (buff[0] != '\0') {
+            m_error.msg = string(buff);
+        }
     }
 
     return success;
@@ -353,11 +399,12 @@ void JsArgConverter::SetConvertedObject(int index, jobject obj, bool isGlobal) {
 
 bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, int index,
                                              bool isNumberObject = false) {
+    napi_status status;
     bool success = true;
 
     jvalue value = {0};
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
 
     const char typePrefix = typeSignature[0];
 
@@ -365,9 +412,13 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         case 'B': { // byte
             int32_t intValue;
             if (isNumberObject) {
-                napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue)) {
+                    return false;
+                }
             } else {
-                napi_get_value_int32(env, jsValue, &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, jsValue, &intValue)) {
+                    return false;
+                }
             }
             value.b = (jbyte) intValue;
             break;
@@ -375,9 +426,13 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         case 'S': { // short
             int intValue;
             if (isNumberObject) {
-                napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue)) {
+                    return false;
+                }
             } else {
-                napi_get_value_int32(env, jsValue, &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, jsValue, &intValue)) {
+                    return false;
+                }
             }
             value.s = (jshort) intValue;
             break;
@@ -385,9 +440,13 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         case 'I': { // int
             int intValue;
             if (isNumberObject) {
-                napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, napi_util::valueOf(env, jsValue), &intValue)) {
+                    return false;
+                }
             } else {
-                napi_get_value_int32(env, jsValue, &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, jsValue, &intValue)) {
+                    return false;
+                }
             }
             value.i = (jint) intValue;
             break;
@@ -395,9 +454,13 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         case 'J': { // long
             int64_t intValue;
             if (isNumberObject) {
-                napi_get_value_int64(env, napi_util::valueOf(env, jsValue), &intValue);
+                NAPI_GUARD(napi_get_value_int64(env, napi_util::valueOf(env, jsValue), &intValue)) {
+                    return false;
+                }
             } else {
-                napi_get_value_int64(env, jsValue, &intValue);
+                NAPI_GUARD(napi_get_value_int64(env, jsValue, &intValue)) {
+                    return false;
+                }
             }
             value.j = (jlong) intValue;
             break;
@@ -405,9 +468,13 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         case 'F': { // float
             double doubleValue;
             if (isNumberObject) {
-                napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue);
+                NAPI_GUARD(napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue)) {
+                    return false;
+                }
             } else {
-                napi_get_value_double(env, jsValue, &doubleValue);
+                NAPI_GUARD(napi_get_value_double(env, jsValue, &doubleValue)) {
+                    return false;
+                }
             }
             value.f = (jfloat) doubleValue;
             break;
@@ -415,9 +482,13 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
         case 'D': { // double
             double doubleValue;
             if (isNumberObject) {
-                napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue);
+                NAPI_GUARD(napi_get_value_double(env, napi_util::valueOf(env, jsValue), &doubleValue)) {
+                    return false;
+                }
             } else {
-                napi_get_value_double(env, jsValue, &doubleValue);
+                NAPI_GUARD(napi_get_value_double(env, jsValue, &doubleValue)) {
+                    return false;
+                }
             }
             value.d = (jdouble) doubleValue;
             break;
@@ -435,13 +506,16 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
 }
 
 bool JsArgConverter::ConvertJavaScriptBoolean(napi_env env, napi_value jsValue, int index) {
+    napi_status status;
     bool success;
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
 
     if (typeSignature == "Z") {
         bool argValue;
-        napi_get_value_bool(env, jsValue, &argValue);
+        NAPI_GUARD(napi_get_value_bool(env, jsValue, &argValue)) {
+            return false;
+        }
 
         jboolean value = argValue ? JNI_TRUE : JNI_FALSE;
         m_args[index].z = value;
@@ -460,16 +534,19 @@ bool JsArgConverter::ConvertJavaScriptString(napi_env env, napi_value jsValue, i
 }
 
 bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int index) {
+    napi_status status;
     bool success = true;
 
     jarray arr = nullptr;
 
     uint32_t jsLen;
-    napi_get_array_length(env, jsArr, &jsLen);
+    NAPI_GUARD(napi_get_array_length(env, jsArr, &jsLen)) {
+        return false;
+    }
 
     const jsize arrLength = jsLen;
 
-    const auto &arraySignature = m_tokens.at(index);
+    const auto &arraySignature = m_tokens[index];
 
     std::string elementType = arraySignature.substr(1);
 
@@ -478,17 +555,17 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
     jclass elementClass;
     std::string strippedClassName;
 
-    JEnv jenv;
+    JEnv jenv = GetJEnv();
     switch (elementTypePrefix) {
         case 'Z': {
             arr = jenv.NewBooleanArray(arrLength);
             std::vector<jboolean> bools(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
 
                 bool boolValue;
-                napi_get_value_bool(env, element, &boolValue);
+                NAPI_GUARD(napi_get_value_bool(env, element, &boolValue)) {}
                 bools[i] = (jboolean) boolValue;
             }
             jenv.SetBooleanArrayRegion((jbooleanArray) arr, 0, arrLength, bools.data());
@@ -499,9 +576,9 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             std::vector<jbyte> bytes(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
                 int32_t intValue;
-                napi_get_value_int32(env, element, &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, element, &intValue)) {}
                 bytes[i] = (jbyte) intValue;
             }
             jenv.SetByteArrayRegion((jbyteArray) arr, 0, arrLength, bytes.data());
@@ -512,11 +589,11 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             std::vector<jchar> chars(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
                 size_t str_len;
-                napi_get_value_string_utf8(env, element, nullptr, 0, &str_len);
+                NAPI_GUARD(napi_get_value_string_utf8(env, element, nullptr, 0, &str_len)) {}
                 std::string str(str_len, '\0');
-                napi_get_value_string_utf8(env, element, &str[0], str_len + 1, &str_len);
+                NAPI_GUARD(napi_get_value_string_utf8(env, element, &str[0], str_len + 1, &str_len)) {}
                 chars[i] = (jchar) str[0];
             }
             jenv.SetCharArrayRegion((jcharArray) arr, 0, arrLength, chars.data());
@@ -527,9 +604,9 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             std::vector<jshort> shorts(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
                 int32_t intValue;
-                napi_get_value_int32(env, element, &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, element, &intValue)) {}
                 shorts[i] = (jshort) intValue;
             }
             jenv.SetShortArrayRegion((jshortArray) arr, 0, arrLength, shorts.data());
@@ -540,9 +617,9 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             std::vector<jint> ints(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
                 int32_t intValue;
-                napi_get_value_int32(env, element, &intValue);
+                NAPI_GUARD(napi_get_value_int32(env, element, &intValue)) {}
                 ints[i] = (jint) intValue;
             }
             jenv.SetIntArrayRegion((jintArray) arr, 0, arrLength, ints.data());
@@ -553,9 +630,9 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             std::vector<jlong> longs(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
                 int64_t intValue;
-                napi_get_value_int64(env, element, &intValue);
+                NAPI_GUARD(napi_get_value_int64(env, element, &intValue)) {}
                 longs[i] = (jlong) intValue;
             }
             jenv.SetLongArrayRegion((jlongArray) arr, 0, arrLength, longs.data());
@@ -566,9 +643,9 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             std::vector<jfloat> floats(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
                 double doubleValue;
-                napi_get_value_double(env, element, &doubleValue);
+                NAPI_GUARD(napi_get_value_double(env, element, &doubleValue)) {}
                 floats[i] = (jfloat) doubleValue;
             }
             jenv.SetFloatArrayRegion((jfloatArray) arr, 0, arrLength, floats.data());
@@ -579,9 +656,9 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             std::vector<jdouble> doubles(arrLength);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
                 double doubleValue;
-                napi_get_value_double(env, element, &doubleValue);
+                NAPI_GUARD(napi_get_value_double(env, element, &doubleValue)) {}
                 doubles[i] = (jdouble) doubleValue;
             }
             jenv.SetDoubleArrayRegion((jdoubleArray) arr, 0, arrLength, doubles.data());
@@ -593,8 +670,11 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
             arr = jenv.NewObjectArray(arrLength, elementClass, nullptr);
             for (uint32_t i = 0; i < arrLength; i++) {
                 napi_value element;
-                napi_get_element(env, jsArr, i, &element);
-                JsArgToArrayConverter c(env, element, false, (int) Type::Null);
+                NAPI_GUARD(napi_get_element(env, jsArr, i, &element)) {}
+                JsArgToArrayConverter c(env, element, false, (int) Type::Null,
+                                        m_objectManager != nullptr
+                                        ? m_objectManager
+                                        : Runtime::GetRuntime(env)->GetObjectManager());
                 jobject o = c.GetConvertedArg();
                 jenv.SetObjectArrayElement((jobjectArray) arr, (int) i, o);
             }
@@ -616,7 +696,7 @@ template<typename T>
 bool JsArgConverter::ConvertFromCastFunctionObject(T value, int index) {
     bool success = false;
 
-    const auto &typeSignature = m_tokens.at(index);
+    const auto &typeSignature = m_tokens[index];
 
     const char typeSignaturePrefix = typeSignature[0];
 
@@ -677,7 +757,7 @@ JsArgConverter::Error JsArgConverter::GetError() const {
 
 JsArgConverter::~JsArgConverter() {
     if (m_argsLen > 0) {
-        JEnv env;
+        JEnv env = GetJEnv();
         for (int i = 0; i < m_args_refs_size; i++) {
             int index = m_args_refs[i];
             if (index != -1) {
@@ -689,6 +769,7 @@ JsArgConverter::~JsArgConverter() {
 
 JniLocalRef JsArgConverter::GetByteBuffer(napi_env env, napi_value object, bool isArrayBuffer,
                                           bool isTypedArray, bool isDataView) {
+    napi_status status;
     JEnv jEnv;
 
     BufferCastType bufferCastType = tns::BufferCastType::Byte;
@@ -698,23 +779,29 @@ JniLocalRef JsArgConverter::GetByteBuffer(napi_env env, napi_value object, bool 
 
     if (isTypedArray) {
         napi_typedarray_type type;
-        napi_value arrayBuffer;
-        size_t byteOffset;
-        napi_get_typedarray_info(env, object, &type, nullptr, &data,
-                                 &arrayBuffer, &byteOffset);
-
-
-
-
-        napi_get_arraybuffer_info(env, arrayBuffer, nullptr, &length);
+        napi_value arrayBuffer = nullptr;
+        size_t byteOffset = 0;
+        // Bail on failure: continuing would feed uninitialized arrayBuffer/offset
+        // (and a possibly-null data pointer) into NewDirectByteBuffer below.
+        NAPI_GUARD(napi_get_typedarray_info(env, object, &type, nullptr, &data,
+                                 &arrayBuffer, &byteOffset)) {
+            return JniLocalRef();
+        }
+        NAPI_GUARD(napi_get_arraybuffer_info(env, arrayBuffer, nullptr, &length)) {
+            return JniLocalRef();
+        }
 
         offset = byteOffset;
         bufferCastType = JsArgConverter::GetCastType(type);
     } else if (isArrayBuffer) {
-        napi_get_arraybuffer_info(env, object, &data, &length);
+        NAPI_GUARD(napi_get_arraybuffer_info(env, object, &data, &length)) {
+            return JniLocalRef();
+        }
     } else if (isDataView) {
-        napi_get_dataview_info(env, object, &length, &data, nullptr,
-                               &offset);
+        NAPI_GUARD(napi_get_dataview_info(env, object, &length, &data, nullptr,
+                               &offset)) {
+            return JniLocalRef();
+        }
     }
 
     jobject directBuffer;

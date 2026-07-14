@@ -3,6 +3,7 @@
 
 #include "jni.h"
 #include <string>
+#include <memory>
 #include "JniLocalRef.h"
 #include "MessageLoopTimer.h"
 #include <android/looper.h>
@@ -22,6 +23,7 @@
 namespace tns {
 
     class JSMethodCache;
+    class LooperTasks;
 
     class Runtime {
     public:
@@ -62,7 +64,11 @@ namespace tns {
 
         void RunModule(const char *moduleName);
 
-        void RunWorker(jstring scriptFile);
+        void RunWorker(const std::string &filePath);
+
+        // Tears down a worker's Runtime (engine scope + env free) and deletes
+        // it. Called from the native worker thread during shutdown.
+        static void DisposeWorkerRuntime(Runtime *runtime);
 
         jobject RunScript(JNIEnv *_env, jobject obj, jstring scriptFile);
 
@@ -86,10 +92,18 @@ namespace tns {
 
         napi_env GetNapiEnv();
 
-        napi_runtime GetNapiRuntime();
+        jsr_ns_runtime GetNapiRuntime();
 
         static ALooper *GetMainLooper() {
             return m_mainLooper;
+        }
+
+        static JavaVM *GetJVM() {
+            return java_vm;
+        }
+
+        std::shared_ptr<LooperTasks> GetLooperTasks() {
+            return m_looperTasks;
         }
 
         void Lock();
@@ -148,7 +162,7 @@ namespace tns {
         int m_id;
         jobject m_runtime;
 
-        napi_runtime rt;
+        jsr_ns_runtime rt;
         napi_env env;
         napi_handle_scope global_scope;
 
@@ -165,6 +179,8 @@ namespace tns {
         bool m_isMainThread;
 
         ModuleInternal m_module;
+
+        std::shared_ptr<LooperTasks> m_looperTasks;
 
         static int GetAndroidVersion();
 

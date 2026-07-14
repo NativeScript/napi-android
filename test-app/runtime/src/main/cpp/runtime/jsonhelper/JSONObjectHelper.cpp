@@ -8,20 +8,25 @@
 using namespace tns;
 
 void JSONObjectHelper::RegisterFromFunction(napi_env env, napi_value value) {
+    napi_status status;
     napi_valuetype type;
-    napi_typeof(env, value, &type);
+    NAPI_GUARD(napi_typeof(env, value, &type)) {
+        return;
+    }
     if (type != napi_function && type != napi_object) {
         return;
     }
 
     bool hasProperty;
-    napi_has_named_property(env, value, "from", &hasProperty);
+    NAPI_GUARD(napi_has_named_property(env, value, "from", &hasProperty)) {
+        return;
+    }
     if (hasProperty) {
         return;
     }
 
     napi_value from = CreateFromFunction(env);
-    napi_set_named_property(env, value, "from", from);
+    NAPI_GUARD(napi_set_named_property(env, value, "from", from)) {}
 }
 
 
@@ -59,11 +64,16 @@ napi_value JSONObjectHelper::CreateFromFunction(napi_env env) {
             }
         })();)";
 
+    napi_status status;
     napi_value script;
-    napi_create_string_utf8(env, source, NAPI_AUTO_LENGTH, &script);
+    NAPI_GUARD(napi_create_string_utf8(env, source, NAPI_AUTO_LENGTH, &script)) {
+        return nullptr;
+    }
 
     napi_value result;
-    js_execute_script(env, script, "<from_function>", &result);
+    NAPI_GUARD(js_execute_script(env, script, "<from_function>", &result)) {
+        return nullptr;
+    }
 
     return result;
 }

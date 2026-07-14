@@ -1,12 +1,35 @@
 #include "jsr.h"
+// JSGlobalContextSetUnhandledRejectionCallback lives in this private JSC header.
+#include <JavaScriptCore/JSContextRefPrivate.h>
 
-napi_status js_create_runtime(napi_runtime *runtime) {
+// Native trampoline for JSC's unhandled-promise-rejection callback. JSC invokes
+// it with (promise, reason); we forward to the JS-side
+// globalThis.onUnhandledPromiseRejectionTracker (installed by ts_helpers.js),
+// mirroring how the V8 path routes rejections.
+static napi_value JscUnhandledRejectionCallback(napi_env env, napi_callback_info info) {
+    size_t argc = 2;
+    napi_value args[2];
+    napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+
+    napi_value global, tracker;
+    napi_get_global(env, &global);
+    napi_get_named_property(env, global, "onUnhandledPromiseRejectionTracker", &tracker);
+
+    napi_valuetype type;
+    napi_typeof(env, tracker, &type);
+    if (type == napi_function) {
+        napi_call_function(env, global, tracker, argc, args, nullptr);
+    }
+    return nullptr;
+}
+
+napi_status js_create_runtime(jsr_ns_runtime *runtime) {
     if (!runtime) return napi_invalid_arg;
-    *runtime = (napi_runtime) JSGlobalContextCreateInGroup(nullptr, nullptr);
+    *runtime = (jsr_ns_runtime) JSGlobalContextCreateInGroup(nullptr, nullptr);
     return napi_ok;
 }
 
-napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
+napi_status js_create_napi_env(napi_env* env, jsr_ns_runtime runtime) {
     if (env == nullptr) return napi_invalid_arg;
 
     *env = new napi_env__((JSGlobalContextRef) runtime);
@@ -22,6 +45,19 @@ napi_status js_create_napi_env(napi_env* env, napi_runtime runtime) {
     napi_value global;
     napi_get_global(*env, &global);
     napi_set_named_property(*env, global, "gc", gc);
+
+    // Report unhandled promise rejections. JSC keeps the callback alive (it is
+    // stored on and marked by the global object), so no extra protection is
+    // needed. JSC only surfaces the "unhandled" event, not a later "handled"
+    // retraction, so the JS tracker treats every call as unhandled.
+    napi_value rejectionCallback;
+    napi_create_function(*env, "onUnhandledRejection", NAPI_AUTO_LENGTH,
+                         JscUnhandledRejectionCallback, nullptr, &rejectionCallback);
+    JSValueRef rejectionException = nullptr;
+    JSGlobalContextSetUnhandledRejectionCallback(
+            (*env)->context,
+            reinterpret_cast<JSObjectRef>(rejectionCallback),
+            &rejectionException);
 
 
     return napi_ok;
@@ -46,7 +82,7 @@ napi_status js_free_napi_env(napi_env env) {
     return  napi_ok;
 }
 
-napi_status js_free_runtime(napi_runtime runtime) {
+napi_status js_free_runtime(jsr_ns_runtime runtime) {
 //    JSContextGroupRelease((JSContextGroupRef) runtime);
     return napi_ok;
 }
@@ -82,6 +118,12 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
     return napi_ok;
 }
 
+
+napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url,
+                                 napi_value *result) {
+    // JSC does not support bytecode; always fall back to source.
+    return napi_cannot_run_js;
+}
 
 napi_status js_get_runtime_version(napi_env env, napi_value* version) {
     napi_create_string_utf8(env, "JSC", NAPI_AUTO_LENGTH, version);

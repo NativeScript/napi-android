@@ -13,10 +13,13 @@ using namespace std;
 static robin_hood::unordered_map<napi_env, napi_ref> envToPersistentSmartJSONStringify = robin_hood::unordered_map<napi_env, napi_ref>();
 
 napi_value GetSmartJSONStringifyFunction(napi_env env) {
+    napi_status status;
     auto it = envToPersistentSmartJSONStringify.find(env);
     if (it != envToPersistentSmartJSONStringify.end()) {
         napi_value smartStringifyFunction;
-        napi_get_reference_value(env, it->second, &smartStringifyFunction);
+        NAPI_GUARD(napi_get_reference_value(env, it->second, &smartStringifyFunction)) {
+            return nullptr;
+        }
         return smartStringifyFunction;
     }
 
@@ -48,13 +51,15 @@ napi_value GetSmartJSONStringifyFunction(napi_env env) {
 
 
     napi_value source;
-    napi_create_string_utf8(env, smartStringifyFunctionScript, strlen(smartStringifyFunctionScript), &source);
+    NAPI_GUARD(napi_create_string_utf8(env, smartStringifyFunctionScript, strlen(smartStringifyFunctionScript), &source)) {
+        return nullptr;
+    }
 
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {}
 
     napi_value result;
-    napi_status status = js_execute_script(env, source, "<json_helper>", &result);
+    status = js_execute_script(env, source, "<json_helper>", &result);
     if (status != napi_ok) {
         return nullptr;
     }
@@ -64,7 +69,9 @@ napi_value GetSmartJSONStringifyFunction(napi_env env) {
     }
 
     napi_ref smartStringifyPersistentFunction;
-    napi_create_reference(env, result, 1, &smartStringifyPersistentFunction);
+    NAPI_GUARD(napi_create_reference(env, result, 1, &smartStringifyPersistentFunction)) {
+        return nullptr;
+    }
 
     envToPersistentSmartJSONStringify.emplace(env, smartStringifyPersistentFunction);
 
@@ -88,7 +95,7 @@ std::string tns::JsonStringifyObject(napi_env env, napi_value value, bool handle
         napi_status status = napi_call_function(env, napi_util::global(env), smartJSONStringifyFunction, 2, args, &resultValue);
         if (status != napi_ok) {
             napi_value exception;
-            napi_get_and_clear_last_exception(env, &exception);
+            NAPI_GUARD(napi_get_and_clear_last_exception(env, &exception)) {}
             if (!napi_util::is_null_or_undefined(env, exception)) {
                 throw NativeScriptException(env, exception, "Error converting object to json");
             } else {
@@ -102,21 +109,28 @@ std::string tns::JsonStringifyObject(napi_env env, napi_value value, bool handle
 }
 
 napi_value tns::JsonParseString(napi_env env, const std::string& value) {
+    napi_status status;
     napi_value global;
     napi_value json;
     napi_value parse;
 
-    napi_get_global(env, &global);
-    napi_get_named_property(env, global, "JSON", &json);
-    napi_get_named_property(env, json, "parse", &parse);
+    NAPI_GUARD(napi_get_global(env, &global)) {
+        return nullptr;
+    }
+    NAPI_GUARD(napi_get_named_property(env, global, "JSON", &json)) {
+        return nullptr;
+    }
+    NAPI_GUARD(napi_get_named_property(env, json, "parse", &parse)) {
+        return nullptr;
+    }
 
     napi_value args[1];
     args[0] = ArgConverter::convertToJsString(env, value);
     napi_value result;
-    napi_status status = napi_call_function(env, json, parse, 1, args, &result);
+    status = napi_call_function(env, json, parse, 1, args, &result);
     if (status != napi_ok) {
         napi_value exception;
-        napi_get_and_clear_last_exception(env, &exception);
+        NAPI_GUARD(napi_get_and_clear_last_exception(env, &exception)) {}
         if (!napi_util::is_null_or_undefined(env, exception)) {
             throw NativeScriptException(env, exception, "Error converting json string to object");
         } else {
@@ -127,30 +141,49 @@ napi_value tns::JsonParseString(napi_env env, const std::string& value) {
 }
 
 std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, napi_value error, int size) {
+    napi_status status;
     std::vector<tns::JsStacktraceFrame> frames;
     napi_value stack;
     if (error != nullptr) {
-        napi_get_named_property(env, error, "stack", &stack);
+        NAPI_GUARD(napi_get_named_property(env, error, "stack", &stack)) {
+            return frames;
+        }
     } else {
 #ifndef __HERMES__
         napi_value err;
         napi_value msg;
-        napi_create_string_utf8(env, "Error", strlen("Error"), &msg);
+        NAPI_GUARD(napi_create_string_utf8(env, "Error", strlen("Error"), &msg)) {
+            return frames;
+        }
         #ifdef __PRIMJS__
         napi_value error_ctor;
-        napi_get_named_property(env, napi_util::global(env), "Error", &error_ctor);
+        NAPI_GUARD(napi_get_named_property(env, napi_util::global(env), "Error", &error_ctor)) {
+            return frames;
+        }
 
-        napi_new_instance(env, error_ctor, 1, &msg, &err);
+        NAPI_GUARD(napi_new_instance(env, error_ctor, 1, &msg, &err)) {
+            return frames;
+        }
         #else
-        napi_create_error(env, msg, msg, &err);
+        NAPI_GUARD(napi_create_error(env, msg, msg, &err)) {
+            return frames;
+        }
         #endif
-        napi_get_named_property(env, err, "stack", &stack);
+        NAPI_GUARD(napi_get_named_property(env, err, "stack", &stack)) {
+            return frames;
+        }
 #else
         napi_value global;
-        napi_get_global(env, &global);
+        NAPI_GUARD(napi_get_global(env, &global)) {
+            return frames;
+        }
         napi_value getErrorStack;
-        napi_get_named_property(env, global, "getErrorStack", &getErrorStack);
-        napi_call_function(env, global, getErrorStack, 0, nullptr, &stack);
+        NAPI_GUARD(napi_get_named_property(env, global, "getErrorStack", &getErrorStack)) {
+            return frames;
+        }
+        NAPI_GUARD(napi_call_function(env, global, getErrorStack, 0, nullptr, &stack)) {
+            return frames;
+        }
 #endif
     }
 
@@ -187,9 +220,10 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
 }
 
 void tns::GlobalHelpers::onDisposeEnv(napi_env env) {
+    napi_status status;
     auto found = envToPersistentSmartJSONStringify.find(env);
     if (found != envToPersistentSmartJSONStringify.end()) {
-        napi_delete_reference(env, found->second);
+        NAPI_GUARD(napi_delete_reference(env, found->second)) {}
     }
     envToPersistentSmartJSONStringify.erase(env);
 }

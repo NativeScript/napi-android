@@ -12,6 +12,12 @@ namespace tns {
 
         JEnv(JNIEnv *jniEnv);
 
+        // Wrap an already-obtained JNIEnv* WITHOUT re-querying the JavaVM
+        // (no GetEnv). Use only when the pointer is known to belong to the
+        // current attached thread (e.g. threaded down from a callback prologue).
+        enum class Adopt { Trusted };
+        JEnv(JNIEnv *jniEnv, Adopt) : m_env(jniEnv) {}
+
         ~JEnv();
 
         operator JNIEnv *() const;
@@ -19,6 +25,10 @@ namespace tns {
         jclass GetObjectClass(jobject obj);
 
         jsize GetArrayLength(jarray array);
+
+        inline bool isSameObject(jobject obj1, jobject obj2) {
+            return m_env->IsSameObject(obj1, obj2) == JNI_TRUE;
+        }
 
         jmethodID GetMethodID(jclass clazz, const std::string &name, const std::string &sig);
 

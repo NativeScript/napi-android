@@ -3,6 +3,7 @@
 #include "ArgConverter.h"
 #include "NativeScriptAssert.h"
 #include "Runtime.h"
+#include "ObjectManager.h"
 #include <sstream>
 
 using namespace std;
@@ -30,41 +31,63 @@ NativeScriptException::NativeScriptException(const string& message, const string
 
 NativeScriptException::NativeScriptException(napi_env env, napi_value error, const string& message)
     : m_javaException(JniLocalRef()) {
+    napi_status status;
     m_javascriptException = nullptr;
-    napi_create_reference(env, error, 1, &m_javascriptException);
+    NAPI_GUARD(napi_create_reference(env, error, 1, &m_javascriptException)) {}
     m_message = GetErrorMessage(env, error, message);
     m_stackTrace = GetErrorStackTrace(env, error);
     m_fullMessage = GetFullMessage(env, error, m_message);
 }
 
 void NativeScriptException::ReThrowToNapi(napi_env env) {
+    napi_status status;
     napi_value errObj;
 
+    // Fallback message used if the rich error object cannot be materialized —
+    // ReThrowToNapi must always leave an exception pending, otherwise the failing
+    // Java call silently appears to succeed to JS.
+    const std::string& fallback = !m_fullMessage.empty() ? m_fullMessage
+                                  : !m_message.empty() ? m_message
+                                  : std::string("Unknown native error.");
+
     if (m_javascriptException != nullptr) {
-        napi_get_reference_value(env, m_javascriptException, &errObj);
+        NAPI_GUARD(napi_get_reference_value(env, m_javascriptException, &errObj)) {
+            napi_throw_error(env, nullptr, fallback.c_str());
+            return;
+        }
         if (napi_util::is_of_type(env, errObj, napi_object)) {
             if (!m_fullMessage.empty()) {
-                napi_set_named_property(env, errObj, "fullMessage", ArgConverter::convertToJsString(env, m_fullMessage));
+                NAPI_GUARD(napi_set_named_property(env, errObj, "fullMessage", ArgConverter::convertToJsString(env, m_fullMessage))) {}
             } else if (!m_message.empty()) {
-                 napi_set_named_property(env, errObj, "fullMessage", ArgConverter::convertToJsString(env, m_message));
+                 NAPI_GUARD(napi_set_named_property(env, errObj, "fullMessage", ArgConverter::convertToJsString(env, m_message))) {}
             }
         }
     } else if (!m_fullMessage.empty()) {
-        napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, m_fullMessage), &errObj);
+        NAPI_GUARD(napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, m_fullMessage), &errObj)) {
+            napi_throw_error(env, nullptr, fallback.c_str());
+            return;
+        }
     } else if (!m_message.empty()) {
-        napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, m_message), &errObj);
+        NAPI_GUARD(napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, m_message), &errObj)) {
+            napi_throw_error(env, nullptr, fallback.c_str());
+            return;
+        }
     } else if (!m_javaException.IsNull()) {
         errObj = WrapJavaToJsException(env);
     } else {
-        napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, "No javascript exception or message provided."), &errObj);
+        NAPI_GUARD(napi_create_error(env, nullptr, ArgConverter::convertToJsString(env, "No javascript exception or message provided."), &errObj)) {
+            napi_throw_error(env, nullptr, "No javascript exception or message provided.");
+            return;
+        }
     }
 
-    napi_throw(env, errObj);
+    NAPI_GUARD(napi_throw(env, errObj)) {}
 
 //    JSLeave
 }
 
 void NativeScriptException::ReThrowToJava(napi_env env) {
+    napi_status status;
     if (env) {
         NapiScope scope(env);
     }
@@ -72,11 +95,9 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
     JEnv jEnv;
 
     if (!m_javaException.IsNull()) {
-        std::string excClassName;
-        if (env) {
-            auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
-            excClassName = objectManager->GetClassName((jobject)m_javaException);
-        }
+        // Static lookup avoids needing the runtime/ObjectManager here, which may
+        // be unavailable while an exception is being rethrown to Java.
+        std::string excClassName = ObjectManager::GetClassName((jobject)m_javaException);
 
         if (excClassName == "com/tns/NativeScriptException") {
             ex = m_javaException;
@@ -87,7 +108,7 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
         }
     } else if (m_javascriptException != nullptr && env != nullptr) {
         napi_value errObj;
-        napi_get_reference_value(env, m_javascriptException, &errObj);
+        NAPI_GUARD(napi_get_reference_value(env, m_javascriptException, &errObj)) {}
         if (napi_util::is_of_type(env, errObj, napi_object)) {
             auto exObj = TryGetJavaThrowableObject(jEnv, env, errObj);
             ex = (jthrowable)exObj.Move();
@@ -99,8 +120,7 @@ void NativeScriptException::ReThrowToJava(napi_env env) {
         if (ex == nullptr) {
             ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_JSVALUE_CTOR_ID, (jstring)msg, (jstring)stackTrace, reinterpret_cast<jlong>(m_javascriptException)));
         } else {
-            auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
-            auto excClassName = objectManager->GetClassName(ex);
+            auto excClassName = ObjectManager::GetClassName(ex);
             if (excClassName != "com/tns/NativeScriptException") {
                 ex = static_cast<jthrowable>(jEnv.NewObject(NATIVESCRIPTEXCEPTION_CLASS, NATIVESCRIPTEXCEPTION_THROWABLE_CTOR_ID, (jstring)msg, (jstring)stackTrace, ex));
             }
@@ -151,38 +171,40 @@ void NativeScriptException::OnUncaughtError(napi_env env, napi_value error) {
 }
 
 void NativeScriptException::CallJsFuncWithErr(napi_env env, napi_value errObj, bool isDiscarded) {
+    napi_status status;
     napi_value global;
-    napi_get_global(env, &global);
+    NAPI_GUARD(napi_get_global(env, &global)) {
+        return;
+    }
 
     napi_value handler = nullptr;
     if (isDiscarded) {
-        napi_get_named_property(env, global, "__onDiscardedError", &handler);
+        NAPI_GUARD(napi_get_named_property(env, global, "__onDiscardedError", &handler)) {}
     } else {
-        napi_get_named_property(env, global, "__onUncaughtError", &handler);
+        NAPI_GUARD(napi_get_named_property(env, global, "__onUncaughtError", &handler)) {}
     }
 
     if (napi_util::is_of_type(env, handler, napi_function)) {
         napi_value result;
-        napi_call_function(env, global, handler, 1, &errObj, &result);
+        NAPI_GUARD(napi_call_function(env, global, handler, 1, &errObj, &result)) {}
     }
 }
 
 napi_value NativeScriptException::WrapJavaToJsException(napi_env env) {
+    napi_status status;
     napi_value errObj;
 
     JEnv jenv;
 
-    auto objectManager = Runtime::GetRuntime(env)->GetObjectManager();
-
-    string excClassName = objectManager->GetClassName((jobject)m_javaException);
+    string excClassName = ObjectManager::GetClassName((jobject)m_javaException);
     if (excClassName == "com/tns/NativeScriptException") {
         jfieldID fieldID = jenv.GetFieldID(jenv.GetObjectClass(m_javaException), "jsValueAddress", "J");
         jlong addr = jenv.GetLongField(m_javaException, fieldID);
 
         if (addr != 0) {
             auto pv = reinterpret_cast<napi_ref>(addr);
-            napi_get_reference_value(env, pv, &errObj);
-            napi_delete_reference(env, pv);
+            NAPI_GUARD(napi_get_reference_value(env, pv, &errObj)) {}
+            NAPI_GUARD(napi_delete_reference(env, pv)) {}
         } else {
             errObj = GetJavaExceptionFromEnv(env, m_javaException, jenv);
         }
@@ -194,6 +216,7 @@ napi_value NativeScriptException::WrapJavaToJsException(napi_env env) {
 }
 
 napi_value NativeScriptException::GetJavaExceptionFromEnv(napi_env env, const JniLocalRef& exc, JEnv& jenv) {
+    napi_status status;
     auto errMsg = GetExceptionMessage(jenv, exc);
     auto stackTrace = GetExceptionStackTrace(jenv, exc);
     DEBUG_WRITE("Error during java interop errorMessage: %s\n stackTrace:\n %s", errMsg.c_str(), stackTrace.c_str());
@@ -203,7 +226,9 @@ napi_value NativeScriptException::GetJavaExceptionFromEnv(napi_env env, const Jn
     napi_value msg = ArgConverter::convertToJsString(env, errMsg);
     napi_value errObj;
     napi_value code = ArgConverter::convertToJsString(env, "0", 1);
-    napi_create_error(env, code, msg, &errObj);
+    NAPI_GUARD(napi_create_error(env, code, msg, &errObj)) {
+        return nullptr;
+    }
 
     jint javaObjectID = objectManager->GetOrCreateObjectId((jobject)exc);
     auto nativeExceptionObject = objectManager->GetJsObjectByJavaObject(javaObjectID);
@@ -213,18 +238,19 @@ napi_value NativeScriptException::GetJavaExceptionFromEnv(napi_env env, const Jn
         nativeExceptionObject = objectManager->CreateJSWrapper(javaObjectID, className);
     }
 
-    napi_set_named_property(env, errObj, "nativeException", nativeExceptionObject);
+    NAPI_GUARD(napi_set_named_property(env, errObj, "nativeException", nativeExceptionObject)) {}
 
     string jsStackTraceMessage = GetErrorStackTrace(env, errObj);
-    napi_set_named_property(env, errObj, "stack", ArgConverter::convertToJsString(env, jsStackTraceMessage));
-    napi_set_named_property(env, errObj, "stackTrace", ArgConverter::convertToJsString(env, jsStackTraceMessage + stackTrace) );
+    NAPI_GUARD(napi_set_named_property(env, errObj, "stack", ArgConverter::convertToJsString(env, jsStackTraceMessage))) {}
+    NAPI_GUARD(napi_set_named_property(env, errObj, "stackTrace", ArgConverter::convertToJsString(env, jsStackTraceMessage + stackTrace) )) {}
 
     return errObj;
 }
 
 string NativeScriptException::GetFullMessage(napi_env env, napi_value error, const string& jsExceptionMessage) {
+    napi_status status;
     bool isError;
-    napi_is_error(env, error, &isError);
+    NAPI_GUARD(napi_is_error(env, error, &isError)) {}
     if (!isError) {
         return jsExceptionMessage;
     }
@@ -244,6 +270,7 @@ string NativeScriptException::GetFullMessage(napi_env env, napi_value error, con
 }
 
 JniLocalRef NativeScriptException::TryGetJavaThrowableObject(JEnv& env, napi_env napiEnv, napi_value jsObj) {
+    napi_status status;
     JniLocalRef javaThrowableObject;
 
     auto objectManager = Runtime::GetRuntime(napiEnv)->GetObjectManager();
@@ -255,7 +282,7 @@ JniLocalRef NativeScriptException::TryGetJavaThrowableObject(JEnv& env, napi_env
         objClass = JniLocalRef(env.GetObjectClass(javaObj));
     } else {
         napi_value nativeEx;
-        napi_get_named_property(napiEnv, jsObj, "nativeException", &nativeEx);
+        NAPI_GUARD(napi_get_named_property(napiEnv, jsObj, "nativeException", &nativeEx)) {}
         if (napi_util::is_object(napiEnv, nativeEx)) {
             javaObj = objectManager->GetJavaObjectByJsObject(nativeEx);
             objClass = JniLocalRef(env.GetObjectClass(javaObj));
@@ -280,17 +307,18 @@ void NativeScriptException::PrintErrorMessage(const string& errorMessage) {
 }
 
 string NativeScriptException::GetErrorMessage(napi_env env, napi_value error, const string& prependMessage) {
+    napi_status status;
     bool isError;
-    napi_is_error(env, error, &isError);
+    NAPI_GUARD(napi_is_error(env, error, &isError)) {}
 
     if (!isError) {
         napi_value err;
-        napi_coerce_to_string(env, error, &err);
+        NAPI_GUARD(napi_coerce_to_string(env, error, &err)) {}
         return napi_util::get_string_value(env, err);
     }
 
     napi_value message;
-    napi_get_named_property(env, error, "message", &message);
+    NAPI_GUARD(napi_get_named_property(env, error, "message", &message)) {}
 
     string mes = ArgConverter::ConvertToString(env, message);
 
@@ -303,7 +331,7 @@ string NativeScriptException::GetErrorMessage(napi_env env, napi_value error, co
     string errMessage;
     bool hasFullErrorMessage = false;
     napi_value fullMessage;
-    napi_get_named_property(env, error, "fullMessage", &fullMessage);
+    NAPI_GUARD(napi_get_named_property(env, error, "fullMessage", &fullMessage)) {}
     if (napi_util::is_of_type(env, fullMessage, napi_string)) {
         hasFullErrorMessage = true;
         errMessage = ArgConverter::ConvertToString(env, fullMessage);
@@ -321,14 +349,15 @@ string NativeScriptException::GetErrorMessage(napi_env env, napi_value error, co
 }
 
 string NativeScriptException::GetErrorStackTrace(napi_env env, napi_value error) {
+    napi_status status;
     stringstream ss;
 
     bool isError;
-    napi_is_error(env, error, &isError);
+    NAPI_GUARD(napi_is_error(env, error, &isError)) {}
     if (!isError) return "";
 
     napi_value stack;
-    napi_get_named_property(env, error, "stack", &stack);
+    NAPI_GUARD(napi_get_named_property(env, error, "stack", &stack)) {}
 
 
     string stackStr = ArgConverter::ConvertToString(env, stack);

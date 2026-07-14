@@ -1,14 +1,15 @@
 apply plugin: 'com.android.library'
 
-// can be: "V8-11", "V8-10","V8-13", "JSC", "HERMES", "QUICKJS", "QUICKJS_NG", "SHERMES", "PRIMJS"
+// can be: "V8-11", "V8-10","V8-13", "JSC", "HERMES", "QUICKJS", "QUICKJS_NG", "PRIMJS"
 
-def jsEngine = "QUICKJS_NG"
+def jsEngine = "V8-13"
+
 def hasEngine = project.hasProperty("engine")
 if (hasEngine) {
     jsEngine = engine
 }
 
-def hasHostObjects = project.hasProperty("useHostObjects")
+def hasHostObjects = true //project.hasProperty("useHostObjects")
 def isNapiModule = project.hasProperty("asNapiModule");
 
 printf("Compiling NativeScript with %s.\n", jsEngine)
@@ -140,9 +141,9 @@ android {
                        arguments.add("-DQUICKJS_NG=1")
                    }
                 } else if (jsEngine == "HERMES") {
+                    // SHERMES is kept as an alias for the static-hermes (hermesvm)
+                    // engine, which is now the canonical HERMES engine.
                     arguments.add("-DHERMES=1")
-                } else if (jsEngine == "SHERMES") {
-                    arguments.add("-DSHERMES=1")  
                 } else if (jsEngine == "PRIMJS") {
                     arguments.add("-DPRIMJS=1")
                 }else if (jsEngine == "JSC") {
@@ -176,11 +177,24 @@ android {
         ndk {
             minSdkVersion NS_DEFAULT_MIN_SDK_VERSION as int
             if (onlyX86) {
-                abiFilters 'x86'
+                // The updated JSC only ships 64-bit libraries, so fall back to
+                // x86_64 when a single-ABI (emulator) build is requested.
+                abiFilters jsEngine == "JSC" ? 'x86_64' : 'x86'
+            } else if (jsEngine == "JSC") {
+                // The newer JSC engine only provides arm64-v8a and x86_64
+                // prebuilts, so restrict the runtime to those two ABIs.
+                abiFilters 'x86_64', 'arm64-v8a'
             } else {
                 abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
             }
         }
+
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     buildTypes {
@@ -207,7 +221,7 @@ android {
             exclude "**/libjsi.so"
             exclude "**/libfbjni.so"
         }
-    } else if (jsEngine == "HERMES" || jsEngine == "SHERMES") {
+    } else if (jsEngine == "HERMES") {
         packagingOptions {
             exclude "**/libjsc.so"
             exclude '**/libfbjni.so'
@@ -243,7 +257,7 @@ dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     testImplementation "junit:junit:${ns_default_junit_version}"
     testImplementation "org.mockito:mockito-core:${ns_default_mockito_core_version}"
-    if (jsEngine == "HERMES" || jsEngine == "SHERMES") {
+    if (jsEngine == "HERMES") {
         implementation 'com.facebook.fbjni:fbjni:0.7.0'
     }
 }

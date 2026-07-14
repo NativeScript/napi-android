@@ -77,7 +77,7 @@ jobs:
           set -euo pipefail
           case "$ENGINE" in
             all)
-              echo 'engines=["v8","hermes","jsc","quickjs","quickjs-ng","shermes","primjs"]' >> "$GITHUB_OUTPUT"
+              echo 'engines=["v8","hermes","jsc","quickjs","quickjs-ng","primjs"]' >> "$GITHUB_OUTPUT"
               ;;
             v8|hermes|jsc|quickjs|quickjs-ng|shermes|primjs)
               printf 'engines=["%s"]\n' "$ENGINE" >> "$GITHUB_OUTPUT"
@@ -123,6 +123,8 @@ jobs:
           distribution: "temurin"
       - name: Install root dependencies
         run: npm install
+      - name: Set up engine submodules, patches, and jsparser
+        run: npm run setup
       - name: Resolve engine target
         id: target
         shell: bash
@@ -200,9 +202,6 @@ jobs:
           echo "NPM_VERSION=$NPM_VERSION" >> "$GITHUB_OUTPUT"
           echo "NPM_TAG=$NPM_TAG" >> "$GITHUB_OUTPUT"
           echo "Resolved $PACKAGE_NAME@$NPM_VERSION (tag: $NPM_TAG)"
-      - name: Install jsparser dependencies
-        working-directory: ${{ env.JS_PARSER_DIR }}
-        run: npm ci
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
       - name: Build (-Pengine=${{ steps.target.outputs.GRADLE_ENGINE }})

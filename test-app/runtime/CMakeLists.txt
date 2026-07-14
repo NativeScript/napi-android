@@ -21,13 +21,14 @@ endif ()
 set(COMMON_CMAKE_ARGUMENTS "-Wno-error -Wno-deprecated-declarations -Wno-unused-result -mstackrealign -fexceptions -fno-builtin-stpcpy")
 set(MI_OVERRIDE OFF)
 
-if (V8_13)
-    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++20")
-elseif ()
-    set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++17")
-endif ()
+# All engines build with C++20: the vendored ada 3.3.0 (used by the URL module,
+# compiled for every engine) requires C++20 (std::endian, concepts). Previously
+# only V8_13 got -std=c++20 (and the empty `elseif ()` set nothing for the rest),
+# so non-V8-13 engine builds failed on ada.h.
+set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -std=c++20")
 
-if (SHERMES)
+if (HERMES)
+    # Hermes/JSI headers require RTTI.
     set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -frtti")
 else ()
     set(COMMON_CMAKE_ARGUMENTS "${COMMON_CMAKE_ARGUMENTS} -fno-rtti")
@@ -77,6 +78,8 @@ include_directories(
         src/main/cpp/runtime/sighandler
         src/main/cpp/runtime/timers
         src/main/cpp/runtime/util
+        # workers: native worker threading & messaging (WorkerWrapper, ConcurrentQueue, LooperTasks)
+        src/main/cpp/runtime/workers
         src/main/cpp/runtime/jsonhelper
         src/main/cpp/runtime/version
         src/main/cpp/runtime/weakref
@@ -86,6 +89,7 @@ include_directories(
 )
 
 # Search for all CPP files in runtime/ directory and add them to our sources
+# (includes runtime/inspector/WorkerInspectorClient.cpp for the V8 worker inspector)
 file(GLOB_RECURSE RUNTIME_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/*.cpp"
         "${PROJECT_SOURCE_DIR}/src/main/cpp/runtime/**/*.cpp"
@@ -95,6 +99,7 @@ file(GLOB_RECURSE MODULE_FILES
         "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/*.cpp"
         "${PROJECT_SOURCE_DIR}/src/main/cpp/modules/**/*.cpp"
 )
+# modules/url: URL, URLSearchParams, URLPattern (backed by vendored ada)
 
 set(SOURCES ${RUNTIME_FILES} ${MODULE_FILES})
 
@@ -109,7 +114,6 @@ if (QUICKJS OR QUICKJS_NG)
 
     set(SOURCES ${SOURCES}
             # quickjs
-            ${QJS_SOURCE_DIR}/cutils.c
             ${QJS_SOURCE_DIR}/libregexp.c
             ${QJS_SOURCE_DIR}/libunicode.c
             ${QJS_SOURCE_DIR}/quickjs.c
@@ -120,6 +124,12 @@ if (QUICKJS OR QUICKJS_NG)
 
 
     )
+
+    if (NOT QUICKJS_NG)
+        set(SOURCES ${SOURCES}
+            ${QJS_SOURCE_DIR}/cutils.c
+        )
+    endif ()
 
     include_directories(
             src/main/cpp/napi/quickjs
@@ -135,9 +145,8 @@ endif ()
 if (PRIMJS)
     set(SOURCES ${SOURCES}
             src/main/cpp/napi/primjs/jsr.cpp
-            src/main/cpp/napi/primjs/code_cache.cc
-            src/main/cpp/napi/primjs/primjs-api.cc
-            src/main/cpp/napi/primjs/napi_env.cc
+            src/main/cpp/napi/primjs/js_native_api_adapter.cc
+            src/main/cpp/napi/primjs/js_native_api_extensions.cc
     )
     include_directories(
             src/main/cpp/napi/primjs
@@ -148,20 +157,11 @@ if (PRIMJS)
 endif ()
 
 if (HERMES)
+    # Hermes is the static-hermes (hermesvm) engine. Headers are extracted from
+    # the hermes-engine AAR into napi/hermes/include.
     include_directories(
             src/main/cpp/napi/hermes
             src/main/cpp/napi/hermes/include
-            src/main/cpp/napi/common
-    )
-    set(SOURCES ${SOURCES}
-            src/main/cpp/napi/hermes/jsr.cpp
-    )
-endif ()
-
-if (SHERMES)
-    include_directories(
-            src/main/cpp/napi/hermes
-            src/main/cpp/napi/hermes/include_shermes
             src/main/cpp/napi/common
     )
     set(SOURCES ${SOURCES}
@@ -289,21 +289,31 @@ MESSAGE(STATUS "# CMAKE_CXX_FLAGS: " ${CMAKE_CXX_FLAGS})
 target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${ANDROID_ABI}/libzip.a)
 #target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/common/${ANDROID_ABI}/libclang_rt.asan-aarch64-android.so)
 
-if (SHERMES)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/shermes/${ANDROID_ABI}/libhermesvm.so)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/shermes/${ANDROID_ABI}/libjsi.so)
-    add_compile_definitions(NativeScript, PRIVATE __HERMES__)
-    add_compile_definitions(NativeScript, PRIVATE __SHERMES__)
-endif ()
-
 if (HERMES)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libhermes.so)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${ANDROID_ABI}/libjsi.so)
+    # Select debug or release Hermes .so files based on build type.
+    # Optimized builds use the MinSizeRel release libraries; all other builds
+    # (including regular debug and debugOptimized-with-inspector) use the debug
+    # libraries, which include HERMES_ENABLE_DEBUGGER and full debug info.
+    if (OPTIMIZED_BUILD OR OPTIMIZED_WITH_INSPECTOR_BUILD)
+        set(HERMES_LIB_VARIANT release)
+    else ()
+        set(HERMES_LIB_VARIANT debug)
+    endif ()
+
+    set(HERMES_LIB_DIR ${PROJECT_SOURCE_DIR}/src/main/libs/hermes/${HERMES_LIB_VARIANT}/${ANDROID_ABI})
+    MESSAGE(STATUS "# Hermes lib variant: ${HERMES_LIB_VARIANT} (${HERMES_LIB_DIR})")
+
+    target_link_libraries(NativeScript ${HERMES_LIB_DIR}/libhermesvm.so)
+    target_link_libraries(NativeScript ${HERMES_LIB_DIR}/libjsi.so)
     add_compile_definitions(NativeScript, PRIVATE __HERMES__)
+
+    # napi_create_host_object / napi_get_host_object_data / napi_is_host_object
+    # are compiled into libhermesvm.so (via hermesNapi) when USE_HOST_OBJECT is
+    # set at Hermes build time. No separate .so to link here.
 endif ()
 
 if (JSC)
-    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/jsc/${ANDROID_ABI}/libjsc.so)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/jsc/${ANDROID_ABI}/libJavaScriptCore.so)
     add_compile_definitions(NativeScript, PRIVATE __JSC__)
 endif ()
 
@@ -327,8 +337,12 @@ if (V8_13)
 endif ()
 
 if (PRIMJS)
-    # target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libnapi.so)
+    # libnapi.so provides the napi host/setup entry points (napi_new_env,
+    # napi_attach_quickjs, napi_setup_loader, the quickjs<->napi bridges, ...)
+    # and installs the value-op vtable consumed by js_native_api_adapter.cc.
+    # It depends on libquick.so (the quickjs engine); link both.
     target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libquick.so)
+    target_link_libraries(NativeScript ${PROJECT_SOURCE_DIR}/src/main/libs/primjs/${ANDROID_ABI}/libnapi.so)
     add_compile_definitions(NativeScript, PRIVATE __PRIMJS__)
 endif ()
 
@@ -357,6 +371,11 @@ endif ()
 #     target_link_libraries(NativeScript ${ANDROID_NDK_ROOT}/sources/cxx-stl/llvm-libc++/libs/${ANDROID_ABI}/libandroid_support.a)
 # endif()
 
+
+if("${ANDROID_ABI}" MATCHES "arm64-v8a$" OR "${ANDROID_ABI}" MATCHES "x86_64$")
+    target_link_options(NativeScript PRIVATE "-Wl,-z,max-page-size=16384")
+endif()
+
 # Command info: https://cmake.org/cmake/help/v3.4/command/find_library.html
 # Searches for a specified prebuilt library and stores the path as a
 # variable. Because CMake includes system libraries in the search path by
@@ -375,7 +394,7 @@ if (QUICKJS)
     else ()
         target_link_libraries(NativeScript ${system-log} ${system-z} ${system-android})
     endif ()
-elseif (HERMES OR SHERMES)
+elseif (HERMES)
     find_package(fbjni REQUIRED CONFIG)
     target_link_libraries(NativeScript ${system-log} ${system-z} fbjni::fbjni ${system-android})
 elseif (JSC OR V8 OR PRIMJS)
