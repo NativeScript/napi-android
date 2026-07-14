@@ -201,7 +201,7 @@ jobs:
           - { host: darwin-x64,   runner: macos-13 }
           - { host: darwin-arm64, runner: macos-14 }
           - { host: win32-x64,    runner: windows-2022 }
-          - { host: win32-arm64,  runner: windows-11-arm }
+          # - { host: win32-arm64,  runner: windows-11-arm }
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain (Linux)
