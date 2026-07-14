@@ -118,8 +118,8 @@ jobs:
   # ---------------------------------------------------------------------------
   # QuickJS (bellard) — build via its own Makefile (libquickjs.a, which injects
   # -D_GNU_SOURCE -DCONFIG_VERSION), then link our blob-emitting shim.
-  # Unix only: bellard QuickJS has no upstream Windows/MSVC support (use
-  # QuickJS-NG for Windows).
+  # win32-x64 is CROSS-compiled on Linux via bellard's CONFIG_WIN32 (mingw-w64);
+  # win32-arm64 is not possible (mingw-w64 targets x86 only).
   # ---------------------------------------------------------------------------
   quickjs:
     name: quickjs (${{ matrix.host }})
@@ -132,11 +132,17 @@ jobs:
           - { host: linux-arm64,  runner: ubuntu-24.04-arm }
           - { host: darwin-x64,   runner: macos-13 }
           - { host: darwin-arm64, runner: macos-14 }
+          - { host: win32-x64,    runner: ubuntu-24.04 }  # mingw cross-compile
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+          # mingw-w64 for the win32-x64 cross build.
+          if [ "${{ matrix.host }}" = "win32-x64" ]; then sudo apt-get install -y mingw-w64; fi
       # macOS: make + clang ship with the Xcode command-line tools.
 
       - name: Clone QuickJS
@@ -156,12 +162,21 @@ jobs:
         run: |
           set -euxo pipefail
           cd quickjs
-          # Use bellard's own Makefile so CONFIG_VERSION / _GNU_SOURCE and the
-          # correct source set come from upstream.
-          make -j"$(getconf _NPROCESSORS_ONLN)" libquickjs.a
+          jobs="$(getconf _NPROCESSORS_ONLN)"
           out="../out/quickjs/${{ matrix.host }}"; mkdir -p "$out"
-          cc -O2 -DNSBC_MAGIC='"NSBCQJS"' -I. -o "$out/nsbc-quickjs" "$SHIM" libquickjs.a -lm
-          "$out/nsbc-quickjs" || true  # usage line (exit 2) proves it links & runs
+          if [ "${{ matrix.host }}" = "win32-x64" ]; then
+            # CONFIG_WIN32=y selects the x86_64-w64-mingw32- cross toolchain.
+            make -j"$jobs" CONFIG_WIN32=y libquickjs.a
+            x86_64-w64-mingw32-gcc -O2 -DNSBC_MAGIC='"NSBCQJS"' -I. \
+              -o "$out/nsbc-quickjs.exe" "$SHIM" libquickjs.a -lm
+            # Cross-built Windows binary — not runnable on the Linux host.
+          else
+            # Use bellard's own Makefile so CONFIG_VERSION / _GNU_SOURCE and the
+            # correct source set come from upstream.
+            make -j"$jobs" libquickjs.a
+            cc -O2 -DNSBC_MAGIC='"NSBCQJS"' -I. -o "$out/nsbc-quickjs" "$SHIM" libquickjs.a -lm
+            "$out/nsbc-quickjs" || true  # usage line (exit 2) proves it links & runs
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
