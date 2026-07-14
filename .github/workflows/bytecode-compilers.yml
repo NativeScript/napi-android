@@ -167,8 +167,10 @@ jobs:
           if [ "${{ matrix.host }}" = "win32-x64" ]; then
             # CONFIG_WIN32=y selects the x86_64-w64-mingw32- cross toolchain.
             make -j"$jobs" CONFIG_WIN32=y libquickjs.a
+            # bellard's win32 LIBS are "-lm -lpthread" (winpthreads provides the
+            # pthread_* and clock_gettime symbols quickjs.c uses).
             x86_64-w64-mingw32-gcc -O2 -DNSBC_MAGIC='"NSBCQJS"' -I. \
-              -o "$out/nsbc-quickjs.exe" "$SHIM" libquickjs.a -lm
+              -o "$out/nsbc-quickjs.exe" "$SHIM" libquickjs.a -lm -lpthread
             # Cross-built Windows binary — not runnable on the Linux host.
           else
             # Use bellard's own Makefile so CONFIG_VERSION / _GNU_SOURCE and the
@@ -228,19 +230,23 @@ jobs:
           SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/qjs-compile.c
         run: |
           set -euxo pipefail
-          # Build only the static engine lib target ('qjs' -> libqjs.a / qjs.lib);
-          # skip the CLI/test executables.
+          # Build the shim as a CMake target so it uses the SAME toolchain + CRT
+          # as the engine lib. Linking a separately-compiled (clang) shim against
+          # the MSVC-built qjs.lib fails with __imp_*/CRT-mismatch link errors on
+          # Windows. The 'qjs' target propagates its public include dirs and libm.
+          cp "$SHIM" quickjs-ng/nsbc-quickjs-ng.c
+          cat >> quickjs-ng/CMakeLists.txt <<'CMAKE'
+
+          add_executable(nsbc-quickjs-ng nsbc-quickjs-ng.c)
+          target_link_libraries(nsbc-quickjs-ng PRIVATE qjs)
+          target_compile_definitions(nsbc-quickjs-ng PRIVATE NSBC_MAGIC=\"NSBCNGS\")
+          CMAKE
           cmake -S quickjs-ng -B quickjs-ng/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build quickjs-ng/build --config Release --target qjs
-          lib="$(find quickjs-ng/build -type f \( -name 'libqjs.a' -o -name 'qjs.lib' \) | head -n1)"
-          test -n "$lib"
-          # Windows has no libm (math is in the CRT); only pass -lm off-Windows.
-          CC="cc"; LIBM="-lm"
-          if [ "${{ runner.os }}" = "Windows" ]; then CC="clang"; LIBM=""; fi
+          cmake --build quickjs-ng/build --config Release --target nsbc-quickjs-ng
           out="out/quickjs-ng/${{ matrix.host }}"; mkdir -p "$out"
-          bin="$out/nsbc-quickjs-ng"; [ "${{ runner.os }}" = "Windows" ] && bin="$bin.exe"
-          $CC -O2 -DNSBC_MAGIC='"NSBCNGS"' -I quickjs-ng -o "$bin" "$SHIM" "$lib" $LIBM
-          "$bin" || true
+          bin="$(find quickjs-ng/build -type f \( -name 'nsbc-quickjs-ng' -o -name 'nsbc-quickjs-ng.exe' \) | head -n1)"
+          test -n "$bin"; cp "$bin" "$out/"
+          [ "${{ runner.os }}" = "Windows" ] || "$out/nsbc-quickjs-ng" || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -256,8 +262,8 @@ jobs:
   # Unix only, and NOT linux-arm64: PrimJS's envsetup.sh aborts on Windows, and
   # its DEPS only provides a linux sysroot for x86_64. So: linux-x64 + macOS.
   #
-  # NOTE: this is the first automated PrimJS build; `hab sync` pulls a large
-  # toolchain and the exact gn/ninja target may need tweaking on the first run.
+  # Validated locally on darwin-arm64 (hab sync -> gn gen -> ninja nsbc-primjs
+  # produces a working CLI). Linux uses the same flow.
   # ---------------------------------------------------------------------------
   primjs:
     name: primjs (${{ matrix.host }})
@@ -291,18 +297,19 @@ jobs:
           SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/primjs-compile.c
         run: |
           set -euxo pipefail
-          # Build as C++ (.cc) to match the working qjs-cli target; the LEPUS_*
-          # API is extern "C", so linkage is fine either way.
+          # Build as C++ (.cc); the LEPUS_* API is extern "C" so linkage is fine.
           cp "$SHIM" primjs/tools/qjs-cli/nsbc-primjs.cc
-          # A standalone executable that links the same engine as qjs-cli.
-          cat >> primjs/tools/qjs-cli/BUILD.gn <<'GN'
+          # Add the target to the ROOT BUILD.gn (always loaded, so it's always
+          # generated) linking ONLY the core engine (//src:quickjs_lib). We avoid
+          # qjs_wasm_binding — its WASM/JSC code doesn't build under the bundled
+          # toolchain's -Werror, and our shim doesn't need it. (Validated locally.)
+          cat >> primjs/BUILD.gn <<'GN'
 
           executable("nsbc-primjs") {
             cflags = [ "-Wno-c99-designator" ]
-            sources = [ "nsbc-primjs.cc" ]
+            sources = [ "//tools/qjs-cli/nsbc-primjs.cc" ]
             include_dirs = [ "//include" ]
-            deps = [ ":qjs_wasm_binding" ]
-            configs += [ ":wasm_internal_config" ]
+            deps = [ "//src:quickjs_lib" ]
           }
           GN
 
