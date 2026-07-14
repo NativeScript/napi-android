@@ -53,7 +53,7 @@ jobs:
         include:
           - { host: linux-x64,    runner: ubuntu-24.04 }
           - { host: linux-arm64,  runner: ubuntu-24.04-arm }
-          - { host: darwin-x64,   runner: macos-13 }
+          - { host: darwin-x64,   runner: macos-15-intel }
           - { host: darwin-arm64, runner: macos-14 }
           - { host: win32-x64,    runner: windows-2022 }
           # win32-arm64 dropped: hermes' Boost.Context ARM64 assembler + CMake's
