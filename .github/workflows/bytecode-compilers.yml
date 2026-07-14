@@ -56,7 +56,9 @@ jobs:
           - { host: darwin-x64,   runner: macos-13 }
           - { host: darwin-arm64, runner: macos-14 }
           - { host: win32-x64,    runner: windows-2022 }
-          - { host: win32-arm64,  runner: windows-11-arm }
+          # win32-arm64 dropped: hermes' Boost.Context ARM64 assembler + CMake's
+          # ASM_ARMASM linker support fail on windows-11-arm. The win32-x64
+          # hermesc runs on ARM Windows via x64 emulation (HBC output is portable).
     steps:
       - name: Install toolchain (Linux)
         if: runner.os == 'Linux'
@@ -114,7 +116,10 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # QuickJS (bellard) — build the engine lib, then our blob-emitting shim.
+  # QuickJS (bellard) — build via its own Makefile (libquickjs.a, which injects
+  # -D_GNU_SOURCE -DCONFIG_VERSION), then link our blob-emitting shim.
+  # Unix only: bellard QuickJS has no upstream Windows/MSVC support (use
+  # QuickJS-NG for Windows).
   # ---------------------------------------------------------------------------
   quickjs:
     name: quickjs (${{ matrix.host }})
@@ -127,16 +132,12 @@ jobs:
           - { host: linux-arm64,  runner: ubuntu-24.04-arm }
           - { host: darwin-x64,   runner: macos-13 }
           - { host: darwin-arm64, runner: macos-14 }
-          - { host: win32-x64,    runner: windows-2022 }
-          - { host: win32-arm64,  runner: windows-11-arm }
     steps:
       - uses: actions/checkout@v4
       - name: Install toolchain (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential
-      - name: Install toolchain (Windows)
-        if: runner.os == 'Windows'
-        run: choco install llvm -y
+      # macOS: make + clang ship with the Xcode command-line tools.
 
       - name: Clone QuickJS
         shell: bash
@@ -148,22 +149,19 @@ jobs:
           git -C quickjs fetch --depth 1 origin "$ref"
           git -C quickjs -c advice.detachedHead=false checkout FETCH_HEAD
 
-      - name: Build shim
+      - name: Build lib + shim
         shell: bash
         env:
           SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/qjs-compile.c
         run: |
           set -euxo pipefail
           cd quickjs
-          CC="cc"; [ "${{ runner.os }}" = "Windows" ] && CC="clang"
-          # Compile the lib sources directly (avoids qjs/qjsc main() collisions).
-          # If bellard changes the source set, adjust this list.
-          libsrc="quickjs.c cutils.c libregexp.c libunicode.c"
-          [ -f dtoa.c ] && libsrc="$libsrc dtoa.c"
+          # Use bellard's own Makefile so CONFIG_VERSION / _GNU_SOURCE and the
+          # correct source set come from upstream.
+          make -j"$(getconf _NPROCESSORS_ONLN)" libquickjs.a
           out="../out/quickjs/${{ matrix.host }}"; mkdir -p "$out"
-          bin="$out/nsbc-quickjs"; [ "${{ runner.os }}" = "Windows" ] && bin="$bin.exe"
-          $CC -O2 -DNSBC_MAGIC='"NSBCQJS"' -I. -o "$bin" "$SHIM" $libsrc -lm
-          "$bin" || true  # usage line (exit 2) proves it links & runs
+          cc -O2 -DNSBC_MAGIC='"NSBCQJS"' -I. -o "$out/nsbc-quickjs" "$SHIM" libquickjs.a -lm
+          "$out/nsbc-quickjs" || true  # usage line (exit 2) proves it links & runs
 
       - uses: actions/upload-artifact@v4
         with:
@@ -215,14 +213,18 @@ jobs:
           SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/qjs-compile.c
         run: |
           set -euxo pipefail
-          cmake -S quickjs-ng -B quickjs-ng/build -DCMAKE_BUILD_TYPE=Release -DBUILD_QJS_LIBC=OFF
-          cmake --build quickjs-ng/build --config Release
+          # Build only the static engine lib target ('qjs' -> libqjs.a / qjs.lib);
+          # skip the CLI/test executables.
+          cmake -S quickjs-ng -B quickjs-ng/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build quickjs-ng/build --config Release --target qjs
           lib="$(find quickjs-ng/build -type f \( -name 'libqjs.a' -o -name 'qjs.lib' \) | head -n1)"
           test -n "$lib"
-          CC="cc"; [ "${{ runner.os }}" = "Windows" ] && CC="clang"
+          # Windows has no libm (math is in the CRT); only pass -lm off-Windows.
+          CC="cc"; LIBM="-lm"
+          if [ "${{ runner.os }}" = "Windows" ]; then CC="clang"; LIBM=""; fi
           out="out/quickjs-ng/${{ matrix.host }}"; mkdir -p "$out"
           bin="$out/nsbc-quickjs-ng"; [ "${{ runner.os }}" = "Windows" ] && bin="$bin.exe"
-          $CC -O2 -DNSBC_MAGIC='"NSBCNGS"' -I quickjs-ng -o "$bin" "$SHIM" "$lib" -lm
+          $CC -O2 -DNSBC_MAGIC='"NSBCNGS"' -I quickjs-ng -o "$bin" "$SHIM" "$lib" $LIBM
           "$bin" || true
 
       - uses: actions/upload-artifact@v4
@@ -232,11 +234,15 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # PrimJS — build the engine, then our LEPUS_* shim.
-  # NOTE: PrimJS's build system is nonstandard; the steps below are best-effort
-  # and will very likely need adjustment against lynx-family/primjs@develop
-  # (its actual CMake targets / include + lib paths). Treat the first CI run as
-  # the source of truth and pin once green.
+  # PrimJS — build via its own toolchain: `hab sync` fetches gn + ninja + a
+  # bundled clang + sysroot, then GN/ninja build the engine. We add our LEPUS_*
+  # shim as a sibling GN executable (reusing the qjs-cli engine deps).
+  #
+  # Unix only, and NOT linux-arm64: PrimJS's envsetup.sh aborts on Windows, and
+  # its DEPS only provides a linux sysroot for x86_64. So: linux-x64 + macOS.
+  #
+  # NOTE: this is the first automated PrimJS build; `hab sync` pulls a large
+  # toolchain and the exact gn/ninja target may need tweaking on the first run.
   # ---------------------------------------------------------------------------
   primjs:
     name: primjs (${{ matrix.host }})
@@ -246,22 +252,13 @@ jobs:
       matrix:
         include:
           - { host: linux-x64,    runner: ubuntu-24.04 }
-          - { host: linux-arm64,  runner: ubuntu-24.04-arm }
           - { host: darwin-x64,   runner: macos-13 }
           - { host: darwin-arm64, runner: macos-14 }
-          - { host: win32-x64,    runner: windows-2022 }
-          - { host: win32-arm64,  runner: windows-11-arm }
     steps:
       - uses: actions/checkout@v4
-      - name: Install toolchain (Linux)
+      - name: Install prerequisites (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build build-essential python3
-      - name: Install toolchain (macOS)
-        if: runner.os == 'macOS'
-        run: brew install cmake ninja
-      - name: Install toolchain (Windows)
-        if: runner.os == 'Windows'
-        run: choco install ninja llvm -y
+        run: sudo apt-get update && sudo apt-get install -y python3 curl
 
       - name: Clone PrimJS
         shell: bash
@@ -272,28 +269,41 @@ jobs:
           git -C primjs remote add origin "$PRIMJS_REPO"
           git -C primjs fetch --depth 1 origin "$ref"
           git -C primjs -c advice.detachedHead=false checkout FETCH_HEAD
-          # PrimJS vendors deps via a script in some layouts; run it if present.
-          if [ -f primjs/tools/hooks/generate_gni.py ]; then python3 primjs/tools/hooks/generate_gni.py || true; fi
 
-      - name: Build engine + shim
+      - name: Add shim as a GN target
         shell: bash
         env:
           SHIM: ${{ github.workspace }}/tools/bytecode-compiler/native/primjs-compile.c
         run: |
           set -euxo pipefail
-          # Best-effort CMake build of the PrimJS/quickjs static lib. Adjust the
-          # target and include/lib paths to match the repo once observed in CI.
-          cmake -S primjs -B primjs/build -DCMAKE_BUILD_TYPE=Release || {
-            echo "::warning::PrimJS cmake configure needs adjustment for this repo layout"; exit 1; }
-          cmake --build primjs/build --config Release
-          lib="$(find primjs/build -type f \( -name 'libquick*.a' -o -name 'libprimjs*.a' -o -name '*.lib' \) | head -n1)"
-          inc="$(dirname "$(find primjs -name quickjs.h | head -n1)")"
-          test -n "$lib" && test -n "$inc"
-          CC="cc"; [ "${{ runner.os }}" = "Windows" ] && CC="clang"
-          out="out/primjs/${{ matrix.host }}"; mkdir -p "$out"
-          bin="$out/nsbc-primjs"; [ "${{ runner.os }}" = "Windows" ] && bin="$bin.exe"
-          $CC -O2 -I"$inc" -o "$bin" "$SHIM" "$lib" -lm
-          "$bin" || true
+          # Build as C++ (.cc) to match the working qjs-cli target; the LEPUS_*
+          # API is extern "C", so linkage is fine either way.
+          cp "$SHIM" primjs/tools/qjs-cli/nsbc-primjs.cc
+          # A standalone executable that links the same engine as qjs-cli.
+          cat >> primjs/tools/qjs-cli/BUILD.gn <<'GN'
+
+          executable("nsbc-primjs") {
+            cflags = [ "-Wno-c99-designator" ]
+            sources = [ "nsbc-primjs.cc" ]
+            include_dirs = [ "//include" ]
+            deps = [ ":qjs_wasm_binding" ]
+            configs += [ ":wasm_internal_config" ]
+          }
+          GN
+
+      - name: Build (hab sync + gn + ninja)
+        shell: bash
+        working-directory: primjs
+        run: |
+          set -euxo pipefail
+          # hab (in-repo) fetches gn, ninja, the bundled clang toolchain + sysroot.
+          source tools/envsetup.sh
+          hab sync .
+          gn gen out/Default --args="is_debug=false"
+          ninja -C out/Default nsbc-primjs
+          out="../out/primjs/${{ matrix.host }}"; mkdir -p "$out"
+          cp out/Default/nsbc-primjs "$out/nsbc-primjs"
+          "$out/nsbc-primjs" || true  # usage line (exit 2) proves it links & runs
 
       - uses: actions/upload-artifact@v4
         with:
