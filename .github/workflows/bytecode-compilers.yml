@@ -8,6 +8,10 @@ name: Build bytecode compilers
 # each containing `<engine>/<host>/<binary>` so the downloads merge straight into
 # tools/bytecode-compiler/bin/.
 #
+# The final `bundle` job merges them all into a single `bytecode-compiler-bin`
+# artifact laid out exactly like tools/bytecode-compiler/bin/ — download it, unzip,
+# and drop its contents into tools/bytecode-compiler/bin/ as-is.
+#
 # NOTE ON COMPATIBILITY: the produced bytecode must be loadable by the engine
 # library the runtime ships. Hermes/PrimJS runtimes link prebuilt .so's and
 # QuickJS/QuickJS-NG compile from vendored source, so the refs below must be kept
@@ -112,7 +116,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: bytecode-compiler-hermes-${{ matrix.host }}
-          path: out/hermes/${{ matrix.host }}
+          # Root the artifact at `out/` so it carries the full
+          # `hermes/<host>/<binary>` path and merges straight into bin/.
+          path: out
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -183,7 +189,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: bytecode-compiler-quickjs-${{ matrix.host }}
-          path: out/quickjs/${{ matrix.host }}
+          # Root the artifact at `out/` so it carries the full
+          # `quickjs/<host>/<binary>` path and merges straight into bin/.
+          path: out
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -251,7 +259,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: bytecode-compiler-quickjs-ng-${{ matrix.host }}
-          path: out/quickjs-ng/${{ matrix.host }}
+          # Root the artifact at `out/` so it carries the full
+          # `quickjs-ng/<host>/<binary>` path and merges straight into bin/.
+          path: out
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -330,5 +340,37 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: bytecode-compiler-primjs-${{ matrix.host }}
-          path: out/primjs/${{ matrix.host }}
+          # Root the artifact at `out/` so it carries the full
+          # `primjs/<host>/<binary>` path and merges straight into bin/.
+          path: out
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Bundle — merge every per-(engine, host) artifact into a single artifact laid
+  # out exactly like tools/bytecode-compiler/bin/, ready to download-and-paste.
+  # ---------------------------------------------------------------------------
+  bundle:
+    name: bundle bin/
+    runs-on: ubuntu-24.04
+    needs: [hermes, quickjs, quickjs-ng, primjs]
+    # Run even if some engine/host builds failed, so a partial bin/ is still
+    # published rather than nothing.
+    if: always()
+    steps:
+      - name: Download all compiler artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Every per-job artifact already carries an `<engine>/<host>/<binary>`
+          # path; merge-multiple overlays them into one tree = the bin/ layout.
+          pattern: bytecode-compiler-*
+          path: bin
+          merge-multiple: true
+
+      - name: Show merged layout
+        run: find bin -type f | sort
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bytecode-compiler-bin
+          path: bin
           if-no-files-found: error
