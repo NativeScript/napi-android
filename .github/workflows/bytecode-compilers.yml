@@ -70,7 +70,15 @@ jobs:
 
       - name: Clone Hermes
         shell: bash
-        run: git clone --depth 1 --branch "${{ github.event.inputs.hermes_ref || 'master' }}" "$HERMES_REPO" hermes
+        # Fetch by ref so an exact commit SHA works (git clone --branch only
+        # accepts branch/tag names). GitHub allows fetching arbitrary SHAs.
+        run: |
+          set -euxo pipefail
+          ref="${{ github.event.inputs.hermes_ref || 'master' }}"
+          git init hermes
+          git -C hermes remote add origin "$HERMES_REPO"
+          git -C hermes fetch --depth 1 origin "$ref"
+          git -C hermes -c advice.detachedHead=false checkout FETCH_HEAD
 
       - name: Build hermesc (Unix)
         if: runner.os != 'Windows'
@@ -132,7 +140,13 @@ jobs:
 
       - name: Clone QuickJS
         shell: bash
-        run: git clone --depth 1 --branch "${{ github.event.inputs.quickjs_ref || 'master' }}" "$QUICKJS_REPO" quickjs
+        run: |
+          set -euxo pipefail
+          ref="${{ github.event.inputs.quickjs_ref || 'master' }}"
+          git init quickjs
+          git -C quickjs remote add origin "$QUICKJS_REPO"
+          git -C quickjs fetch --depth 1 origin "$ref"
+          git -C quickjs -c advice.detachedHead=false checkout FETCH_HEAD
 
       - name: Build shim
         shell: bash
@@ -187,7 +201,13 @@ jobs:
 
       - name: Clone QuickJS-NG
         shell: bash
-        run: git clone --depth 1 --branch "${{ github.event.inputs.quickjs_ng_ref || 'master' }}" "$QUICKJS_NG_REPO" quickjs-ng
+        run: |
+          set -euxo pipefail
+          ref="${{ github.event.inputs.quickjs_ng_ref || 'master' }}"
+          git init quickjs-ng
+          git -C quickjs-ng remote add origin "$QUICKJS_NG_REPO"
+          git -C quickjs-ng fetch --depth 1 origin "$ref"
+          git -C quickjs-ng -c advice.detachedHead=false checkout FETCH_HEAD
 
       - name: Build lib + shim
         shell: bash
@@ -246,7 +266,12 @@ jobs:
       - name: Clone PrimJS
         shell: bash
         run: |
-          git clone --depth 1 --branch "${{ github.event.inputs.primjs_ref || 'develop' }}" "$PRIMJS_REPO" primjs
+          set -euxo pipefail
+          ref="${{ github.event.inputs.primjs_ref || 'develop' }}"
+          git init primjs
+          git -C primjs remote add origin "$PRIMJS_REPO"
+          git -C primjs fetch --depth 1 origin "$ref"
+          git -C primjs -c advice.detachedHead=false checkout FETCH_HEAD
           # PrimJS vendors deps via a script in some layouts; run it if present.
           if [ -f primjs/tools/hooks/generate_gni.py ]; then python3 primjs/tools/hooks/generate_gni.py || true; fi
 
