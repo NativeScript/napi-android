@@ -114,10 +114,22 @@ void Runtime::Init(JavaVM *vm) {
 
     // handle SIGABRT/SIGSEGV only on API level > 20 as the handling is not so efficient in older versions
     if (m_androidVersion > 20) {
-        struct sigaction action;
+        struct sigaction action = {};
+        sigemptyset(&action.sa_mask);
+        action.sa_flags = 0;
         action.sa_handler = SIGHandler;
         sigaction(SIGABRT, &action, NULL);
+#ifndef __JSC__
+        // JavaScriptCore installs and relies on its OWN SIGSEGV handler for normal,
+        // non-fatal operation (concurrent GC / JIT). Overwriting it with a handler
+        // that unconditionally throws a C++ exception hijacks those legitimate
+        // faults and manufactures a crash — reliably reproduced under multithreaded
+        // JNI access (testConcurrentAccess). No active test relies on converting a
+        // SIGSEGV to a JS exception (the only such spec is disabled via xit), so on
+        // JSC we leave SIGSEGV to the engine. SIGABRT (which JSC does not use) is
+        // still converted. On every other engine both are converted as before.
         sigaction(SIGSEGV, &action, NULL);
+#endif
     }
 
     // Log uncaught native exceptions before aborting.
@@ -247,6 +259,10 @@ void Runtime::Init(JNIEnv *_env, jstring filesPath, jstring nativeLibsDir,
 #endif
 
     Timers::InitStatic(env, global);
+
+    // Bound to this (runtime) thread's Looper; drains deferred finalizers posted
+    // via Runtime::PostFinalizer at a safe point off the GC sweep.
+    m_finalizerQueue = new FinalizerQueue(env);
 
     napi_util::napi_set_function(env, global, "__log", CallbackHandlers::LogMethodCallback);
     napi_util::napi_set_function(env, global, "__dumpReferenceTables",
@@ -463,6 +479,14 @@ void Runtime::DestroyRuntime() {
     Console::onDisposeEnv(env);
     CallbackHandlers::RemoveEnvEntries(env);
     this->m_objectManager->OnDisposeEnv();
+    // Release the finalizer handler and flush any still-queued cleanup while the
+    // env is still valid; finalizers firing during the js_free_napi_env teardown
+    // below then run inline (Runtime::PostFinalizer's fallback).
+    if (m_finalizerQueue != nullptr) {
+        m_finalizerQueue->Destroy();
+        delete m_finalizerQueue;
+        m_finalizerQueue = nullptr;
+    }
     NAPI_GUARD(napi_close_handle_scope(env, this->global_scope)) {}
     Runtime::thread_id_to_rt_cache.Remove(this->my_thread_id);
     id_to_runtime_cache.Remove(m_id);
@@ -560,9 +584,10 @@ jobject Runtime::RunScript(JNIEnv *_env, jobject obj, jstring scriptFile) {
     napi_value result;
     DEBUG_WRITE("%s", filename.c_str());
 
-    // Raw scripts (e.g. internal/ts_helpers.js) are run unwrapped, so the build
-    // compiles them to bytecode as-is. Run that bytecode directly when present.
-    status = js_run_bytecode_file(env, filename.c_str(), sourceUrl.c_str(), &result);
+    // Raw scripts (e.g. internal/ts_helpers.js) are compiled unwrapped, so the
+    // build stores their bytecode as-is. Run it directly when present; only read
+    // the source as text on a miss.
+    status = js_run_bytecode_file(env, sourceUrl.c_str(), &result);
     if (status == napi_cannot_run_js) {
         auto src = ReadFileText(filename);
 

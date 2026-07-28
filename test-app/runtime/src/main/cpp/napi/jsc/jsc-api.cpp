@@ -108,6 +108,21 @@ class JSString {
                 return JSStringCreateWithUTF8CString(string);
             }
 
+            // Fast path: pure-ASCII input maps 1:1 onto UTF-16 code units, so we can
+            // widen it directly and skip the costly std::wstring_convert/codecvt
+            // transcode (which dominates JSC string creation for the common case).
+            bool isAscii = true;
+            for (size_t i = 0; i < length; ++i) {
+                if (static_cast<unsigned char>(string[i]) >= 0x80) { isAscii = false; break; }
+            }
+            if (isAscii) {
+                std::vector<JSChar> chars(length);
+                for (size_t i = 0; i < length; ++i) {
+                    chars[i] = static_cast<JSChar>(static_cast<unsigned char>(string[i]));
+                }
+                return JSStringCreateWithCharacters(chars.data(), length);
+            }
+
             std::u16string u16str{std::wstring_convert<
                                   std::codecvt_utf8_utf16<char16_t>, char16_t>{}.from_bytes(string, string + length)};
             return JSStringCreateWithCharacters(reinterpret_cast<JSChar*>(u16str.data()), u16str.size());
@@ -218,10 +233,27 @@ class NativeInfo {
 
     template<typename T>
     static T* GetNativeInfo(JSContextRef ctx, JSObjectRef obj, const char * propertyKey) {
+        // Guard against a receiver that isn't a wrapped object (e.g. a plain {} passed
+        // to napi_unwrap via method.call({})). Reading the info property yields undefined;
+        // JSValueToObject(undefined) then returns NULL and JSObjectGetPrivate(NULL) would
+        // dereference a null JSObjectRef -> SIGSEGV. V8/QuickJS return safely here, so
+        // mirror that and just report "no native info".
+        if (obj == nullptr) {
+            return nullptr;
+        }
         JSValueRef exception {};
         JSValueRef native_info = JSObjectGetProperty(ctx, obj, JSString(propertyKey), &exception);
+        if (exception != nullptr || native_info == nullptr ||
+            !JSValueIsObject(ctx, native_info)) {
+            return nullptr;
+        }
 
-        NativeInfo* info = Get<NativeInfo>(JSValueToObject(ctx, native_info, &exception));
+        JSObjectRef info_obj = JSValueToObject(ctx, native_info, &exception);
+        if (exception != nullptr || info_obj == nullptr) {
+            return nullptr;
+        }
+
+        NativeInfo* info = Get<NativeInfo>(info_obj);
         if (info != nullptr && info->Type() == T::StaticType) {
             return reinterpret_cast<T*>(info);
         }
@@ -262,6 +294,58 @@ class ConstructorInfo : public NativeInfo {
             }
 
             JSObjectRef constructor{JSObjectMakeConstructor(env->context, info->_class, CallAsConstructor)};
+
+            // Give the constructor a non-writable own `Symbol.hasInstance` equal to
+            // the built-in default (Function.prototype[@@hasInstance], i.e. the
+            // OrdinaryHasInstance handler). JSObjectMakeConstructor produces an
+            // object whose prototype chain does not include Function.prototype, so
+            // `Class[Symbol.hasInstance]` would otherwise be `undefined` — unlike
+            // V8/QuickJS where these constructors are ordinary functions that
+            // inherit the (non-writable) default. That gap lets the TypeScript
+            // `__extends` helper's defensive `child[Symbol.hasInstance] = fn`
+            // assignment SUCCEED on JSC (it is a silent no-op elsewhere because the
+            // inherited default is non-writable), installing a broken own
+            // @@hasInstance that reduces `x instanceof ExtendedClass` to the
+            // always-false `x instanceof <native extended ctor>`. Defining the
+            // default here as a non-writable own property restores the correct
+            // `instanceof` behaviour WITHOUT reparenting the constructor to
+            // Function.prototype (which would also override its class-name
+            // `toString`).
+            {
+                JSObjectRef jsGlobal = JSContextGetGlobalObject(env->context);
+                JSValueRef symbolVal = JSObjectGetProperty(env->context, jsGlobal,
+                                                           JSString("Symbol"), nullptr);
+                JSObjectRef symbolCtor = JSValueToObject(env->context, symbolVal, nullptr);
+                JSValueRef funcVal = JSObjectGetProperty(env->context, jsGlobal,
+                                                         JSString("Function"), nullptr);
+                JSObjectRef funcCtor = JSValueToObject(env->context, funcVal, nullptr);
+                if (symbolCtor != nullptr && funcCtor != nullptr) {
+                    JSValueRef hasInstanceKey = JSObjectGetProperty(env->context, symbolCtor,
+                                                                    JSString("hasInstance"), nullptr);
+                    JSValueRef funcProtoVal = JSObjectGetProperty(env->context, funcCtor,
+                                                                  JSString("prototype"), nullptr);
+                    JSObjectRef funcProto = JSValueToObject(env->context, funcProtoVal, nullptr);
+                    if (hasInstanceKey != nullptr && JSValueIsSymbol(env->context, hasInstanceKey) &&
+                        funcProto != nullptr) {
+                        JSValueRef defaultHasInstance = JSObjectGetPropertyForKey(
+                                env->context, funcProto, hasInstanceKey, nullptr);
+                        if (defaultHasInstance != nullptr &&
+                            JSValueIsObject(env->context, defaultHasInstance)) {
+                            // Non-writable (blocks the __extends `[[Set]]`
+                            // assignment, matching the inherited default's
+                            // writability on V8/QuickJS) but CONFIGURABLE, so
+                            // interfaces can still install their own java-backed
+                            // @@hasInstance via Object.defineProperty
+                            // (RegisterSymbolHasInstanceCallback).
+                            JSObjectSetPropertyForKey(
+                                    env->context, constructor, hasInstanceKey, defaultHasInstance,
+                                    kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontEnum,
+                                    nullptr);
+                        }
+                    }
+                }
+            }
+
             JSValueRef exception{};
             if (length) {
                 napi_value name;
@@ -1125,6 +1209,14 @@ napi_status napi_define_properties(napi_env env,
             napi_value method{};
             CHECK_NAPI(napi_create_function(env, p->utf8name, NAPI_AUTO_LENGTH, p->method, p->data, &method));
             CHECK_NAPI(napi_set_named_property(env, descriptor, "value", method));
+            // A method is a data property; honor the writable attribute like V8/Node
+            // do. Omitting it makes Object.defineProperty default writable to false,
+            // which leaves the method non-writable and prevents callers from shadowing
+            // it with an own property (e.g. ts_helpers wrapping URLSearchParams.set to
+            // propagate changes back to the parent URL).
+            napi_value method_writable{};
+            CHECK_NAPI(napi_get_boolean(env, (p->attributes & napi_writable), &method_writable));
+            CHECK_NAPI(napi_set_named_property(env, descriptor, "writable", method_writable));
         } else {
             RETURN_STATUS_IF_FALSE(env, p->value != nullptr, napi_invalid_arg);
 

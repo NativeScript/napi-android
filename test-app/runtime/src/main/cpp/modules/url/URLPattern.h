@@ -8,6 +8,7 @@
 #define TEST_APP_URLPATTERN_H
 
 #include "native_api_util.h"
+#include "FinalizerQueue.h"
 #include "ada/ada.h"
 #include <optional>
 #include <string>
@@ -51,16 +52,13 @@ namespace tns {
 
         ~NapiRegex() {
             if (ref != nullptr && env != nullptr) {
-#ifdef __V8__
-                node_api_post_finalizer(env, [](napi_env env, void *d, void*) {
+                // This destructor can run from URLPattern's GC finalizer
+                // (URLPattern::Destructor, via napi_wrap), where deleting a napi_ref
+                // is unsafe on every engine. Defer it to the runtime's post-GC
+                // finalizer drain (which falls back to inline during teardown).
+                tns::PostFinalizer(env, [](napi_env env, void *d, void *) {
                     napi_delete_reference(env, (napi_ref) d);
                 }, ref, nullptr);
-#else
-                napi_delete_reference(env, ref);
-#endif
-
-
-
             }
         }
     };

@@ -204,6 +204,15 @@ private:
     static napi_value NullValueOfCallback(napi_env env, napi_callback_info info);
 
 
+    // Heap holder for the Symbol.hasInstance callback data. The napi `data`
+    // pointer must be a real heap pointer: PrimJS boxes callback data into 48
+    // bits and rebuilds it with a fixed top-16-bit heap tag on retrieval, which
+    // would corrupt a raw JNI global ref passed directly. See
+    // RegisterSymbolHasInstanceCallback.
+    struct SymbolHasInstanceData {
+        jclass clazz;
+    };
+
     static void RegisterSymbolHasInstanceCallback(napi_env env, const MetadataTreeNode *treeNode, napi_value interface);
 
     static napi_value SymbolHasInstanceCallback(napi_env env, napi_callback_info info);

@@ -141,7 +141,13 @@ describe('native timer', () => {
         let timeout = 0;
         let interval = 0;
         let weakRef;
-        {
+        // Keep `obj` inside its own function environment rather than a bare block.
+        // Engines that allocate a single heap environment per function (e.g. Hermes)
+        // fold block scopes into the enclosing `it` environment, which the surviving
+        // weakRef-check closure below retains — keeping `obj` alive forever. A nested
+        // function gets its own environment that is collectable once the timer
+        // callbacks (its only other retainers) are cleared.
+        (function setupTimers() {
             let obj = {
                 value: 0
             };
@@ -152,7 +158,7 @@ describe('native timer', () => {
             interval = setInterval(() => {
                 obj.value++;
             }, 50);
-        }
+        })();
         setTimeout(() => {
             // use !! here because if you pass weakRef.get() it creates a strong reference (side effect of expect)
             expect(!!weakRef.get()).toBe(true);

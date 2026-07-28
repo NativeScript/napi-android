@@ -2,7 +2,7 @@ apply plugin: 'com.android.library'
 
 // can be: "V8-11", "V8-10","V8-13", "JSC", "HERMES", "QUICKJS", "QUICKJS_NG", "PRIMJS"
 
-def jsEngine = "V8-13"
+def jsEngine = "PRIMJS"
 
 def hasEngine = project.hasProperty("engine")
 if (hasEngine) {
@@ -32,6 +32,15 @@ if (onlyX86) {
 def useCCache = project.hasProperty("useCCache")
 if (useCCache) {
     println "Use CCache build triggered."
+}
+
+// Bytecode stack-trace support. Defaults on (opt out with -PnsBytecodeDisabled).
+// Defines NS_BYTECODE_ENABLED so BuildStacktraceFrames accepts bytecode frames
+// (app-relative source names) and rebuilds their full runtime URL. Harmless when
+// the app ships plain JS — those frames always carry a "file://" URL already.
+def bytecodeStacktraces = !project.hasProperty("nsBytecodeDisabled")
+if (bytecodeStacktraces) {
+    println "Bytecode stack-trace frame support enabled."
 }
 
 def defaultNdkVersion = "27.1.12297006"
@@ -134,9 +143,16 @@ android {
                     arguments.add("-DIS_NAPI_MODULE=true")
                 }
 
+                if (bytecodeStacktraces) {
+                    arguments.add("-DNS_BYTECODE=1")
+                }
+
                if (jsEngine == "QUICKJS" || jsEngine == "QUICKJS_NG") {
                     arguments.add("-DQUICKJS=1")
                     arguments.add("-DUSE_MIMALLOC=1")
+                    // Trade memory for allocator speed (disables page purging,
+                    // eager-commits arenas, enables THP). See qjs_create_runtime.
+                    arguments.add("-DMIMALLOC_PERF=1")
                    if (jsEngine == "QUICKJS_NG") {
                        arguments.add("-DQUICKJS_NG=1")
                    }

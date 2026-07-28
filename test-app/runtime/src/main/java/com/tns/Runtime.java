@@ -147,6 +147,14 @@ public class Runtime {
 
     private Map<Class<?>, JavaScriptImplementation> loadedJavaScriptExtends = new HashMap<Class<?>, JavaScriptImplementation>();
 
+    // Classes already registered via classStorageService.storeClass, so repeated
+    // object registrations of the same class (e.g. thousands of java.util.Date
+    // instances) skip the redundant getClass().getName() string + cache/classloader
+    // puts. Class uses identity equals/hashCode, so a plain concurrent set is
+    // correct and thread-safe.
+    private final java.util.Set<Class<?>> storedClasses =
+            java.util.Collections.newSetFromMap(new ConcurrentHashMap<Class<?>, Boolean>());
+
     private final java.lang.Runtime dalvikRuntime = java.lang.Runtime.getRuntime();
 
     private final Object keyNotFoundObject = new Object();
@@ -188,6 +196,13 @@ public class Runtime {
 
     private final StaticConfiguration config;
     private static StaticConfiguration staticConfiguration;
+
+    // Config flags hoisted out of the boxed AppConfig.values[] Object[] and cached
+    // as primitive fields, so every JS->Java callback dispatch avoids two enum
+    // ordinal lookups + Boolean unboxes. Set once in init(); config is immutable
+    // after load.
+    private boolean cachedDiscardUncaughtJsExceptions;
+    private boolean cachedEnableMultithreadedJavascript;
 
     private final DynamicConfiguration dynamicConfig;
 
@@ -516,6 +531,12 @@ public class Runtime {
         ManualInstrumentation.Frame frame = ManualInstrumentation.start("Runtime.init");
         try {
             this.logger = logger;
+
+            // Cache the hot per-call config flags as primitives (see field decls).
+            if (appConfig != null) {
+                this.cachedDiscardUncaughtJsExceptions = appConfig.getDiscardUncaughtJsExceptions();
+                this.cachedEnableMultithreadedJavascript = appConfig.getEnableMultithreadedJavascript();
+            }
 
             // Only inject generated proxies into the app's PathClassLoader on the main
             // thread, so Class.forName() (used by framework components like FragmentFactory)
@@ -877,7 +898,12 @@ public class Runtime {
         strongJavaObjectToID.put(instance, objectId);
 
         Class<?> clazz = instance.getClass();
-        classStorageService.storeClass(clazz.getName(), clazz);
+        // Only resolve the name + store the class the first time we see it; the
+        // storage is keyed by class name and the classloader set is idempotent, so
+        // repeated registrations of the same class are pure overhead.
+        if (storedClasses.add(clazz)) {
+            classStorageService.storeClass(clazz.getName(), clazz);
+        }
 
         if (logger != null && logger.isEnabled()) {
             logger.write("MakeInstanceStrong (" + objectId + ", " + instance.getClass().toString() + ")");
@@ -1101,26 +1127,32 @@ public class Runtime {
     public static Object callJSMethod(int runtimeId, Object javaObject, String methodName, Class<?> retType, boolean isConstructor, long delay, Object... args) throws NativeScriptException {
         Runtime runtime = Runtime.runtimeCache.get(runtimeId);
 
+        // Resolve the object's id on the found runtime once and reuse it (the common
+        // path previously looked it up here for the ownership check AND again in
+        // callJSMethodImpl). Re-resolve only when we switch to a different runtime.
+        Integer javaObjectID = (runtime != null) ? runtime.getJavaObjectID(javaObject) : null;
+
         // If we didn't find a runtime by id, or the one we found doesn't own this
         // object, locate the runtime that actually created it. This happens when a
         // worker fires a JS method on an object created in the main thread or another worker.
-        if (runtime == null || runtime.getJavaObjectID(javaObject) == null) {
+        if (runtime == null || javaObjectID == null) {
             runtime = getObjectRuntime(javaObject);
+            javaObjectID = (runtime != null) ? runtime.getJavaObjectID(javaObject) : null;
         }
 
         if (runtime == null) {
             runtime = Runtime.getCurrentRuntime();
+            javaObjectID = (runtime != null) ? runtime.getJavaObjectID(javaObject) : null;
         }
 
         if (runtime == null) {
             throw new NativeScriptException("Cannot find runtime for instance=" + ((javaObject == null) ? "null" : javaObject));
         }
 
-        return runtime.callJSMethodImpl(javaObject, methodName, retType, isConstructor, delay, args);
+        return runtime.callJSMethodImpl(javaObjectID, javaObject, methodName, retType, isConstructor, delay, args);
     }
 
-    private Object callJSMethodImpl(Object javaObject, String methodName, Class<?> retType, boolean isConstructor, long delay, Object... args) throws NativeScriptException {
-        Integer javaObjectID = getJavaObjectID(javaObject);
+    private Object callJSMethodImpl(Integer javaObjectID, Object javaObject, String methodName, Class<?> retType, boolean isConstructor, long delay, Object... args) throws NativeScriptException {
         if (javaObjectID == null) {
             throw new NativeScriptException("Cannot find object id for instance=" + ((javaObject == null) ? "null" : javaObject));
         }
@@ -1237,8 +1269,8 @@ public class Runtime {
         boolean isWorkThread = threadScheduler.getThread().equals(Thread.currentThread());
 
         final Object[] tmpArgs = extendConstructorArgs(methodName, isConstructor, args);
-        final boolean discardUncaughtJsExceptions = this.config.appConfig.getDiscardUncaughtJsExceptions();
-        boolean enableMultithreadedJavascript = this.config.appConfig.getEnableMultithreadedJavascript();
+        final boolean discardUncaughtJsExceptions = this.cachedDiscardUncaughtJsExceptions;
+        boolean enableMultithreadedJavascript = this.cachedEnableMultithreadedJavascript;
 
         if (enableMultithreadedJavascript || isWorkThread) {
             Object[] packagedArgs = packageArgs(tmpArgs);

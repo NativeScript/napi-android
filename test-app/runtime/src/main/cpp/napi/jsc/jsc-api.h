@@ -11,7 +11,10 @@
 #include <unordered_set>
 #include <list>
 #include <thread>
+#include <mutex>
 #include <cassert>
+
+
 
 struct napi_env__ {
     JSGlobalContextRef context{};
@@ -28,6 +31,16 @@ struct napi_env__ {
 
     const std::thread::id thread_id{std::this_thread::get_id()};
 
+    // Serializes all host->JS entries into this context. JSC's C API takes its
+    // per-VM lock around each individual call, but a logical host->JS callback
+    // spans many napi_* calls that must run atomically w.r.t. other threads
+    // (background-thread JNI callbacks, timers, worker marshaling). Without this,
+    // two threads interleave inside a single JS callback and corrupt the runtime's
+    // shared C++ state (ObjectManager/ArgConverter) and JS heap -> SIGSEGV. This
+    // mirrors QuickJS's per-env recursive mutex taken by NapiScope. Recursive so a
+    // nested NapiScope on the same thread re-enters instead of self-deadlocking.
+    std::recursive_mutex js_mutex{};
+
     napi_env__(JSGlobalContextRef context) : context{context} {
         napi_envs[context] = this;
         JSGlobalContextRetain(context);
@@ -38,13 +51,18 @@ struct napi_env__ {
     }
 
     ~napi_env__() {
+        // All of these (deinit_refs and deinit_symbol) call JSValueUnprotect
+        // on `context`, so the context must stay alive until after they run.
+        // Releasing it earlier frees the underlying JSC context when this env
+        // holds the last reference (e.g. a terminating worker), turning the
+        // subsequent unprotect calls into a use-after-free crash.
         deinit_refs();
-        JSGlobalContextRelease(context);
         deinit_symbol(wrapper_info_symbol);
         deinit_symbol(reference_info_symbol);
         deinit_symbol(function_info_symbol);
         deinit_symbol(constructor_info_symbol);
         napi_envs.erase(context);
+        JSGlobalContextRelease(context);
     }
 
     static napi_env get(JSGlobalContextRef context) {
@@ -62,6 +80,11 @@ private:
     void init_symbol(JSValueRef& symbol, const char* description);
     void deinit_symbol(JSValueRef symbol);
 };
+
+napi_status napi_set_exception__(napi_env env, JSValueRef exception) {
+    env->last_exception = exception;
+    return napi_ok;
+}
 
 #define RETURN_STATUS_IF_FALSE(env, condition, status) \
   do {                                                 \

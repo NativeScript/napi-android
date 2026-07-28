@@ -153,6 +153,7 @@ static bool NormalizeScriptPath(const char *file, std::string &out) {
 static void PersistCodeCache(v8::Local<v8::UnboundScript> unbound, const std::string &fsPath) {
     ScriptCompiler::CachedData *cachedData = ScriptCompiler::CreateCodeCache(unbound);
     if (cachedData == nullptr) {
+        DEBUG_WRITE("[code-cache] CreateCodeCache produced no data for: %s", fsPath.c_str());
         return;
     }
 
@@ -163,8 +164,10 @@ static void PersistCodeCache(v8::Local<v8::UnboundScript> unbound, const std::st
     // cache. Stamp the temp file with the source's mtime *before* the rename so
     // the published cache atomically carries the correct staleness marker.
     bool wrote = File::WriteBinary(tmpPath, cachedData->data, cachedData->length);
+    int cacheLength = cachedData->length;
     delete cachedData;
     if (!wrote) {
+        DEBUG_WRITE("[code-cache] failed to write cache file: %s", tmpPath.c_str());
         remove(tmpPath.c_str());
         return;
     }
@@ -176,8 +179,12 @@ static void PersistCodeCache(v8::Local<v8::UnboundScript> unbound, const std::st
     utime(tmpPath.c_str(), &new_times);
 
     if (rename(tmpPath.c_str(), cachePath.c_str()) != 0) {
+        DEBUG_WRITE("[code-cache] failed to publish cache file: %s", cachePath.c_str());
         remove(tmpPath.c_str());
+        return;
     }
+
+    DEBUG_WRITE("[code-cache] wrote V8 code cache: %s (%d bytes)", cachePath.c_str(), cacheLength);
 }
 
 // Cold path: compile the source once, publish a code cache from that same
@@ -217,6 +224,8 @@ static napi_status CompileRunAndCache(napi_env env, napi_value script, const cha
         // into napi_pending_exception).
         return GET_RETURN_STATUS(env);
     }
+
+    DEBUG_WRITE("[code-cache] compiling from source (cold): %s (cacheable=%d)", file, cacheable);
 
     // Publish a code cache from this single compile for the next launch.
     if (cacheable) {
@@ -314,11 +323,13 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
     auto cachePath = fsPath + ".cache";
     struct stat cacheStat;
     if (stat(cachePath.c_str(), &cacheStat) != 0) {
+        DEBUG_WRITE("[code-cache] miss (no cache on disk): %s", fsPath.c_str());
         return napi_cannot_run_js; // no cache written yet
     }
     struct stat srcStat;
     if (stat(fsPath.c_str(), &srcStat) == 0 && srcStat.st_mtime != cacheStat.st_mtime) {
         // Source changed since the cache was written — ignore the stale cache.
+        DEBUG_WRITE("[code-cache] miss (source newer than cache): %s", fsPath.c_str());
         return napi_cannot_run_js;
     }
 
@@ -363,8 +374,11 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
         // The cache was stale/incompatible; V8 recompiled from source but we did
         // NOT run it. Report a miss so the caller runs the source and refreshes
         // the cache. (No script executed, so no double side effects.)
+        DEBUG_WRITE("[code-cache] miss (V8 rejected cache as incompatible): %s", fsPath.c_str());
         return napi_cannot_run_js;
     }
+
+    DEBUG_WRITE("[code-cache] loaded V8 compiled code cache: %s (%d bytes)", fsPath.c_str(), length);
 
     v8::Local<v8::Value> ret;
     if (!cachedScript->Run(env->context()).ToLocal(&ret)) {
@@ -377,8 +391,7 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
     return GET_RETURN_STATUS(env);
 }
 
-napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url,
-                                 napi_value *result) {
+napi_status js_run_bytecode_file(napi_env env, const char *file, napi_value *result) {
     // V8 has no compile-time bytecode format (it caches code at runtime instead,
     // see js_cache_script/js_run_cached_script); always fall back to source.
     return napi_cannot_run_js;

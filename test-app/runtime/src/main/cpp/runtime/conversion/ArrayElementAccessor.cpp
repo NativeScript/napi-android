@@ -105,7 +105,10 @@ napi_value ArrayElementAccessor::GetArrayElement(napi_env env, napi_value array,
         }
         default: {  // 'L' object or '[' nested array
             jobject result = jenv.GetObjectArrayElement((jobjectArray) arr, index);
-            value = ConvertToJsValue(env, objectManager, jenv, arraySignature.substr(1), &result);
+            // Pass the element signature as a string_view into arraySignature (drop
+            // the leading '[') instead of allocating a fresh substring per element.
+            value = ConvertToJsValue(env, objectManager, jenv,
+                                     std::string_view(arraySignature).substr(1), &result);
             jenv.DeleteLocalRef(result);
             break;
         }
@@ -240,7 +243,7 @@ void ArrayElementAccessor::SetArrayElement(napi_env env, napi_value array, uint3
     }
 }
 
-napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* objectManager, JEnv& jenv, const string& elementSignature, const void* value) {
+napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* objectManager, JEnv& jenv, std::string_view elementSignature, const void* value) {
     napi_status status;
     napi_value jsValue;
 
@@ -298,7 +301,7 @@ napi_value ArrayElementAccessor::ConvertToJsValue(napi_env env, ObjectManager* o
                     if (napi_util::is_null_or_undefined(env, jsValue)) {
                         string className;
                         if (elementSignature[0] == '[') {
-                            className = Util::JniClassPathToCanonicalName(elementSignature);
+                            className = Util::JniClassPathToCanonicalName(string(elementSignature));
                         } else {
                             className = objectManager->GetClassName(*(jobject*) value);
                         }

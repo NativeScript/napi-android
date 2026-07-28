@@ -6,17 +6,15 @@
 // by .github/workflows/bytecode-compilers.yml. It writes a NativeScript bytecode
 // container: 8-byte magic + 4-byte LE format version + JS_WriteObject payload.
 //
-// Still gated OFF (`ready: false`): the runtime side, napi/quickjs
-// `js_run_bytecode_file`, is a stub. To enable: implement it (strip the 12-byte
-// header, JS_ReadObject(JS_READ_OBJ_BYTECODE) + JS_EvalFunction) so it matches
-// this `magic`, confirm the CLI's engine ref matches the runtime's vendored
-// QuickJS, then flip `ready` to true.
+// The runtime side reads this container in napi/quickjs js_execute_script (strips
+// the 12-byte header, JS_ReadObject(JS_READ_OBJ_BYTECODE) + JS_EvalFunction).
+// Keep the CLI's engine ref in step with the runtime's vendored QuickJS.
 const MAGIC = Buffer.from('NSBCQJS\0', 'latin1'); // 8 bytes, must match the shim + runtime
 
 module.exports = {
   key: 'quickjs',
   engineKeys: ['QUICKJS'],
-  ready: false,
+  ready: true,
   magic: MAGIC,
   supportsSourceMaps: false,
   defaultOptimize: null,

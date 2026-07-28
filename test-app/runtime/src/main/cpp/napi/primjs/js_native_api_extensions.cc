@@ -44,6 +44,29 @@ static void lepus_host_object_finalizer(LEPUSRuntime *rt, LEPUSValue val) {
     delete info;
 }
 
+// PrimJS keeps the napi "pending exception" in a napi_env slot that is SEPARATE
+// from the LEPUS context's thrown-exception slot. libnapi's own C-function
+// trampoline transfers a napi exception into the ctx before unwinding, but our
+// exotic host-object traps are invoked directly by the engine and bypass that
+// trampoline. So when a trap's napi callback leaves an exception pending, we must
+// move it into the LEPUS ctx ourselves; otherwise returning LEPUS_EXCEPTION makes
+// the engine throw the ctx's (unset -> null) exception instead of the real error
+// object, and JS `catch` receives null.
+//
+// Tracing-GC-safe: no manual LEPUS_FreeValue. napi_js_value_to_quickjs_value
+// yields an owned value whose ownership is handed to LEPUS_Throw (the engine's
+// exception slot); the collector reclaims it.
+static bool primjs_sync_pending_exception(napi_env env, LEPUSContext *ctx) {
+    bool exc = false;
+    env->napi_is_exception_pending(env, &exc);
+    if (!exc) return false;
+    napi_value pend = nullptr;
+    env->napi_get_and_clear_last_exception(env, &pend);
+    LEPUSValue ev = pend ? napi_js_value_to_quickjs_value(env, pend) : LEPUS_UNDEFINED;
+    LEPUS_Throw(ctx, ev);
+    return true;
+}
+
 static LEPUSValue lepus_host_object_get(LEPUSContext *ctx,
                                          LEPUSValueConst obj,
                                          JSAtom atom,
@@ -67,10 +90,7 @@ static LEPUSValue lepus_host_object_get(LEPUSContext *ctx,
 
     env->napi_close_handle_scope(env, scope);
 
-    bool exc = false;
-    env->napi_is_exception_pending(env, &exc);
-    if (exc) {
-        LEPUS_FreeValue(ctx, ret);
+    if (primjs_sync_pending_exception(env, ctx)) {
         return LEPUS_EXCEPTION;
     }
     return ret;
@@ -97,9 +117,7 @@ static int lepus_host_object_set(LEPUSContext *ctx,
 
     env->napi_close_handle_scope(env, scope);
 
-    bool exc = false;
-    env->napi_is_exception_pending(env, &exc);
-    if (exc) return -1;
+    if (primjs_sync_pending_exception(env, ctx)) return -1;
     return 1;
 }
 
@@ -120,9 +138,7 @@ static int lepus_host_object_has(LEPUSContext *ctx,
 
     env->napi_close_handle_scope(env, scope);
 
-    bool exc = false;
-    env->napi_is_exception_pending(env, &exc);
-    if (exc) return -1;
+    if (primjs_sync_pending_exception(env, ctx)) return -1;
     return present;
 }
 
@@ -143,9 +159,7 @@ static int lepus_host_object_delete(LEPUSContext *ctx,
 
     env->napi_close_handle_scope(env, scope);
 
-    bool exc = false;
-    env->napi_is_exception_pending(env, &exc);
-    if (exc) return -1;
+    if (primjs_sync_pending_exception(env, ctx)) return -1;
     return deleted;
 }
 
@@ -185,7 +199,6 @@ static int lepus_host_object_own_property_names(LEPUSContext *ctx,
                     if (!elem) continue;
                     LEPUSValue lv = napi_js_value_to_quickjs_value(env, elem);
                     JSAtom atom = LEPUS_ValueToAtom(ctx, lv);
-                    LEPUS_FreeValue(ctx, lv);
                     if (atom == 0) continue; // 0 == invalid / JS_ATOM_NULL
                     (*ptab)[added].atom = atom;
                     (*ptab)[added].is_enumerable = 1;
@@ -197,6 +210,8 @@ static int lepus_host_object_own_property_names(LEPUSContext *ctx,
     }
 
     env->napi_close_handle_scope(env, scope);
+
+    if (primjs_sync_pending_exception(env, ctx)) return -1;
     return ret;
 }
 

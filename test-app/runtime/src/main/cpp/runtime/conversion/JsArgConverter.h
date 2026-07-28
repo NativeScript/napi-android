@@ -102,9 +102,11 @@ namespace tns {
         int m_args_refs[255];
         int m_args_refs_size = 0;
 
-        std::string m_methodSignature;
-
-        std::vector<std::string> m_tokens;
+        // Parsed argument-type tokens. On the common path this points directly at
+        // the MetadataEntry's cached `parsedSig` (no copy); only the entry-less /
+        // unresolved fallback owns its tokens in m_ownedTokens.
+        const std::vector<std::string>* m_tokens = nullptr;
+        std::vector<std::string> m_ownedTokens;
 
         Error m_error;
     };

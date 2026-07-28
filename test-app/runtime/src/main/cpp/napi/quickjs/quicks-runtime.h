@@ -27,6 +27,12 @@ NAPI_EXTERN napi_status NAPI_CDECL qjs_execute_script(napi_env env,
                                                       const char *file,
                                                       napi_value *result);
 
+NAPI_EXTERN napi_status NAPI_CDECL qjs_run_bytecode(napi_env env,
+                                                    const uint8_t *buf,
+                                                    size_t buf_len,
+                                                    const char *file,
+                                                    napi_value *result);
+
 NAPI_EXTERN napi_status NAPI_CDECL qjs_runtime_before_gc_callback(napi_env env, napi_finalize cb, void *data);
 
 NAPI_EXTERN napi_status NAPI_CDECL qjs_runtime_after_gc_callback(napi_env env, napi_finalize cb, void *data);

@@ -1,5 +1,8 @@
 #include "jsr.h"
 #include "quicks-runtime.h"
+#include "bytecode_container.h"
+#include "File.h"
+#include "NativeScriptAssert.h"
 
 JSR::JSR() = default;
 tns::SimpleMap<napi_env, JSR *> JSR::env_to_jsr_cache;
@@ -59,10 +62,48 @@ napi_status js_free_runtime(jsr_ns_runtime runtime) {
     return status;
 }
 
+#ifdef __QUICKJS_NG__
+static const char *kBytecodeMagic = "NSBCNGS";  // 7 chars + NUL = 8-byte magic
+static const char *kEngineName = "QuickJS-NG";
+#else
+static const char *kBytecodeMagic = "NSBCQJS";
+static const char *kEngineName = "QuickJS";
+#endif
+
+napi_status js_run_bytecode_file(napi_env env, const char *file, napi_value *result) {
+    std::string path;
+    if (!nsbc::ResolvePath(file, path)) {
+        DEBUG_WRITE("[bytecode] Unable to resolve file: %s", path.c_str());
+        return napi_cannot_run_js;
+    }
+    if (!nsbc::HasMagic(path, kBytecodeMagic)) {
+        DEBUG_WRITE("[bytecode] Unable to find %s header: %s", kEngineName, path.c_str());
+        return napi_cannot_run_js;
+    }
+
+    int length = 0;
+    auto data = tns::File::ReadBinary(path, length);
+    if (!data) return napi_cannot_run_js;
+    if (static_cast<size_t>(length) <= nsbc::kHeaderLen) {
+        delete[] static_cast<uint8_t *>(data);
+        return napi_cannot_run_js;
+    }
+
+    DEBUG_WRITE("[bytecode] loading %s bytecode: %s (%d bytes)", kEngineName, file, length);
+
+    // JS_ReadObject copies what it needs, so the buffer can be freed after.
+    napi_status status = qjs_run_bytecode(
+        env, static_cast<const uint8_t *>(data) + nsbc::kHeaderLen,
+        static_cast<size_t>(length) - nsbc::kHeaderLen, file, result);
+    delete[] static_cast<uint8_t *>(data);
+    return status;
+}
+
 napi_status js_execute_script(napi_env env,
                               napi_value script,
                               const char *file,
                               napi_value *result) {
+    DEBUG_WRITE("[script] loading script: %s", file);
     return qjs_execute_script(env, script, file, result);
 }
 
@@ -85,12 +126,6 @@ napi_status js_run_cached_script(napi_env env, const char *file, napi_value scri
     return napi_ok;
 }
 
-
-napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url,
-                                 napi_value *result) {
-    // No compile-time bytecode format wired up for this engine yet; fall back to source.
-    return napi_cannot_run_js;
-}
 
 napi_status js_get_runtime_version(napi_env env, napi_value *version) {
     napi_create_string_utf8(env, "QuickJS", NAPI_AUTO_LENGTH, version);

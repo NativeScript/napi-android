@@ -122,6 +122,7 @@ namespace tns {
             bool isArray;
             std::string arraySignature;    // jni array signature (arrays only)
             int8_t isSuper = -1;           // cached super-call flag (-1=unresolved)
+            int64_t arrayLength = -1;      // cached fixed length (arrays only; -1=unresolved)
         };
 
         napi_value CreateHostObjectProxy(napi_value instance,
@@ -150,8 +151,8 @@ namespace tns {
                                                 napi_callback_info info);
         static void HostObjectProxyFinalizer(napi_env env, void *data,
                                              void *hint);
-        // Actual cleanup, run on the safe post-GC pass (via node_api_post_finalizer
-        // on V8) so reference-deleting Node-API calls are legal.
+        // Actual cleanup, deferred to the runtime's safe post-GC finalizer drain
+        // (Runtime::PostFinalizer) so its reference-deleting Node-API calls are legal.
         static void HostObjectProxyPostFinalizer(napi_env env, void *data,
                                                  void *hint);
 #endif

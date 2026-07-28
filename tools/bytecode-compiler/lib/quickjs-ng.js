@@ -2,14 +2,14 @@
 
 // QuickJS-NG adapter. Same JS_* API and shim as QuickJS (native/qjs-compile.c),
 // but a distinct engine whose bytecode is NOT interchangeable — hence its own
-// magic and bin/quickjs-ng/ directory. Gated OFF until the runtime side
-// (napi/quickjs `js_run_bytecode_file`) reads this format; see quickjs.js.
+// magic and bin/quickjs-ng/ directory. The runtime reads this container in
+// napi/quickjs js_execute_script (the __QUICKJS_NG__ build); see quickjs.js.
 const MAGIC = Buffer.from('NSBCNGS\0', 'latin1'); // 8 bytes, must match the shim + runtime
 
 module.exports = {
   key: 'quickjs-ng',
   engineKeys: ['QUICKJS_NG'],
-  ready: false,
+  ready: true,
   magic: MAGIC,
   supportsSourceMaps: false,
   defaultOptimize: null,

@@ -1207,12 +1207,21 @@ void MetadataNode::RegisterSymbolHasInstanceCallback(napi_env env, const Metadat
     NAPI_GUARD(napi_get_named_property(env, symbol, "hasInstance", &hasInstance)) {
         return;
     }
+    // NOTE: the napi `data` pointer must be a heap-allocated pointer, NOT a raw
+    // JNI reference. PrimJS's napi boxes the callback data into 48 bits and
+    // reconstructs it with a fixed top-16-bit heap tag (0xb400...) on retrieval;
+    // that is lossless for real heap pointers but corrupts a JNI global ref
+    // (top bits 0x0000), yielding a bogus jclass and a CheckJNI "invalid jobject"
+    // abort. Wrap the class ref in a heap holder so `data` is always a heap
+    // pointer (engine-neutral; matches the MethodCallbackData pattern).
+    auto *holder = new SymbolHasInstanceData{clazz};
     napi_value method;
-    NAPI_GUARD(napi_create_function(env, "hasInstance", NAPI_AUTO_LENGTH, SymbolHasInstanceCallback, clazz,
+    NAPI_GUARD(napi_create_function(env, "hasInstance", NAPI_AUTO_LENGTH, SymbolHasInstanceCallback, holder,
                          &method)) {
+        delete holder;
         return;
     }
-   
+
     napi_property_descriptor desc = {
             nullptr, // utf8name
             hasInstance,      // name
@@ -1239,7 +1248,7 @@ napi_value MetadataNode::SymbolHasInstanceCallback(napi_env env, napi_callback_i
         return napi_util::get_false(env);
     }
 
-    auto clazz = reinterpret_cast<jclass>(data);
+    auto clazz = reinterpret_cast<SymbolHasInstanceData *>(data)->clazz;
     auto runtime = Runtime::GetRuntime(env);
 
     auto objectManager = runtime->GetObjectManager();
@@ -1523,6 +1532,16 @@ std::vector<MetadataNode::MethodCallbackData *> MetadataNode::SetClassMembersFro
     NAPI_GUARD(napi_create_function(env, PROP_KEY_EXTEND, sizeof(PROP_KEY_EXTEND), ExtendMethodCallback, this,
                          &extendMethod)) {}
     NAPI_GUARD(napi_set_named_property(env, constructor, PROP_KEY_EXTEND, extendMethod)) {}
+
+    // Brand the runtime's native extend() so ts_helpers can reliably tell a native class's
+    // extend from a user/JS extend. It must NOT rely on Function.prototype.toString() sniffing
+    // "[native code]": in release builds JS is compiled to bytecode and every function
+    // (native or JS) stringifies to "[native code]", so a plain JS class with a static method
+    // named "extend" would be misdetected as native. This brand is a real, non-enumerable
+    // property set by the runtime, so it works identically for source and bytecode on all engines.
+    napi_value nativeExtendBrand;
+    NAPI_GUARD(napi_get_boolean(env, true, &nativeExtendBrand)) {}
+    NAPI_GUARD(napi_util::define_property_value(env, extendMethod, "__isNativeExtend__", nativeExtendBrand, napi_default)) {}
 
     // get candidates from static fields metadata
     auto staticFieldCout = *reinterpret_cast<uint16_t *>(curPtr);

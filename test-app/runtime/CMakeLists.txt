@@ -65,6 +65,7 @@ include_directories(
         src/main/cpp/runtime/constants
         src/main/cpp/runtime/conversion
         src/main/cpp/runtime/exceptions
+        src/main/cpp/runtime/finalizer
         src/main/cpp/runtime/global
         src/main/cpp/runtime/instrumentation
         src/main/cpp/runtime/inspector
@@ -104,10 +105,34 @@ file(GLOB_RECURSE MODULE_FILES
 set(SOURCES ${RUNTIME_FILES} ${MODULE_FILES})
 
 if (QUICKJS OR QUICKJS_NG)
+    # Build mimalloc (v3) for speed regardless of the APK variant. Android
+    # Gradle passes -DCMAKE_BUILD_TYPE=Debug for debug variants, and mimalloc v3
+    # then *explicitly* defines MI_DEBUG=2 and auto-enables MI_GUARDED (guard
+    # pages) — assertion + invariant checking on the alloc/free hot path that can
+    # make it slower than the system allocator. MI_NO_DEBUG forces MI_DEBUG=0
+    # (and takes priority over the Debug branch, which also suppresses the
+    # auto-guard). arm64 already gets -march=armv8.1-a via v3's default
+    # MI_OPT_ARCH, so no arch flag is needed here.
+    set(MI_NO_DEBUG     ON  CACHE BOOL "" FORCE)  # define MI_DEBUG=0 in all builds
+    set(MI_GUARDED      OFF CACHE BOOL "" FORCE)  # no guard-page allocations
+    set(MI_NO_PADDING   ON  CACHE BOOL "" FORCE)  # define MI_PADDING=0 in all builds
+    set(MI_SECURE       OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_TESTS  OFF CACHE BOOL "" FORCE)
+    set(MI_BUILD_SHARED OFF CACHE BOOL "" FORCE)  # we only link mimalloc-static
+    set(MI_BUILD_OBJECT OFF CACHE BOOL "" FORCE)
+    set(MI_OVERRIDE     OFF CACHE BOOL "" FORCE)  # we call mi_* explicitly
+
     add_subdirectory(${PROJECT_SOURCE_DIR}/src/main/cpp/napi/quickjs/mimalloc-dev mimalloc)
+
+    # Optimize the mimalloc sources even in a debug configuration, scoped to the
+    # mimalloc target only (not quickjs.c or the rest of the C runtime). -O2 is
+    # appended after the Debug -O0 so it wins; -DNDEBUG drops any remaining
+    # assert()s in mimalloc's own code.
+    target_compile_options(mimalloc-static PRIVATE -O2 -DNDEBUG)
 
     if (QUICKJS_NG)
         set(QJS_SOURCE_DIR src/main/cpp/napi/quickjs/source_ng)
+        add_compile_definitions(__QUICKJS_NG__)
     else()
         set(QJS_SOURCE_DIR src/main/cpp/napi/quickjs/source)
     endif()
@@ -353,6 +378,12 @@ if (QUICKJS OR QUICKJS_NG)
     endif ()
     if (USE_MIMALLOC)
         add_compile_definitions(NativeScript, PRIVATE USE_MIMALLOC)
+        # Opt-in mimalloc runtime tuning (see qjs_create_runtime): trades higher
+        # memory residency for fewer syscalls / faster allocation. Enable from
+        # runtime/build.gradle with -DMIMALLOC_PERF=1.
+        if (MIMALLOC_PERF)
+            add_compile_definitions(NativeScript, PRIVATE MIMALLOC_PERF)
+        endif ()
     endif ()
 endif ()
 
@@ -362,6 +393,13 @@ endif ()
 
 if (IS_NAPI_MODULE)
     add_compile_definitions(NativeScript, PRIVATE IS_NAPI_MODULE)
+endif ()
+
+# Bytecode builds embed app-relative source names (no "file://" scheme). This
+# lets the JS stack-trace parser (BuildStacktraceFrames) accept those frames and
+# rebuild the full runtime URL from the app root. Wired from runtime/build.gradle.
+if (NS_BYTECODE)
+    add_compile_definitions(NativeScript, PRIVATE NS_BYTECODE_ENABLED)
 endif ()
 
 # if("${ANDROID_ABI}" MATCHES "armeabi-v7a$" OR "${ANDROID_ABI}" MATCHES "x86$")

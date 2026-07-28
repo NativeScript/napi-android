@@ -145,9 +145,13 @@ std::string buildStringFromArg(napi_env env, napi_value val) {
     } else if (type == napi_object) {
         return transformJSObject(env, val);
     } else if (type == napi_symbol) {
-        napi_value symString;
-        NAPI_GUARD(napi_coerce_to_string(env, val, &symString)) {}
-        return "Symbol(" + ArgConverter::ConvertToString(env, symString) + ")";
+        // A Symbol has no ToString coercion (napi_coerce_to_string throws per
+        // spec), so invoke Symbol.prototype.toString explicitly, which yields
+        // "Symbol(description)".
+        napi_value toStringFn = nullptr, symString = nullptr;
+        NAPI_GUARD(napi_get_named_property(env, val, "toString", &toStringFn)) {}
+        NAPI_GUARD(napi_call_function(env, val, toStringFn, 0, nullptr, &symString)) {}
+        return ArgConverter::ConvertToString(env, symString);
     } else {
         napi_value defaultToString;
         NAPI_GUARD(napi_coerce_to_string(env, val, &defaultToString)) {}

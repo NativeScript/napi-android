@@ -54,8 +54,12 @@
   };
 
   var __extends = function (Child, Parent) {
+    // Detect a native class by a brand the runtime stamps on its native extend() rather than
+    // sniffing Parent.extend.toString() for "[native code]": in release/bytecode builds every
+    // function (JS or native) stringifies to "[native code]", which misdetects a plain JS class
+    // with a static "extend" method as native. The brand works for source and bytecode alike.
     var extendNativeClass =
-      !!Parent.extend && Parent.extend.toString().indexOf("[native code]") > -1;
+      !!Parent.extend && Parent.extend.__isNativeExtend__ === true;
 
     if (!extendNativeClass) {
       __extends_ts(Child, Parent);

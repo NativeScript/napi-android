@@ -6,6 +6,7 @@
 #include <memory>
 #include "JniLocalRef.h"
 #include "MessageLoopTimer.h"
+#include "FinalizerQueue.h"
 #include <android/looper.h>
 #include "js_native_api.h"
 #include "robin_hood.h"
@@ -43,6 +44,21 @@ namespace tns {
 
         inline static Runtime *GetRuntimeUnchecked(napi_env env) {
             return env_to_runtime_cache.Get(env);
+        }
+
+        // Engine-agnostic replacement for node_api_post_finalizer: schedules
+        // `cb(env, data, hint)` to run at the next runtime message-loop tick
+        // instead of immediately. Call this from a GC finalizer that needs to
+        // delete references / touch the JS heap (illegal during the GC sweep on
+        // every engine). Falls back to running inline if the runtime is already
+        // tearing down (no loop left to drain it).
+        static void PostFinalizer(napi_env env, napi_finalize cb, void *data, void *hint) {
+            Runtime *rt = GetRuntimeUnchecked(env);
+            if (rt != nullptr && rt->m_finalizerQueue != nullptr && !rt->is_destroying) {
+                rt->m_finalizerQueue->Post(cb, data, hint);
+            } else if (cb != nullptr) {
+                cb(env, data, hint);
+            }
         }
 
         static void Init(JavaVM *vm);
@@ -167,6 +183,7 @@ namespace tns {
         napi_handle_scope global_scope;
 
         MessageLoopTimer *m_loopTimer;
+        FinalizerQueue *m_finalizerQueue = nullptr;
         int64_t m_lastUsedMemory;
         napi_ref m_gcFunc;
         volatile bool m_runGC;

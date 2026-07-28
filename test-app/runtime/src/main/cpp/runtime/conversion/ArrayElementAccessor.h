@@ -5,6 +5,7 @@
 #include "JniLocalRef.h"
 #include "js_native_api.h"
 #include <string>
+#include <string_view>
 #include "ObjectManager.h"
 
 
@@ -26,7 +27,7 @@ namespace tns {
                              jobject arrayObject = nullptr);
 
     private:
-        napi_value ConvertToJsValue(napi_env env, ObjectManager* objectManager, JEnv& jEnv, const std::string& elementSignature, const void* value);
+        napi_value ConvertToJsValue(napi_env env, ObjectManager* objectManager, JEnv& jEnv, std::string_view elementSignature, const void* value);
         void assertNonNullNativeArray(tns::JniLocalRef& arrayReference);
     };
 }

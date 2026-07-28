@@ -140,26 +140,42 @@ function isPlaceholder(file) {
   }
 }
 
-function compileFile(opts, adapter, compiler, file, isRaw) {
+function compileFile(opts, adapter, compiler, file, isRaw, appDir) {
   const source = fs.readFileSync(file, 'utf8');
   const wrapped = isRaw ? source : MODULE_PROLOGUE + source + MODULE_EPILOGUE;
 
-  // Compile through a temp file that keeps the original basename so the compiler
-  // embeds a meaningful module name / source-map "sources" entry.
+  // Embed the app-relative path as the module's source name so runtime stack
+  // traces point at the app's file (e.g. "shared/index.js"), not a throwaway
+  // temp path. Every engine derives the embedded name from the *input path we
+  // pass*: hermesc bakes in its argv path verbatim (it never absolutizes a
+  // cwd-relative path), and the qjs/primjs shims hand their input path straight
+  // to JS_Eval/LEPUS_Eval as the filename. So we mirror the wrapped source under
+  // a temp root at its app-relative path and run the compiler from that root with
+  // the relative path as input — the embedded name becomes exactly `rel`.
+  //
+  // The device-absolute "file:///data/data/<app>/files/app/..." form can't be
+  // used here: hermesc must be given a real, openable host file (no URL scheme /
+  // device path), and that prefix is device-specific anyway. The app-relative
+  // path is the identity all engines can embed consistently.
+  const rel = relKey(appDir, file);
+  const relParts = rel.split('/');
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nsbc-'));
-  const tmpSrc = path.join(tmpDir, path.basename(file));
+  const tmpSrc = path.join(tmpDir, ...relParts);
   const tmpOut = path.join(tmpDir, path.basename(file) + '.bc');
   const wantMap = opts.sourceMaps && adapter.supportsSourceMaps;
   try {
+    fs.mkdirSync(path.dirname(tmpSrc), { recursive: true });
     fs.writeFileSync(tmpSrc, wrapped);
     const optimize = opts.optimize !== undefined ? opts.optimize : adapter.defaultOptimize;
     const args = adapter.buildArgs({
-      input: tmpSrc,
+      // Pass the app-relative path (forward-slashed); with cwd = tmpDir the
+      // compiler opens tmpDir/<rel> and embeds "<rel>" as the source name.
+      input: rel,
       output: tmpOut,
       sourceMap: wantMap ? adapter.sourceMapOutput(tmpOut) : null,
       optimize,
     });
-    const res = spawnSync(compiler, args, { encoding: 'utf8' });
+    const res = spawnSync(compiler, args, { cwd: tmpDir, encoding: 'utf8' });
     if (res.status !== 0) {
       const detail = (res.stderr || res.stdout || (res.error && res.error.message) || '').toString().trim();
       throw new Error(`compiler failed for ${file} (exit ${res.status}):\n${detail}`);
@@ -207,6 +223,17 @@ function main() {
     return;
   }
 
+  // Ensure the compiler is executable. Binaries shipped via CI artifact zips,
+  // npm packages, or restored without the exec bit lose it, which surfaces as a
+  // spawn EACCES. (No-op on Windows.)
+  if (process.platform !== 'win32') {
+    try {
+      fs.chmodSync(compiler, 0o755);
+    } catch (err) {
+      console.warn(`[bytecode] could not chmod +x ${compiler}: ${err.message}`);
+    }
+  }
+
   const rawSet = new Set(opts.raw);
   const magicLen = adapter.magic ? adapter.magic.length : 0;
   const files = listJsFiles(appDir);
@@ -223,7 +250,7 @@ function main() {
     }
     const isRaw = rawSet.has(relKey(appDir, file));
     try {
-      compileFile(opts, adapter, compiler, file, isRaw);
+      compileFile(opts, adapter, compiler, file, isRaw, appDir);
       compiled++;
       if (isRaw) rawCount++;
       if (opts.verbose) {

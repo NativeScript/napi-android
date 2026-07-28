@@ -1,6 +1,7 @@
 #include "GlobalHelpers.h"
 #include "ArgConverter.h"
 #include "CallbackHandlers.h"
+#include "Constants.h"
 #include "JEnv.h"
 #include "NativeScriptException.h"
 #include <sstream>
@@ -193,6 +194,22 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
     vector<string> stackLines;
     Util::SplitString(stackTrace, "\n", stackLines);
 
+    // Source modules carry a full "file://…" URL in every frame, so this matches
+    // those exactly as before (also covers JSC's "func@file://…:line:col" form).
+    const regex schemeRegex(R"((file:.*):(\d+):(\d+))");
+#ifdef NS_BYTECODE_ENABLED
+    // Bytecode modules embed an app-relative source name (e.g. "shared/index.js")
+    // at compile time — see tools/bytecode-compiler/compile-bytecode.js — because
+    // the device-absolute path can't be baked in ahead of time. Those frames have
+    // no scheme, so match a "(path:line:col)" (or leading-space) form and rebuild
+    // the full runtime URL from the app root. A leading "(" or space anchors the
+    // path so a function name is never glued on; "@" stays a valid path char so
+    // scoped modules (tns_modules/@nativescript/…) survive. Bytecode engines
+    // (Hermes/QuickJS/PrimJS) all emit the parenthesised V8-style frame, so the
+    // "@"-delimited (JSC) form never reaches here — and JSC has no bytecode.
+    const regex bareRegex(R"RE([(\s]([^\s():]+):(\d+):(\d+))RE");
+#endif
+
     int current = 0;
     int count = 0;
     for (auto &frame : stackLines) {
@@ -201,20 +218,25 @@ std::vector<tns::JsStacktraceFrame> tns::BuildStacktraceFrames(napi_env env, nap
             if (error == nullptr && count < 3) continue;
 #endif
 
-//#ifdef __JSC__
-        regex frameRegex(R"((file:.*):(\d+):(\d+))");
-//#else
-//        regex frameRegex(R"(\((.*):(\d+):(\d+)\))");
-//#endif
         smatch match;
-        if (regex_search(frame, match, frameRegex)) {
-            current++;
-            frames.emplace_back(stoi(match[2].str()),
-                                stoi(match[3].str()),
-                                match[1].str(),
-                                frame);
-            if (current == size) break;
+        std::string filePath;
+        if (regex_search(frame, match, schemeRegex)) {
+            filePath = match[1].str();
         }
+#ifdef NS_BYTECODE_ENABLED
+        else if (regex_search(frame, match, bareRegex)) {
+            filePath = "file://" + Constants::APP_ROOT_FOLDER_PATH + match[1].str();
+        }
+#endif
+        else {
+            continue;
+        }
+        current++;
+        frames.emplace_back(stoi(match[2].str()),
+                            stoi(match[3].str()),
+                            filePath,
+                            frame);
+        if (current == size) break;
     }
     return frames;
 }

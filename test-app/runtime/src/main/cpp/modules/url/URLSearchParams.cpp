@@ -12,11 +12,20 @@ namespace {
     // ref, holds a weak self-ref to the iterator object for the `next` receiver
     // brand check, and tracks the current index. Freed by the iterator's finalizer.
     struct IterState {
-        napi_ref src;
-        napi_ref iterSelf; // weak ref to the iterator object (brand identity)
         uint32_t idx;
         int kind;
     };
+
+    // Internal, non-enumerable keys the iterator carries:
+    //  - ITER_SOURCE_KEY: a strong reference to the source URLSearchParams (kept
+    //    alive for `next`); released by ordinary property teardown.
+    //  - ITER_BRAND_KEY: a napi_external wrapping this iterator's IterState*, used
+    //    by `next` for the receiver brand check.
+    // Holding these as properties (not napi_refs) means the iterator's finalizer
+    // never has to delete a reference — illegal during the GC sweep on every
+    // engine — so it can stay a plain C++ delete (see MakeIterator).
+    static constexpr const char *ITER_SOURCE_KEY = "__nsSource";
+    static constexpr const char *ITER_BRAND_KEY = "__nsBrand";
 
     napi_value js_str(napi_env env, std::string_view s) {
         napi_value v;
@@ -107,18 +116,18 @@ namespace {
         auto *st = static_cast<IterState *>(data);
 
         // Brand check: `next` must be invoked on the very iterator it belongs to.
-        // Compare the receiver against the iterator identity; a foreign receiver
-        // (e.g. next.call({})) throws, per spec.
+        // The receiver carries a napi_external wrapping its IterState*; a matching
+        // pointer proves identity. A foreign receiver (e.g. next.call({})) has no
+        // such brand and throws, per spec.
         if (st == nullptr) {
             ThrowTypeError(env, "Illegal invocation");
             return nullptr;
         }
-        napi_value iterObj;
-        bool sameReceiver = false;
-        if (napi_get_reference_value(env, st->iterSelf, &iterObj) == napi_ok && iterObj != nullptr) {
-            napi_strict_equals(env, jsThis, iterObj, &sameReceiver);
-        }
-        if (!sameReceiver) {
+        napi_value brandVal = nullptr;
+        void *brand = nullptr;
+        if (napi_get_named_property(env, jsThis, ITER_BRAND_KEY, &brandVal) != napi_ok ||
+            !napi_util::is_of_type(env, brandVal, napi_external) ||
+            napi_get_value_external(env, brandVal, &brand) != napi_ok || brand != st) {
             ThrowTypeError(env, "Illegal invocation");
             return nullptr;
         }
@@ -128,7 +137,7 @@ namespace {
 
         napi_value srcObj;
         URLSearchParams *self = nullptr;
-        if (napi_get_reference_value(env, st->src, &srcObj) != napi_ok ||
+        if (napi_get_named_property(env, jsThis, ITER_SOURCE_KEY, &srcObj) != napi_ok ||
             napi_unwrap(env, srcObj, reinterpret_cast<void **>(&self)) != napi_ok ||
             self == nullptr) {
             napi_set_named_property(env, result, "value", napi_util::undefined(env));
@@ -167,15 +176,38 @@ namespace {
     }
 
     napi_value MakeIterator(napi_env env, napi_value jsThis, int kind) {
-        // src: strong ref to the source URLSearchParams (kept alive for `next`).
-        auto *st = new IterState{napi_util::make_ref(env, jsThis, 1), nullptr, 0, kind};
+        auto *st = new IterState{0, kind};
 
         napi_value iterator;
         napi_create_object(env, &iterator);
 
-        // Weak self-ref for the `next` receiver brand check (see IteratorNext).
-        // Weak (refcount 0) so it does not keep the iterator alive / create a cycle.
-        st->iterSelf = napi_util::make_ref(env, iterator, 0);
+        // Attach two non-enumerable internal properties (napi_default => not
+        // enumerable, invisible to JS):
+        //  - the strong source URLSearchParams reference, kept alive for `next`
+        //    and released by ordinary property teardown (no cycle: the iterator
+        //    does not reference the source's keys);
+        //  - a napi_external wrapping the IterState* for the `next` brand check.
+        // The external owns no data (nullptr finalize) — st is freed by the
+        // iterator's own finalizer below.
+        napi_value brandVal;
+        napi_create_external(env, st, nullptr, nullptr, &brandVal);
+        napi_property_descriptor descs[2] = {};
+        descs[0].utf8name = ITER_SOURCE_KEY;
+        descs[0].value = jsThis;
+        descs[0].attributes = napi_default;
+        descs[1].utf8name = ITER_BRAND_KEY;
+        descs[1].value = brandVal;
+        descs[1].attributes = napi_default;
+        napi_define_properties(env, iterator, 2, descs);
+
+        // Free the IterState when the iterator is collected. napi_add_finalizer
+        // works on a plain object on every engine (unlike napi_wrap, which this
+        // runtime backs with a V8 internal-field slot a plain object lacks). The
+        // callback only frees C++ memory (no napi/JS-heap calls), so it is safe to
+        // run synchronously during the GC sweep everywhere — no deferral needed.
+        napi_add_finalizer(env, iterator, st, [](napi_env, void *d, void *) {
+            delete static_cast<IterState *>(d);
+        }, nullptr, nullptr);
 
         napi_value nextFn;
         napi_create_function(env, "next", NAPI_AUTO_LENGTH, IteratorNext, st, &nextFn);
@@ -190,22 +222,6 @@ namespace {
         // Object.prototype.toString output.
         napi_set_property(env, iterator, WellKnownSymbol(env, "toStringTag"),
                           js_str(env, "URLSearchParams Iterator"));
-
-        // Release the state when the iterator is collected. Ref deletion is
-        // deferred on V8 (deleting a reference synchronously inside a finalizer
-        // is illegal there).
-        napi_add_finalizer(env, iterator, st, [](napi_env env, void *d, void *) {
-#ifdef __V8__
-            node_api_post_finalizer(env, [](napi_env env, void *d, void *) {
-#endif
-                auto *s = static_cast<IterState *>(d);
-                napi_delete_reference(env, s->src);
-                napi_delete_reference(env, s->iterSelf);
-                delete s;
-#ifdef __V8__
-            }, d, nullptr);
-#endif
-        }, st, nullptr);
 
         return iterator;
     }

@@ -390,7 +390,13 @@ napi_value CallbackHandlers::CallJavaMethod(napi_env env, napi_value caller, con
             }
 
             if (result != nullptr) {
-                auto isString = jEnv.IsInstanceOf(result, JAVA_LANG_STRING);
+                // A declared array return can never be a java.lang.String, so skip
+                // the per-return IsInstanceOf JNI probe on the array-return hot path.
+                // Non-array Object/CharSequence returns can be polymorphic Strings,
+                // so those still need the check.
+                bool isArrayReturn = returnType != nullptr && !returnType->empty() &&
+                                     (*returnType)[0] == '[';
+                auto isString = !isArrayReturn && jEnv.IsInstanceOf(result, JAVA_LANG_STRING);
 
                 if (isString) {
                     returnValue = ArgConverter::jstringToJsString(env, (jstring) result);

@@ -14,20 +14,21 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value caller, napi_value *args
                                const std::string &methodSignature, MetadataEntry *entry, JNIEnv *jniEnv,
                                ObjectManager *objectManager)
         : m_env(env), m_jniEnv(jniEnv), m_objectManager(objectManager), m_isValid(true),
-          m_methodSignature(methodSignature), m_error(Error()) {
+          m_error(Error()) {
     int napiProvidedArgumentsLength = argc;
     m_argsLen = 1 + napiProvidedArgumentsLength;
 
     if (m_argsLen > 0) {
         if ((entry != nullptr) && (entry->getIsResolved())) {
             if (entry->parsedSig.empty()) {
-                JniSignatureParser parser(m_methodSignature);
+                JniSignatureParser parser(methodSignature);
                 entry->parsedSig = parser.Parse();
             }
-            m_tokens = entry->parsedSig;
+            m_tokens = &entry->parsedSig;
         } else {
-            JniSignatureParser parser(m_methodSignature);
-            m_tokens = parser.Parse();
+            JniSignatureParser parser(methodSignature);
+            m_ownedTokens = parser.Parse();
+            m_tokens = &m_ownedTokens;
         }
 
         m_isValid = ConvertArg(env, caller, 0);
@@ -50,19 +51,20 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
                                bool hasImplementationObject, const std::string &methodSignature,
                                MetadataEntry *entry, JNIEnv *jniEnv, ObjectManager *objectManager)
         : m_env(env), m_jniEnv(jniEnv), m_objectManager(objectManager), m_isValid(true),
-          m_methodSignature(methodSignature), m_error(Error()) {
+          m_error(Error()) {
     m_argsLen = !hasImplementationObject ? argc : argc - 1;
 
     if (m_argsLen > 0) {
         if ((entry != nullptr) && (entry->getIsResolved())) {
             if (entry->parsedSig.empty()) {
-                JniSignatureParser parser(m_methodSignature);
+                JniSignatureParser parser(methodSignature);
                 entry->parsedSig = parser.Parse();
             }
-            m_tokens = entry->parsedSig;
+            m_tokens = &entry->parsedSig;
         } else {
-            JniSignatureParser parser(m_methodSignature);
-            m_tokens = parser.Parse();
+            JniSignatureParser parser(methodSignature);
+            m_ownedTokens = parser.Parse();
+            m_tokens = &m_ownedTokens;
         }
 
         for (size_t i = 0; i < m_argsLen; i++) {
@@ -77,11 +79,12 @@ JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
 
 JsArgConverter::JsArgConverter(napi_env env, napi_value *args, size_t argc,
                                const std::string &methodSignature)
-        : m_env(env), m_isValid(true), m_methodSignature(methodSignature), m_error(Error()) {
+        : m_env(env), m_isValid(true), m_error(Error()) {
     m_argsLen = argc;
 
-    JniSignatureParser parser(m_methodSignature);
-    m_tokens = parser.Parse();
+    JniSignatureParser parser(methodSignature);
+    m_ownedTokens = parser.Parse();
+    m_tokens = &m_ownedTokens;
 
     for (size_t i = 0; i < m_argsLen; i++) {
         m_isValid = ConvertArg(env, args[i], i);
@@ -119,15 +122,13 @@ bool JsArgConverter::ConvertArg(napi_env env, napi_value arg, int index) {
     char buff[1024];
     buff[0] = '\0';
 
-    const auto &typeSignature = m_tokens[index];
+    const auto &typeSignature = (*m_tokens)[index];
 
-    // Seed a default diagnostic up front: the NAPI_GUARD bails below `return
-    // false` without reaching the error-population tail, and the caller loop
-    // stops at the first failing argument, so this guarantees GetError() carries
-    // a non-empty, indexed message even on those early-exit paths.
+    // Record only the failing index up front (cheap). The default diagnostic
+    // string is built lazily in GetError() from m_tokens[index], so the common
+    // success path pays no per-argument string allocation. A NAPI_GUARD early
+    // `return false` below still leaves m_error.index set for GetError().
     m_error.index = index;
-    m_error.msg = "Cannot convert argument at index " + std::to_string(index) +
-                  " to " + typeSignature;
 
     if (arg == nullptr) {
         SetConvertedObject(index, nullptr);
@@ -404,7 +405,7 @@ bool JsArgConverter::ConvertJavaScriptNumber(napi_env env, napi_value jsValue, i
 
     jvalue value = {0};
 
-    const auto &typeSignature = m_tokens[index];
+    const auto &typeSignature = (*m_tokens)[index];
 
     const char typePrefix = typeSignature[0];
 
@@ -509,7 +510,7 @@ bool JsArgConverter::ConvertJavaScriptBoolean(napi_env env, napi_value jsValue, 
     napi_status status;
     bool success;
 
-    const auto &typeSignature = m_tokens[index];
+    const auto &typeSignature = (*m_tokens)[index];
 
     if (typeSignature == "Z") {
         bool argValue;
@@ -546,7 +547,7 @@ bool JsArgConverter::ConvertJavaScriptArray(napi_env env, napi_value jsArr, int 
 
     const jsize arrLength = jsLen;
 
-    const auto &arraySignature = m_tokens[index];
+    const auto &arraySignature = (*m_tokens)[index];
 
     std::string elementType = arraySignature.substr(1);
 
@@ -696,7 +697,7 @@ template<typename T>
 bool JsArgConverter::ConvertFromCastFunctionObject(T value, int index) {
     bool success = false;
 
-    const auto &typeSignature = m_tokens[index];
+    const auto &typeSignature = (*m_tokens)[index];
 
     const char typeSignaturePrefix = typeSignature[0];
 
@@ -752,7 +753,15 @@ jvalue *JsArgConverter::ToArgs() {
 }
 
 JsArgConverter::Error JsArgConverter::GetError() const {
-    return m_error;
+    Error e = m_error;
+    // Build the default diagnostic lazily (only when an error is actually
+    // queried and no specific message was already formatted on the failure path).
+    if (e.index >= 0 && e.msg.empty() && m_tokens != nullptr &&
+        e.index < (int) m_tokens->size()) {
+        e.msg = "Cannot convert argument at index " + std::to_string(e.index) +
+                " to " + (*m_tokens)[e.index];
+    }
+    return e;
 }
 
 JsArgConverter::~JsArgConverter() {

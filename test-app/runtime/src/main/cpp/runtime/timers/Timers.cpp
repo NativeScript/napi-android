@@ -182,8 +182,6 @@ void Timers::FireTimer() {
     napi_value recv = napi_util::get_ref_value(env_, task->thisArg);
     size_t argc = task->args_ == nullptr ? 0 : task->args_->size();
     napi_status status;
-    // Log a failed dispatch (e.g. a JS exception) but continue: the cleanup
-    // below must still run so the task's references are released.
     if (argc > 0) {
         std::vector<napi_value> argv(argc);
         for (size_t i = 0; i < argc; i++) {
@@ -201,6 +199,20 @@ void Timers::FireTimer() {
     }
 
     nesting = 0;
+
+    // A pending exception left on the env fails every subsequent napi call
+    // (NAPI_PREAMBLE returns napi_pending_exception), which would silently stop
+    // all timer dispatch. Clear it and surface it to Java instead — cleanup
+    // above must run first so the task's references are released.
+    bool pendingException = false;
+    napi_is_exception_pending(env_, &pendingException);
+    if (pendingException) {
+        napi_value error = nullptr;
+        NAPI_GUARD(napi_get_and_clear_last_exception(env_, &error)) {}
+        if (error != nullptr) {
+            throw NativeScriptException(env_, error, "Error in timer callback");
+        }
+    }
 }
 
 void Timers::Destroy() {

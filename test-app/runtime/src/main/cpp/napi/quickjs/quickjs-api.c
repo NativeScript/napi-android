@@ -2340,18 +2340,15 @@ napi_status napi_coerce_to_string(napi_env env, napi_value value, napi_value *re
     CHECK_ARG(result)
 
     JSValue jsValue = *((JSValue *) value);
-    JSValue jsResult;
-    if (JS_IsSymbol(jsValue)) {
-        jsResult = JS_GetPropertyStr(env->context, jsValue, "description");
-    } else {
-        jsResult = JS_ToString(env->context, jsValue);
-    }
+    // ToString abstract operation. Per spec (and matching the V8 N-API) this
+    // throws a TypeError for a Symbol; callers that want a symbol's textual form
+    // must handle it before coercing (see Console::buildStringFromArg). JS_ToString
+    // returns a value with an owned reference, which CreateScopedResult takes over.
+    JSValue jsResult = JS_ToString(env->context, jsValue);
 
     if (JS_IsException(jsResult)) {
         return napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
     }
-
-    JS_DupValue(env->context, jsResult);
 
     return CreateScopedResult(env, jsResult, result);
 }
@@ -3354,7 +3351,9 @@ napi_new_instance(napi_env env, napi_value constructor, size_t argc, const napi_
 
 
     if (JS_IsException(returnValue)) {
-        JS_Throw(env->context, returnValue);
+        // The constructor's real error is already pending; leave it intact rather
+        // than re-throwing the JS_EXCEPTION sentinel (which frees the real error
+        // and replaces it with a non-object sentinel).
         return napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
     }
 
@@ -4068,6 +4067,36 @@ napi_status qjs_create_runtime(napi_runtime *runtime) {
     *runtime = mi_malloc(sizeof(napi_runtime__));
 
 #ifdef USE_MIMALLOC
+#ifdef MIMALLOC_PERF
+    // One-time mimalloc runtime tuning: trade memory for speed. Set before the
+    // first runtime is created (options are process-global). Guarded so it runs
+    // once even if multiple runtimes/workers are spawned.
+    static int mi_perf_configured = 0;
+    if (!mi_perf_configured) {
+        mi_perf_configured = 1;
+        // Never decommit/return freed pages to the OS: eliminates the
+        // madvise(DONTNEED)/re-commit syscall churn during GC. Biggest lever.
+        mi_option_set(mi_option_purge_delay, -1);
+        // Commit arenas up front instead of lazily on first page fault.
+        mi_option_set(mi_option_arena_eager_commit, 1);
+        // Transparent huge pages default to OFF on Android (mi_option_allow_thp
+        // = 0). Enabling madvise(MADV_HUGEPAGE) is the effective way to get 2MB
+        // pages here (fewer TLB misses); this is a v3 option.
+        mi_option_set(mi_option_allow_thp, 1);
+        // Also try explicit large OS pages; silently ignored if the kernel has
+        // no hugepage pool (typical on Android), so it's a harmless best-effort.
+        mi_option_set(mi_option_allow_large_os_pages, 1);
+        // v3: keep more full pages cached per size class (default 2) so freed
+        // pages are reused instead of released back to the arena.
+        mi_option_set(mi_option_page_full_retain, 4);
+        // v3: run mimalloc's internal heap collection less often (default every
+        // 10000 generic allocs) — fewer housekeeping passes at the cost of RSS.
+        mi_option_set(mi_option_generic_collect, 100000);
+        // Reserve a 64MB arena up front to avoid many small mmap calls as the
+        // JS heap grows. This option is stored internally in KiB.
+        mi_option_set(mi_option_arena_reserve, 64 * 1024);
+    }
+#endif
     (*runtime)->runtime = JS_NewRuntime2(&mi_mf, NULL);
 #else
     (*runtime)->runtime = JS_NewRuntime();
@@ -4221,6 +4250,10 @@ napi_status qjs_create_napi_env(napi_env *env, napi_runtime runtime) {
 
     JS_SetHostPromiseRejectionTracker(runtime->runtime, JSR_PromiseRejectionTracker, *env);
 
+    // referenceSymbolValue is otherwise unassigned but is JS_FreeValue'd in
+    // qjs_free_napi_env; without this it holds uninitialized mi_malloc garbage and
+    // freeing it at env teardown dereferences a bogus refcount pointer (SIGSEGV).
+    (*env)->referenceSymbolValue = JS_UNDEFINED;
     (*env)->instanceData = NULL;
     (*env)->isThrowNull = false;
     (*env)->gcBefore = NULL;
@@ -4373,11 +4406,57 @@ napi_status qjs_execute_script(napi_env env,
     eval_result = JS_Eval(env->context, cScript, strlen(cScript), file, JS_EVAL_TYPE_GLOBAL);
     JS_FreeCString(env->context, cScript);
     if (JS_IsException(eval_result)) {
-        const char *exceptionMessage = JS_ToCString(env->context, eval_result);
-        napi_set_last_error(env, napi_cannot_run_js, exceptionMessage, 0, NULL);
-        JS_FreeCString(env->context, exceptionMessage);
-        JS_Throw(env->context, eval_result);
+        // JS_Eval failed (e.g. a syntax error) and already left the real error
+        // object as the context's pending exception. Leave it intact so the
+        // caller can retrieve it via napi_get_and_clear_last_exception.
+        //
+        // Do NOT JS_Throw(eval_result) here: eval_result is only the JS_EXCEPTION
+        // sentinel, and JS_Throw frees the real pending error and replaces it with
+        // that sentinel. The caller would then receive a non-object sentinel
+        // instead of the actual Error/SyntaxError (which fails napi_typeof and any
+        // subsequent property set on it).
+        napi_set_last_error(env, napi_cannot_run_js, NULL, 0, NULL);
         return napi_cannot_run_js;
+    }
+
+    if (result) {
+        CHECK_NAPI(CreateScopedResult(env, eval_result, result));
+    } else {
+        JS_FreeValue(env->context, eval_result);
+    }
+
+    return napi_clear_last_error(env);
+}
+
+/* Deserialize and run pre-compiled bytecode (JS_WriteObject output). Mirrors
+ * qjs_execute_script but reads bytecode instead of compiling source; the
+ * completion value (the module wrapper function) is returned via *result. */
+napi_status qjs_run_bytecode(napi_env env,
+                             const uint8_t *buf,
+                             size_t buf_len,
+                             const char *file,
+                             napi_value *result) {
+    CHECK_ARG(env)
+    CHECK_ARG(buf)
+
+    /* Errors here return napi_pending_exception (not napi_cannot_run_js): the file
+     * IS bytecode, so the caller must surface the error, not fall back to source. */
+    JSValue fun_obj = JS_ReadObject(env->context, buf, buf_len, JS_READ_OBJ_BYTECODE);
+    if (JS_IsException(fun_obj)) {
+        // The real error is already the context's pending exception; leave it
+        // intact. Re-throwing fun_obj (the JS_EXCEPTION sentinel) via JS_Throw
+        // frees the real error and replaces it with the non-object sentinel.
+        napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
+        return napi_pending_exception;
+    }
+
+    /* JS_EvalFunction consumes fun_obj. */
+    JSValue eval_result = JS_EvalFunction(env->context, fun_obj);
+    if (JS_IsException(eval_result)) {
+        // See above: leave the real pending exception in place instead of
+        // clobbering it with the eval_result sentinel.
+        napi_set_last_error(env, napi_pending_exception, NULL, 0, NULL);
+        return napi_pending_exception;
     }
 
     if (result) {

@@ -29,24 +29,24 @@ napi_status js_cache_script(napi_env env, const char *source, const char *file);
 napi_status js_run_cached_script(napi_env env, const char * file, napi_value script, void* cache, napi_value *result);
 
 /**
- * Compile-time bytecode support.
+ * Compile-time bytecode fast path. The runtime calls this BEFORE reading a
+ * module's source, so a precompiled module is never read/compiled as text.
  *
- * If `file` holds pre-compiled bytecode this engine can execute (generated at
- * build time, e.g. via hermesc), this loads and runs it and sets *result to the
- * completion value of the module — for a `require`d module that is the wrapper
- * function `(function(module, exports, require, __filename, __dirname){...})`,
- * mirroring exactly what js_execute_script returns for the equivalent source.
+ * `file` is the module's source URL (e.g. "file:///.../app/foo.js"). If it holds
+ * precompiled bytecode for this engine, load + run it and set *result to the
+ * module wrapper function (mirroring js_execute_script for the equivalent source).
+ *
+ * The bytecode-loading implementation lives entirely in each engine's jsr.cpp;
+ * this is just the thin entry point the module loader calls.
  *
  * Returns:
- *   - napi_ok               : `file` was bytecode; it ran; *result is set.
- *   - napi_cannot_run_js    : `file` is NOT bytecode for this engine (the caller
- *                             should fall back to compiling the source). Engines
- *                             without a compile-time bytecode story always
- *                             return this without touching the filesystem.
- *   - napi_pending_exception/other : `file` was bytecode but failed to load or
- *                             threw while executing (surfaced as an error).
+ *   - napi_ok            : `file` was bytecode; it ran; *result is set.
+ *   - napi_cannot_run_js : `file` is NOT bytecode (caller compiles source).
+ *                          Detection only peeks the header — no full read — and
+ *                          engines without bytecode support always return this.
+ *   - other              : `file` was bytecode but failed/threw (do NOT fall back).
  */
-napi_status js_run_bytecode_file(napi_env env, const char *file, const char *source_url, napi_value *result);
+napi_status js_run_bytecode_file(napi_env env, const char *file, napi_value *result);
 
 napi_status js_get_runtime_version(napi_env env, napi_value* version);
 

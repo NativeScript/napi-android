@@ -122,66 +122,107 @@
 #define UNDEFINED \
 napi_util::undefined(env);
 
+// The helpers below are convenience wrappers around the raw Node-API. Every one
+// of them guards the status of the underlying napi_* call via NAPI_GUARD and
+// returns a well-defined fallback on failure instead of reading a possibly
+// uninitialized out-parameter:
+//   - value accessors return nullptr,
+//   - boolean predicates return false,
+//   - numeric accessors return 0.
+// This keeps a single failed napi_* call (e.g. an unclassifiable value, or a
+// call made while a JS exception is pending) from producing undefined behavior
+// in the caller.
 namespace napi_util {
 
     inline napi_value undefined(napi_env env) {
-        napi_value undefined;
-        napi_get_undefined(env, &undefined);
+        napi_status status;
+        napi_value undefined = nullptr;
+        NAPI_GUARD(napi_get_undefined(env, &undefined)) {
+            return nullptr;
+        }
         return undefined;
     }
 
     inline napi_value null(napi_env env) {
-        napi_value null;
-        napi_get_null(env, &null);
+        napi_status status;
+        napi_value null = nullptr;
+        NAPI_GUARD(napi_get_null(env, &null)) {
+            return nullptr;
+        }
         return null;
     }
 
     inline napi_ref make_ref(napi_env env, napi_value value,
                              uint32_t initialCount = 1) {
-        napi_ref ref;
-        napi_create_reference(env, value, initialCount, &ref);
+        napi_status status;
+        napi_ref ref = nullptr;
+        NAPI_GUARD(napi_create_reference(env, value, initialCount, &ref)) {
+            return nullptr;
+        }
         return ref;
     }
 
     inline napi_value get_ref_value(napi_env env, napi_ref ref) {
-        napi_value value;
-        napi_get_reference_value(env, ref, &value);
+        napi_status status;
+        napi_value value = nullptr;
+        NAPI_GUARD(napi_get_reference_value(env, ref, &value)) {
+            return nullptr;
+        }
         return value;
     }
 
     inline napi_value get__proto__(napi_env env, napi_value object) {
-        napi_value proto;
-        napi_get_named_property(env, object, "__proto__", &proto);
+        napi_status status;
+        napi_value proto = nullptr;
+        NAPI_GUARD(napi_get_named_property(env, object, "__proto__", &proto)) {
+            return nullptr;
+        }
         return proto;
     }
 
     inline void set__proto__(napi_env env, napi_value object, napi_value __proto__) {
-        napi_set_named_property(env, object, "__proto__", __proto__);
+        napi_status status;
+        NAPI_GUARD(napi_set_named_property(env, object, "__proto__", __proto__)) {}
     }
 
     inline napi_value getPrototypeOf(napi_env env, napi_value object) {
-        napi_value proto;
-        napi_get_prototype(env, object, &proto);
+        napi_status status;
+        napi_value proto = nullptr;
+        NAPI_GUARD(napi_get_prototype(env, object, &proto)) {
+            return nullptr;
+        }
         return proto;
     }
 
     inline napi_value get_prototype(napi_env env, napi_value object) {
-        napi_value prototype;
-        napi_get_named_property(env, object, "prototype", &prototype);
+        napi_status status;
+        napi_value prototype = nullptr;
+        NAPI_GUARD(napi_get_named_property(env, object, "prototype", &prototype)) {
+            return nullptr;
+        }
         return prototype;
     }
 
     inline void set_prototype(napi_env env, napi_value object, napi_value prototype) {
-        napi_set_named_property(env, object, "prototype", prototype);
+        napi_status status;
+        NAPI_GUARD(napi_set_named_property(env, object, "prototype", prototype)) {}
     }
 
     inline char *get_string_value(napi_env env, napi_value str, size_t size = 0) {
+        napi_status status;
         size_t str_size = size;
         if (str_size == 0) {
-            napi_get_value_string_utf8(env, str, nullptr, 0, &str_size);
+            // Probe the required length first; bail out (rather than allocating a
+            // garbage-sized buffer) if the value is not a readable string.
+            NAPI_GUARD(napi_get_value_string_utf8(env, str, nullptr, 0, &str_size)) {
+                return nullptr;
+            }
         }
         char *buffer = new char[str_size + 1];
-        napi_get_value_string_utf8(env, str, buffer, str_size + 1, nullptr);
+        NAPI_GUARD(napi_get_value_string_utf8(env, str, buffer, str_size + 1, nullptr)) {
+            delete[] buffer;
+            return nullptr;
+        }
         return buffer;
     }
 
@@ -213,16 +254,17 @@ namespace napi_util {
     }
 
     inline void setPrototypeOf(napi_env env, napi_value object, napi_value prototype) {
-        napi_value global, global_object, set_proto;
+        napi_status status;
+        napi_value global = nullptr, global_object = nullptr, set_proto = nullptr;
 
         // Get the global object
-        napi_get_global(env, &global);
+        NAPI_GUARD(napi_get_global(env, &global)) { return; }
 
         // Get the Object global object
-        napi_get_named_property(env, global, OBJECT, &global_object);
+        NAPI_GUARD(napi_get_named_property(env, global, OBJECT, &global_object)) { return; }
 
         // Get the setPrototypeOf function from the Object global object
-        napi_get_named_property(env, global_object, SET_PROTOTYPE_OF, &set_proto);
+        NAPI_GUARD(napi_get_named_property(env, global_object, SET_PROTOTYPE_OF, &set_proto)) { return; }
 
         // Prepare the arguments for the setPrototypeOf call
         napi_value argv[] {
@@ -230,192 +272,261 @@ namespace napi_util {
             prototype
         };
         // Call setPrototypeOf(object, prototype)
-        napi_call_function(env, global, set_proto, 2, argv, nullptr);
+        NAPI_GUARD(napi_call_function(env, global, set_proto, 2, argv, nullptr)) {}
     }
 
 
 
     inline bool is_object_explicit(napi_env env, napi_value value) {
-        napi_valuetype type;
-        napi_typeof(env, value, &type);
+        napi_status status;
+        napi_valuetype type = napi_undefined;
+        NAPI_GUARD(napi_typeof(env, value, &type)) {
+            return false;
+        }
         return type == napi_object;
     }
 
     inline bool is_object(napi_env env, napi_value value) {
-        napi_valuetype type;
-        napi_typeof(env, value, &type);
+        napi_status status;
+        napi_valuetype type = napi_undefined;
+        NAPI_GUARD(napi_typeof(env, value, &type)) {
+            return false;
+        }
         return type == napi_object || type == napi_function;
     }
 
     inline bool is_of_type(napi_env env, napi_value value, napi_valuetype expected_type) {
-        napi_valuetype type;
-        napi_typeof(env, value, &type);
+        // napi_typeof can fail (and leave `type` unwritten) for values it cannot
+        // classify, e.g. an engine exception sentinel; guarding the status keeps
+        // this from returning a spurious match on an uninitialized value.
+        napi_status status;
+        napi_valuetype type = napi_undefined;
+        NAPI_GUARD(napi_typeof(env, value, &type)) {
+            return false;
+        }
         return type == expected_type;
     }
 
     inline bool is_number_object(napi_env env, napi_value value) {
-        bool result;
-        napi_value numberCtor;
-        napi_value global;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "Number", &numberCtor);
-        napi_instanceof(env, value, numberCtor, &result);
+        napi_status status;
+        bool result = false;
+        napi_value numberCtor = nullptr;
+        napi_value global = nullptr;
+        NAPI_GUARD(napi_get_global(env, &global)) { return false; }
+        NAPI_GUARD(napi_get_named_property(env, global, "Number", &numberCtor)) { return false; }
+        NAPI_GUARD(napi_instanceof(env, value, numberCtor, &result)) { return false; }
         return result;
     }
 
     inline napi_value valueOf(napi_env env, napi_value value) {
-        napi_value valueOf, result;
-        napi_get_named_property(env, value, "valueOf", &valueOf);
-        napi_call_function(env, value, valueOf, 0, nullptr, &result);
+        napi_status status;
+        napi_value valueOf = nullptr, result = nullptr;
+        NAPI_GUARD(napi_get_named_property(env, value, "valueOf", &valueOf)) { return nullptr; }
+        NAPI_GUARD(napi_call_function(env, value, valueOf, 0, nullptr, &result)) { return nullptr; }
         return result;
     }
 
     inline bool is_string_object(napi_env env, napi_value value) {
-        bool result;
-        napi_value stringCtor;
-        napi_value global;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "String", &stringCtor);
-        napi_instanceof(env, value, stringCtor, &result);
+        napi_status status;
+        bool result = false;
+        napi_value stringCtor = nullptr;
+        napi_value global = nullptr;
+        NAPI_GUARD(napi_get_global(env, &global)) { return false; }
+        NAPI_GUARD(napi_get_named_property(env, global, "String", &stringCtor)) { return false; }
+        NAPI_GUARD(napi_instanceof(env, value, stringCtor, &result)) { return false; }
         return result;
     }
 
     inline bool is_boolean_object(napi_env env, napi_value value) {
-        bool result;
-        napi_value booleanCtor;
-        napi_value global;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "Boolean", &booleanCtor);
-        napi_instanceof(env, value, booleanCtor, &result);
+        napi_status status;
+        bool result = false;
+        napi_value booleanCtor = nullptr;
+        napi_value global = nullptr;
+        NAPI_GUARD(napi_get_global(env, &global)) { return false; }
+        NAPI_GUARD(napi_get_named_property(env, global, "Boolean", &booleanCtor)) { return false; }
+        NAPI_GUARD(napi_instanceof(env, value, booleanCtor, &result)) { return false; }
         return result;
     }
-    
+
 
     inline bool is_array(napi_env env, napi_value value) {
-        bool result;
-        napi_is_array(env, value, &result);
+        napi_status status;
+        bool result = false;
+        NAPI_GUARD(napi_is_array(env, value, &result)) {
+            return false;
+        }
         return result;
     }
 
     inline bool is_arraybuffer(napi_env env, napi_value value) {
-        bool result;
-        napi_is_arraybuffer(env, value, &result);
+        napi_status status;
+        bool result = false;
+        NAPI_GUARD(napi_is_arraybuffer(env, value, &result)) {
+            return false;
+        }
         return result;
     }
 
     inline bool is_dataview(napi_env env, napi_value value) {
-        bool result;
-        napi_is_dataview(env, value, &result);
+        napi_status status;
+        bool result = false;
+        NAPI_GUARD(napi_is_dataview(env, value, &result)) {
+            return false;
+        }
         return result;
     }
 
     inline bool is_typedarray(napi_env env, napi_value value) {
-        bool result;
-        napi_is_typedarray(env, value, &result);
+        napi_status status;
+        bool result = false;
+        NAPI_GUARD(napi_is_typedarray(env, value, &result)) {
+            return false;
+        }
         return result;
     }
 
     inline bool is_date(napi_env env, napi_value value) {
-        bool result;
-        napi_is_date(env, value, &result);
+        napi_status status;
+        bool result = false;
+        NAPI_GUARD(napi_is_date(env, value, &result)) {
+            return false;
+        }
         return result;
     }
 
 
     inline bool is_undefined(napi_env env, napi_value value) {
         if (value == nullptr) return true;
-        napi_valuetype type;
-        napi_typeof(env, value, &type);
+        napi_status status;
+        napi_valuetype type = napi_undefined;
+        // A value that cannot be classified is unusable; treat it as undefined so
+        // callers guarding with is_null_or_undefined skip it (matches the
+        // value == nullptr case above).
+        NAPI_GUARD(napi_typeof(env, value, &type)) {
+            return true;
+        }
         return type == napi_undefined;
     }
 
     inline bool is_null(napi_env env, napi_value value) {
-        napi_valuetype type;
-        napi_typeof(env, value, &type);
+        napi_status status;
+        napi_valuetype type = napi_undefined;
+        NAPI_GUARD(napi_typeof(env, value, &type)) {
+            return false;
+        }
         return type == napi_null;
     }
 
     inline napi_value get_true(napi_env env) {
-        napi_value trueValue;
-        napi_get_boolean(env, true, &trueValue);
+        napi_status status;
+        napi_value trueValue = nullptr;
+        NAPI_GUARD(napi_get_boolean(env, true, &trueValue)) {
+            return nullptr;
+        }
         return trueValue;
     }
 
     inline napi_value get_false(napi_env env) {
-        napi_value falseValue;
-        napi_get_boolean(env, false, &falseValue);
+        napi_status status;
+        napi_value falseValue = nullptr;
+        NAPI_GUARD(napi_get_boolean(env, false, &falseValue)) {
+            return nullptr;
+        }
         return falseValue;
     }
 
     inline bool get_bool(napi_env env, napi_value value) {
-        bool result;
-        napi_get_value_bool(env, value, &result);
+        napi_status status;
+        bool result = false;
+
+        if (!napi_util::is_of_type(env, value, napi_boolean)) return false;
+
+        NAPI_GUARD(napi_get_value_bool(env, value, &result)) {
+            return false;
+        }
         return result;
     }
 
     inline bool is_float(napi_env env, napi_value value) {
-        napi_value global, number, is_int, result;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "Number", &number);
-        napi_get_named_property(env, number, "isInteger", &is_int);
-        napi_call_function(env, number, is_int, 1, &value, &result);
+        napi_status status;
+        napi_value global = nullptr, number = nullptr, is_int = nullptr, result = nullptr;
+        NAPI_GUARD(napi_get_global(env, &global)) { return false; }
+        NAPI_GUARD(napi_get_named_property(env, global, "Number", &number)) { return false; }
+        NAPI_GUARD(napi_get_named_property(env, number, "isInteger", &is_int)) { return false; }
+        NAPI_GUARD(napi_call_function(env, number, is_int, 1, &value, &result)) { return false; }
 
         return !napi_util::get_bool(env, result);
     }
 
     // Same as Object.create()`
     inline napi_value object_create_from(napi_env env, napi_value object) {
-        napi_value new_object;
-        napi_create_object(env, &new_object);
-        napi_set_named_property(env, new_object, "prototype", object);
+        napi_status status;
+        napi_value new_object = nullptr;
+        NAPI_GUARD(napi_create_object(env, &new_object)) { return nullptr; }
+        NAPI_GUARD(napi_set_named_property(env, new_object, "prototype", object)) {}
         return new_object;
     }
 
     inline bool strict_equal(napi_env env, napi_value v1, napi_value v2) {
-        bool equal;
-        napi_strict_equals(env, v1, v2, &equal);
+        napi_status status;
+        bool equal = false;
+        NAPI_GUARD(napi_strict_equals(env, v1, v2, &equal)) {
+            return false;
+        }
         return equal;
     }
 
     inline double get_number(napi_env env, napi_value value) {
-        double result;
-        napi_get_value_double(env, value, &result);
+        napi_status status;
+        double result = 0;
+        NAPI_GUARD(napi_get_value_double(env, value, &result)) {
+            return 0;
+        }
         return result;
     }
 
     inline int32_t get_int32(napi_env env, napi_value value) {
-        int32_t result;
-        napi_get_value_int32(env, value, &result);
+        napi_status status;
+        int32_t result = 0;
+        NAPI_GUARD(napi_get_value_int32(env, value, &result)) {
+            return 0;
+        }
         return result;
     }
 
     template<typename Func, typename... Args>
     inline void run_in_handle_scope(napi_env env, Func func, Args &&...args) {
-        napi_handle_scope scope;
-        napi_open_handle_scope(env, &scope);
+        napi_status status;
+        napi_handle_scope scope = nullptr;
+        NAPI_GUARD(napi_open_handle_scope(env, &scope)) {
+            return;
+        }
 
         // Call the provided function
         func(std::forward<Args>(args)...);
 
-        napi_close_handle_scope(env, scope);
+        NAPI_GUARD(napi_close_handle_scope(env, scope)) {}
     }
 
     template<typename Func, typename... Args>
     inline napi_value run_in_escapable_handle_scope(napi_env env, Func func, Args &&...args) {
-        napi_escapable_handle_scope scope;
-        napi_value result, escaped = nullptr;
+        napi_status status;
+        napi_escapable_handle_scope scope = nullptr;
+        napi_value result = nullptr, escaped = nullptr;
 
-        napi_open_escapable_handle_scope(env, &scope);
+        NAPI_GUARD(napi_open_escapable_handle_scope(env, &scope)) {
+            return nullptr;
+        }
 
         // Call the provided function with forwarded arguments and get the result
         result = func(std::forward<Args>(args)...);
 
         if (result != nullptr) {
             // Escape the result
-            napi_escape_handle(env, scope, result, &escaped);
+            NAPI_GUARD(napi_escape_handle(env, scope, result, &escaped)) {}
         }
 
-        napi_close_escapable_handle_scope(env, scope);
+        NAPI_GUARD(napi_close_escapable_handle_scope(env, scope)) {}
 
         return escaped;
     }
@@ -423,9 +534,12 @@ namespace napi_util {
     inline napi_value
     napi_set_function(napi_env env, napi_value object, const char *name, napi_callback callback,
                       void *data = nullptr) {
-        napi_value fn;
-        napi_create_function(env, name, strlen(name), callback, data, &fn);
-        napi_set_named_property(env, object, name, fn);
+        napi_status status;
+        napi_value fn = nullptr;
+        NAPI_GUARD(napi_create_function(env, name, strlen(name), callback, data, &fn)) {
+            return nullptr;
+        }
+        NAPI_GUARD(napi_set_named_property(env, object, name, fn)) {}
         return fn;
     }
 
@@ -440,49 +554,50 @@ namespace napi_util {
     }
 
     inline napi_value global(napi_env env) {
-        napi_value global;
-        napi_get_global(env, &global);
+        napi_status status;
+        napi_value global = nullptr;
+        NAPI_GUARD(napi_get_global(env, &global)) {
+            return nullptr;
+        }
         return global;
     }
 
 
     inline void log_value(napi_env env, napi_value value) {
-        napi_value global;
-        napi_value console;
-        napi_value log;
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, "console", &console);
-        napi_get_named_property(env, console, "log", &log);
+        napi_status status;
+        napi_value global = nullptr;
+        napi_value console = nullptr;
+        napi_value log = nullptr;
+        NAPI_GUARD(napi_get_global(env, &global)) { return; }
+        NAPI_GUARD(napi_get_named_property(env, global, "console", &console)) { return; }
+        NAPI_GUARD(napi_get_named_property(env, console, "log", &log)) { return; }
         napi_value argv[] = {
                 value
         };
 
-        napi_call_function(env, console, log, 1, argv, nullptr);
+        NAPI_GUARD(napi_call_function(env, console, log, 1, argv, nullptr)) {}
     }
 
     inline void napi_inherits(napi_env env, napi_value ctor,
                               napi_value super_ctor) {
-        napi_value global, global_object, set_proto, ctor_proto_prop,
-                super_ctor_proto_prop;
+        napi_status status;
+        napi_value global = nullptr, global_object = nullptr, set_proto = nullptr,
+                ctor_proto_prop = nullptr, super_ctor_proto_prop = nullptr;
         napi_value argv[2];
 
-        napi_get_global(env, &global);
-        napi_get_named_property(env, global, OBJECT, &global_object);
-        napi_get_named_property(env, global_object, SET_PROTOTYPE_OF, &set_proto);
-        napi_get_named_property(env, ctor, PROTOTYPE, &ctor_proto_prop);
-        napi_get_named_property(env, super_ctor, PROTOTYPE, &super_ctor_proto_prop);
-
-        bool exception;
-
-        napi_is_exception_pending(env, &exception);
+        NAPI_GUARD(napi_get_global(env, &global)) { return; }
+        NAPI_GUARD(napi_get_named_property(env, global, OBJECT, &global_object)) { return; }
+        NAPI_GUARD(napi_get_named_property(env, global_object, SET_PROTOTYPE_OF, &set_proto)) { return; }
+        NAPI_GUARD(napi_get_named_property(env, ctor, PROTOTYPE, &ctor_proto_prop)) { return; }
+        NAPI_GUARD(napi_get_named_property(env, super_ctor, PROTOTYPE, &super_ctor_proto_prop)) { return; }
 
         argv[0] = ctor_proto_prop;
         argv[1] = super_ctor_proto_prop;
-        napi_call_function(env, global, set_proto, 2, argv, nullptr);
+        NAPI_GUARD(napi_call_function(env, global, set_proto, 2, argv, nullptr)) { return; }
 
         argv[0] = ctor;
         argv[1] = super_ctor;
-        napi_call_function(env, global, set_proto, 2, argv, nullptr);
+        NAPI_GUARD(napi_call_function(env, global, set_proto, 2, argv, nullptr)) {}
     }
 
 }

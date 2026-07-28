@@ -344,6 +344,47 @@ bool ObjectManager::IsHostObject(napi_value object) {
 //  getNativeArrayProp/setNativeArrayProp, mirroring the old implementation.
 // ----------------------------------------------------------------------------
 
+// Recognise a canonical array index in a host-object trap key. V8 routes numeric
+// indices through a dedicated indexed interceptor (the key is a napi_number), but
+// QuickJS(-NG) delivers every key to get()/set() as a string, so an index arrives
+// as its canonical decimal string ("0", "1", ...). Accept both forms: a
+// non-negative integer number, or the canonical decimal string of a uint32 in
+// [0, 2^32-2] (the valid array-index range, no leading zeros).
+static bool TryGetArrayIndex(napi_env env, napi_value property, uint32_t &outIndex) {
+    napi_status status;
+    napi_valuetype type;
+    NAPI_GUARD(napi_typeof(env, property, &type)) { return false; }
+
+    if (type == napi_number) {
+        double d = 0;
+        NAPI_GUARD(napi_get_value_double(env, property, &d)) { return false; }
+        if (d < 0 || d > 4294967294.0 || d != (double) (uint32_t) d) return false;
+        outIndex = (uint32_t) d;
+        return true;
+    }
+    if (type == napi_string) {
+        size_t len = 0;
+        NAPI_GUARD(napi_get_value_string_utf8(env, property, nullptr, 0, &len)) { return false; }
+        if (len == 0 || len > 10) return false; // a uint32 has at most 10 digits
+        char buf[11];
+        NAPI_GUARD(napi_get_value_string_utf8(env, property, buf, sizeof(buf), nullptr)) { return false; }
+        if (buf[0] == '0') { // canonical form has no leading zeros; only "0" itself
+            if (len != 1) return false;
+            outIndex = 0;
+            return true;
+        }
+        uint64_t v = 0;
+        for (size_t i = 0; i < len; i++) {
+            if (buf[i] < '0' || buf[i] > '9') return false;
+            v = v * 10 + (uint64_t) (buf[i] - '0');
+        }
+        if (v > 4294967294ULL) return false; // max array index is 2^32 - 2
+        outIndex = (uint32_t) v;
+        return true;
+    }
+    return false;
+}
+
 napi_value ObjectManager::HostObjectGet(napi_env env, napi_value host,
                                         napi_value property, void *data) {
     napi_status status;
@@ -351,11 +392,11 @@ napi_value ObjectManager::HostObjectGet(napi_env env, napi_value host,
     try {
         // Numeric keys on arrays: straight into the native element accessor. On V8
         // these arrive via the indexed interceptor (HostObjectIndexedGet); engines
-        // that route everything through get() (e.g. QuickJS) hit it here.
+        // that route everything through get() (e.g. QuickJS, which passes the index
+        // as its decimal string) hit it here.
+        uint32_t index = 0;
         if (proxy->isArray && !proxy->arraySignature.empty() &&
-            napi_util::is_of_type(env, property, napi_number)) {
-            uint32_t index = 0;
-            NAPI_GUARD(napi_get_value_uint32(env, property, &index)) {}
+            TryGetArrayIndex(env, property, index)) {
             return HostObjectIndexedGet(env, host, index, data);
         }
 
@@ -383,10 +424,9 @@ void ObjectManager::HostObjectSet(napi_env env, napi_value host,
     napi_status status;
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
     try {
+        uint32_t index = 0;
         if (proxy->isArray && !proxy->arraySignature.empty() &&
-            napi_util::is_of_type(env, property, napi_number)) {
-            uint32_t index = 0;
-            NAPI_GUARD(napi_get_value_uint32(env, property, &index)) {}
+            TryGetArrayIndex(env, property, index)) {
             HostObjectIndexedSet(env, host, index, value, data);
             return;
         }
@@ -408,6 +448,31 @@ int ObjectManager::HostObjectHas(napi_env env, napi_value host,
     napi_status status;
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
     try {
+        // Numeric keys on java arrays: an index is "present" when it is within the
+        // array's bounds, matching JS array semantics. This is load-bearing on JSC:
+        // its JSCallbackObject consults the hasProperty callback BEFORE getProperty
+        // and only fetches the value when hasProperty returns true, so returning
+        // false here makes arr[i] read back as undefined. (V8 routes indexed reads
+        // through a dedicated interceptor and QuickJS calls get() directly, so this
+        // only affects `in`/hasOwnProperty there — which is also more correct.)
+        uint32_t index = 0;
+        if (proxy->isArray && !proxy->arraySignature.empty() &&
+            TryGetArrayIndex(env, property, index)) {
+            // A Java array has a fixed length, so resolve "length" once and cache it
+            // on the proxy. This is the JSC hot path: JSCallbackObject calls
+            // hasProperty before every getProperty, so an uncached length fetch
+            // (JSString alloc + property get + double read) was paid per element read.
+            if (proxy->arrayLength < 0) {
+                napi_value target = napi_util::get_ref_value(env, proxy->target);
+                napi_value lengthVal = nullptr;
+                NAPI_GUARD(napi_get_named_property(env, target, "length", &lengthVal)) { return false; }
+                double length = 0;
+                NAPI_GUARD(napi_get_value_double(env, lengthVal, &length)) { return false; }
+                proxy->arrayLength = (int64_t) length;
+            }
+            return (int64_t) index < proxy->arrayLength;
+        }
+
         napi_value target = napi_util::get_ref_value(env, proxy->target);
         bool result = false;
         NAPI_GUARD(napi_has_property(env, target, property, &result)) {}
@@ -548,12 +613,10 @@ void ObjectManager::HostObjectProxyFinalizer(napi_env env, void *data,
     if (proxy == nullptr) return;
 
     // The cleanup deletes a napi_ref, which is illegal from inside the GC
-    // finalizer pass (InvokeFinalizerFromGC). Defer it to the safe post-GC pass.
-#ifdef __V8__
-    node_api_post_finalizer(env, HostObjectProxyPostFinalizer, proxy, hint);
-#else
-    HostObjectProxyPostFinalizer(env, data, hint);
-#endif
+    // finalizer pass on every engine (V8's InvokeFinalizerFromGC; a JS_FreeValue
+    // during a QuickJS sweep corrupts the collector). Defer it to the runtime's
+    // engine-agnostic post-GC drain (message-loop tick).
+    Runtime::PostFinalizer(env, HostObjectProxyPostFinalizer, proxy, hint);
 }
 
 void ObjectManager::HostObjectProxyPostFinalizer(napi_env env, void *data,
@@ -562,13 +625,23 @@ void ObjectManager::HostObjectProxyPostFinalizer(napi_env env, void *data,
     auto *proxy = reinterpret_cast<HostObjectProxy *>(data);
     if (proxy == nullptr) return;
 
-    if (proxy->target) { NAPI_GUARD(napi_delete_reference(env, proxy->target)) {} }
+    auto rt = Runtime::GetRuntimeUnchecked(env);
+    // Once the runtime is tearing down (or its env is already off the cache), the
+    // env-dispose path owns every outstanding napi_ref: OnDisposeEnv clears the
+    // id maps and js_free_napi_env frees whatever remains in env->referencesList.
+    // Deleting proxy->target here in that window double-frees it (a use-after-free
+    // in the reference-free loop). So only release the reference during normal,
+    // per-object finalization; the C++ cleanup below still runs in both cases.
+    bool destroying = (rt == nullptr) || rt->is_destroying;
+
+    if (proxy->target != nullptr && !destroying) {
+        NAPI_GUARD(napi_delete_reference(env, proxy->target)) {}
+    }
 
     // Primary (cached) proxies own their JSInstanceInfo and mark the java
     // instance weak on collection (the old JSObjectProxyFinalizerCallback role).
     if (proxy->isPrimary && proxy->instanceInfo) {
-        auto rt = Runtime::GetRuntimeUnchecked(env);
-        if (rt && !rt->is_destroying) {
+        if (!destroying) {
             auto objManager = rt->GetObjectManager();
             auto javaObjectID = proxy->instanceInfo->JavaObjectID;
             if (objManager->m_weakObjectIds.find(javaObjectID) ==
@@ -742,9 +815,17 @@ ObjectManager::CreateJSWrapperHelper(jint javaObjectID, const std::string &typeN
     napi_value proxy = nullptr;
     napi_value jsWrapper = node->CreateJSWrapper(m_env, this);
     if (jsWrapper != nullptr) {
-        JEnv jenv;
-        auto claz = jenv.FindClass(className);
-        Link(jsWrapper, javaObjectID, claz, node);
+        // Reuse the class we already resolved via GetObjectClass on the instance
+        // path instead of re-resolving it with a JNI FindClass. The class is only
+        // stored on JSInstanceInfo::ObjectClazz, which nothing on this path reads,
+        // so a fresh FindClass is pure overhead; only fall back to it for the
+        // typeName-only overload where no instance class was available.
+        jclass linkClazz = clazz;
+        if (linkClazz == nullptr) {
+            JEnv jenv;
+            linkClazz = jenv.FindClass(className);
+        }
+        Link(jsWrapper, javaObjectID, linkClazz, node);
         if (node->isArray()) {
             NAPI_GUARD(napi_set_named_property(m_env, jsWrapper, "__is__javaArray",
                                     napi_util::get_true(m_env))) {}

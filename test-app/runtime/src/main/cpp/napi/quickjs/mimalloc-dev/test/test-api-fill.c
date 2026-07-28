@@ -271,7 +271,7 @@ int main(void) {
     mi_free(p);
   };
 
-  #if !(MI_TRACK_VALGRIND || MI_TRACK_ASAN)
+  #if !(MI_TRACK_VALGRIND || MI_TRACK_ASAN || MI_GUARDED)
   CHECK_BODY("fill-freed-small") {
     size_t malloc_size = MI_SMALL_SIZE_MAX / 2;
     uint8_t* p = (uint8_t*)mi_malloc(malloc_size);
@@ -310,7 +310,7 @@ bool check_zero_init(uint8_t* p, size_t size) {
 
 #if MI_DEBUG >= 2
 bool check_debug_fill_uninit(uint8_t* p, size_t size) {
-#if MI_TRACK_VALGRIND || MI_TRACK_ASAN
+#if MI_TRACK_VALGRIND || MI_TRACK_ASAN || MI_GUARDED
   (void)p; (void)size;
   return true; // when compiled with valgrind we don't init on purpose
 #else
@@ -326,7 +326,7 @@ bool check_debug_fill_uninit(uint8_t* p, size_t size) {
 }
 
 bool check_debug_fill_freed(uint8_t* p, size_t size) {
-#if MI_TRACK_VALGRIND
+#if MI_TRACK_VALGRIND || MI_GUARDED
   (void)p; (void)size;
   return true; // when compiled with valgrind we don't fill on purpose
 #else
