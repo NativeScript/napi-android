@@ -99,7 +99,7 @@ if (enableAnalytics) {
     analyticsCollector.writeAnalyticsFile()
 }
 
-project.ext.selectedBuildType = "release"
+project.ext.selectedBuildType = project.hasProperty("release") ? "release" : "debug"
 
 buildscript {
     def applyBuildScriptConfigurations = { ->
