@@ -21,12 +21,11 @@ The new runtime is based on the Node-API and is designed to be more stable, fast
 
 <!-- TOC depthFrom:2 -->
 
-- [Main Projects](#main-projects)
+- [Project structure](#project-structure)
 - [Helper Projects](#helper-projects)
 - [Build Prerequisites](#build-prerequisites)
 - [How to build](#how-to-build)
 - [How to run tests](#how-to-run-tests)
-- [Misc](#misc)
 - [Get Help](#get-help)
 
 <!-- /TOC -->
@@ -35,15 +34,15 @@ The new runtime is based on the Node-API and is designed to be more stable, fast
 
 The repo is structured in the following projects (ordered by dependencies):
 
-- [**android-metadata-generator**](android-metadata-generator) - generates metadata necessary for the Android Runtime.
+- [**android-metadata-generator**](test-app/build-tools/android-metadata-generator) - generates metadata necessary for the Android Runtime.
 - [**android-binding-generator**](test-app/runtime-binding-generator) - enables Java & Android types to be dynamically created at runtime. Needed by the `extend` routine.
 - [**android-runtime**](test-app/runtime) - contains the core logic behind the NativeScript's Android Runtime. This project contains native C++ code and needs the Android NDK to build properly.
 - [**android-runtime-testapp**](test-app/app) - this is a vanilla Android Application, which contains the tests for the runtime project.
-- [**napi-implementations**](test-app/runtime/src/main//cpp/napi/) - contains the implementation of the Node-API for each supported JS engine.
+- [**napi-implementations**](test-app/runtime/src/main/cpp/napi/) - contains the implementation of the Node-API for each supported JS engine.
 
 ## Helper Projects
 
-- [**android-static-binding-generator**](android-static-binding-generator) - build tool that generates bindings based on the user's javascript code.
+- [**android-static-binding-generator**](test-app/build-tools/static-binding-generator) - build tool that generates bindings based on the user's javascript code.
 - [**project-template**](build-artifacts/project-template-gradle) - this is an empty placeholder Android Application project, used by the [NativeScript CLI](https://github.com/NativeScript/nativescript-cli) when building an Android project.
 
 ### Build Prerequisites
